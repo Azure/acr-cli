@@ -1,0 +1,26 @@
+run:
+  concurrency: 2
+  deadline: 1m
+  skip-dirs:
+    - vendor
+    - docs
+    - baseimages
+linters-settings:
+  govet:
+    check-shadowing: true
+  golint:
+    min-confidence: 0
+linters:
+  disable-all: true
+  enable:
+    - gofmt
+    - goimports
+    - golint
+    - gosec
+    - govet
+    - ineffassign
+    - maligned
+    - staticcheck
+    - structcheck
+    - unconvert
+    - varcheck
