@@ -1,4 +1,10 @@
 
+# Azure Container Registry CLI
+
+[![Build Status](https://travis-ci.org/AzureCR/acr-cli.svg?branch=master)](https://travis-ci.org/AzureCR/acr-cli)
+
+This repository contains the source code for CLI components for Azure Container Registry.
+
 # Contributing
 
 This project welcomes contributions and suggestions.  Most contributions require you to agree to a
