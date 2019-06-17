@@ -3,6 +3,11 @@
 
 package main
 
-func main() {
+import "os"
 
+func main() {
+	cmd := newRootCmd(os.Args[1:])
+	if err := cmd.Execute(); err != nil {
+		os.Exit(1)
+	}
 }
