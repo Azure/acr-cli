@@ -21,6 +21,7 @@ To start working with the CLI, run acr --help`,
 	out := cmd.OutOrStdout()
 
 	cmd.AddCommand(
+		newPurgeCmd(out),
 		newVersionCmd(out),
 	)
 
