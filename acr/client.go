@@ -1,7 +1,7 @@
 // Package acrapi implements the Azure ARM Acrapi service API version 1.0.
 //
 // V2 API definition for the Azure Container Registry runtime
-package acrapi
+package acr
 
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License. See License.txt in the project root for license information.
