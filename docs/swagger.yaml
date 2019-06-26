@@ -1,0 +1,1650 @@
+swagger: '2.0'
+info:
+  version: '1.0'
+  title: Azure Container Registry
+  description: V2 API definition for the Azure Container Registry runtime
+host: acrapi.azurecr-test.io
+schemes:
+  - https
+securityDefinitions:
+  registry_auth:
+    type: basic
+security:
+  - registry_auth: []
+parameters:
+  name:
+    name: name
+    in: path
+    description: Name of the image (including the namespace)
+    type: string
+    required: true
+  reference:
+    name: reference
+    in: path
+    description: 'A tag or a digest, pointing to a specific image'
+    type: string
+    required: true
+  digest:
+    name: digest
+    in: path
+    description: Digest of a desired BLOB
+    type: string
+    required: true
+  metadata:
+    name: metadata
+    in: path
+    description: Name of the metadata
+    type: string
+    required: true
+  property:
+    name: property
+    in: path
+    description: Name of the property
+    type: string
+    required: true
+  auth:
+    name: authorization
+    in: header
+    description: Authorization header
+    type: string
+    required: true
+  queryOrderBy:
+    in: query
+    name: orderby
+    type: string
+    description: orderby query parameter
+    required: false
+  queryNum:
+    in: query
+    name: n
+    type: string
+    description: query parameter for max number of items
+    required: false
+  queryLast:
+    in: query
+    name: last
+    type: string
+    description: query parameter for the last item in previou query
+    required: false
+  queryDigest:
+    in: query
+    name: digest
+    type: string
+    description: filter by digest
+    required: false
+tags:
+  - name: v2
+    description: Root API
+  - name: Manifest
+    description: Everything about manfests
+  - name: Tag
+    description: Everything about tags
+  - name: Layer
+    description: Everything about layers
+  - name: Repository
+    description: Everyting about repository
+  - name: AcrRepository
+    description: ACR APIs related to repositories
+  - name: AcrManifest
+    description: ACR APIs related to manifests
+  - name: AcrTag
+    description: ACR APIs related to tags
+  - name: AcrMetadata
+    description: ACR APIs related to metadata
+paths:
+  /v2/:
+    parameters:
+      - $ref: '#/parameters/auth'
+    get:
+      tags:
+        - v2
+      operationId: CheckDockerRegistryV2Support
+      description: >-
+        Tells whether this Docker Registry instance supports Docker Registry
+        HTTP API v2
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: Successful response. API v2 supported
+        '401':
+          description: Unauthorized access
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '404':
+          description: Registry does not implement v2 of the API
+  '/v2/{name}/tags/list':
+    parameters:
+      - $ref: '#/parameters/name'
+      - $ref: '#/parameters/auth'
+    get:
+      tags:
+        - Tag
+      operationId: ListTags
+      description: Fetch the tags under the repository identified by 'name'
+      parameters:
+        - $ref: '#/parameters/queryNum'
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: Gives a list of tags for the names repository.
+          schema:
+            type: object
+            properties:
+              name:
+                type: string
+              tags:
+                type: array
+                items:
+                  type: string
+        '401':
+          description: Unauthorized access
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '404':
+          description: The named manifest could not be found in the Registry
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+      security:
+        - registry_auth: []
+  '/v2/{name}/manifests/{reference}':
+    parameters:
+      - $ref: '#/parameters/name'
+      - $ref: '#/parameters/reference'
+      - $ref: '#/parameters/auth'
+    get:
+      tags:
+        - Manifest
+      operationId: GetManifest
+      description: >-
+        Pulls the image manifest file associated with the specified name and
+        reference. Reference may be a tag or a digest
+      responses:
+        '200':
+          description: Returns the requested manifest file
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Layers'
+        '400':
+          description: On failure
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '401':
+          description: Unauthorized access
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '404':
+          description: The named manifest could not be found in the Registry
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+    put:
+      tags:
+        - Manifest
+      operationId: UploadManifest
+      description: >-
+        Put the manifest identified by name and reference where reference can be
+        a tag or digest.
+      responses:
+        '202':
+          description: >-
+            The manifest has been accepted by the registry and is stored under
+            the specified name and tag.
+        '400':
+          description: On failure
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '401':
+          description: Unauthorized access
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+    delete:
+      tags:
+        - Manifest
+      operationId: DeleteManifest
+      description: >-
+        Delete the manifest identified by name and reference where reference can
+        be a tag or digest.
+      responses:
+        '202':
+          description: >-
+            The manifest has been accepted by the registry and is stored under
+            the specified name and tag.
+        '400':
+          description: On failure
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '401':
+          description: Unauthorized access
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '404':
+          description: The named manifest could not be found in the Registry
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+  '/v2/{name}/blobs/{digest}':
+    parameters:
+      - $ref: '#/parameters/name'
+      - $ref: '#/parameters/digest'
+      - $ref: '#/parameters/auth'
+    get:
+      tags:
+        - Layer
+      operationId: GetBlob
+      description: Retrieve the blob from the registry identified by digest.
+      responses:
+        '200':
+          description: >-
+            The blob identified by digest is available. The blob content will be
+            present in the body of the response.
+          schema:
+            type: string
+            format: binary
+        '206':
+          description: >-
+            The blob identified by digest is available. The specified chunk of
+            blob content will be present in the body of the request.
+          schema:
+            type: string
+            format: binary
+        '307':
+          description: The blob identified by digest is available at the provided location.
+        '400':
+          description: On failure
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '401':
+          description: Unauthorized access
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '404':
+          description: 'The blob, identified by name and digest, is unknown to the registry.'
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '416':
+          description: >-
+            The range specification cannot be satisfied for the requested
+            content.
+    head:
+      tags:
+        - Layer
+      operationId: CheckBlobExistence
+      description: 'Same as GET, except only the headers are returned.'
+      responses:
+        '200':
+          description: >-
+            The blob identified by digest is available.
+        '206':
+          description: >-
+            The blob identified by digest is available.
+        '307':
+          description: The blob identified by digest is available at the provided location.
+        '400':
+          description: On failure
+        '401':
+          description: Unauthorized access
+        '404':
+          description: 'The blob, identified by name and digest, is unknown to the registry.'
+        '416':
+          description: >-
+            The range specification cannot be satisfied for the requested
+            content.
+  '/v2/{name}/blobs/uploads':
+    parameters:
+      - $ref: '#/parameters/name'
+      - $ref: '#/parameters/auth'
+    post:
+      tags:
+        - Layer
+      operationId: StartBlobUpload
+      description: >-
+        Upload a blob identified by the digest parameter in single request. This
+        upload will not be resumable unless a recoverable error is returned.
+      parameters:
+        - name: digest
+          description: >-
+            Digest of uploaded blob. If present, the upload will be completed,
+            in a single request, with contents of the request body as the
+            resulting blob.
+          type: string
+          in: query
+      responses:
+        '201':
+          description: >-
+            The blob has been created in the registry and is available at the
+            provided location.
+        '202':
+          description: >-
+            The upload has been created. The Location header must be used to
+            complete the upload. The response should be identical to a GET
+            request on the contents of the returned Location header.
+        '400':
+          description: On failure
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '401':
+          description: Unauthorized access
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+  '/v2/{name}/blobs/uploads/{uuid}':
+    parameters:
+      - $ref: '#/parameters/name'
+      - name: uuid
+        description: A uuid identifying the upload.
+        type: string
+        in: path
+        required: true
+      - $ref: '#/parameters/auth'
+    get:
+      tags:
+        - Layer
+      operationId: GetBlobUploadStatus
+      description: >-
+        Retrieve status of upload identified by uuid. The primary purpose of
+        this endpoint is to resolve the current status of a resumable upload.
+      responses:
+        '204':
+          description: >-
+            The upload is known and in progress. The last received offset is
+            available in the Range header.
+        '400':
+          description: On failure
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '401':
+          description: Unauthorized access
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '404':
+          description: The upload is unknown to the registry. The upload must be restarted.
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+    patch:
+      tags:
+        - Layer
+      operationId: UploadBlobContent
+      description: Upload a stream of data without completing the upload.
+      responses:
+        '204':
+          description: >-
+            The stream of data has been accepted and the current progress is
+            available in the range header. The updated upload location is
+            available in the Location header.
+        '400':
+          description: On failure
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '401':
+          description: Unauthorized access
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '404':
+          description: The upload is unknown to the registry. The upload must be restarted.
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '416':
+          description: >-
+            The Content-Range specification cannot be accepted, either because
+            it does not overlap with the current progress or it is invalid.
+    put:
+      tags:
+        - Layer
+      operationId: EndBlobUpload
+      description: >-
+        Complete the upload, providing all the data in the body, if necessary. A
+        request without a body will just complete the upload with previously
+        uploaded content.
+      parameters:
+        - name: digest
+          description: >-
+            Digest of uploaded blob. If present, the upload will be completed,
+            in a single request, with contents of the request body as the
+            resulting blob.
+          type: string
+          in: query
+          required: true
+      responses:
+        '204':
+          description: The upload has been completed and accepted by the registry.
+        '400':
+          description: On failure
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '401':
+          description: Unauthorized access
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '404':
+          description: The upload is unknown to the registry. The upload must be restarted.
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+    delete:
+      tags:
+        - Layer
+      operationId: CancelBlobUpload
+      description: >-
+        Cancel outstanding upload processes, releasing associated resources. If
+        this is not called, the unfinished uploads will eventually timeout.
+      responses:
+        '204':
+          description: The upload has been successfully deleted.
+        '400':
+          description: On failure
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '401':
+          description: Unauthorized access
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '404':
+          description: >-
+            The upload is unknown to the registry. The client may ignore this
+            error and assume the upload has been deleted.
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+  /v2/_catalog:
+    get:
+      tags:
+        - Repository
+      operationId: ListRepositories
+      description: List respositories
+      parameters:
+        - $ref: '#/parameters/queryLast'
+        - $ref: '#/parameters/queryNum'
+        - $ref: '#/parameters/auth'
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: Returns a list of repositories
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Repositories'
+        '400':
+          description: On failure
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '401':
+          description: Unauthorized access
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+  /acr/v1/_catalog:
+    get:
+      tags:
+        - AcrRepository
+      operationId: AcrListRepositories
+      description: List respositories
+      parameters:
+        - $ref: '#/parameters/auth'
+        - $ref: '#/parameters/queryLast'
+        - $ref: '#/parameters/queryNum'
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: Returns a list of repositories
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Repositories'
+        '400':
+          description: On failure
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '401':
+          description: Unauthorized access
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+  '/acr/v1/{name}':
+    parameters:
+      - $ref: '#/parameters/name'
+      - $ref: '#/parameters/auth'
+    delete:
+      tags:
+        - AcrRepository
+      operationId: AcrDeleteRepository
+      description: Delete a respository
+      responses:
+        '202':
+          description: The repoisotry is deleted
+        '400':
+          description: On failure
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '401':
+          description: Unauthorized access
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '404':
+          description: The repository is unknown to the registry.
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+    get:
+      tags:
+        - AcrRepository
+        - AcrMetadata
+      operationId: AcrGetRepositoryAttributes
+      description: Get respository attributes
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: Returns a list of attributes
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/RepositoryAttributes'
+        '400':
+          description: On failure
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '401':
+          description: Unauthorized access
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '404':
+          description: The repository is unknown to the registry.
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+    patch:
+      tags:
+        - AcrRepository
+        - AcrMetadata
+      operationId: AcrUpdateRepositoryAttributes
+      description: Update attributes of a repository
+      consumes:
+        - application/json
+      parameters:
+        - in: body
+          name: value
+          schema:
+            type: string
+      responses:
+        '204':
+          description: The attributes is updated
+        '400':
+          description: On failure
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '401':
+          description: Unauthorized access
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '404':
+          description: The repository is unknown
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+  '/acr/v1/{name}/_metadata':
+    parameters:
+      - $ref: '#/parameters/name'
+      - $ref: '#/parameters/auth'
+    get:
+      tags:
+        - AcrRepository
+        - AcrMetadata
+      operationId: AcrListRepositoryMetadata
+      description: List respository metadata
+      responses:
+        '200':
+          description: Returns a list of repository metadata
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/RepositoryMetadata'
+        '400':
+          description: On failure
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '401':
+          description: Unauthorized access
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '404':
+          description: The repository is unknown to the registry.
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+  '/acr/v1/{name}/_metadata/{metadata}':
+    parameters:
+      - $ref: '#/parameters/name'
+      - $ref: '#/parameters/metadata'
+      - $ref: '#/parameters/auth'
+    get:
+      tags:
+        - AcrRepository
+        - AcrMetadata
+      operationId: AcrGetRepositoryMetadata
+      description: Get metadata value
+      produces:
+        - text/plain
+        - application/json
+      responses:
+        '200':
+          description: Returns the metadata value
+          schema:
+            type: string
+        '400':
+          description: On failure
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '401':
+          description: Unauthorized access
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '404':
+          description: The repository or the metadata is unknown to the registry.
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+    put:
+      tags:
+        - AcrRepository
+        - AcrMetadata
+      operationId: AcrUpdateRepositoryMetadata
+      description: Add or update a metadata of a repository
+      parameters:
+        - in: body
+          name: value
+          schema:
+            type: string
+      consumes:
+        - text/plain
+        - application/json
+      responses:
+        '201':
+          description: The metadata is added/updated
+        '400':
+          description: On failure
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '401':
+          description: Unauthorized access
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '404':
+          description: The repository or metadata is unknown
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+    delete:
+      tags:
+        - AcrRepository
+        - AcrMetadata
+      operationId: AcrDeleteRepositoryMetadata
+      description: Delete a metadata of a repository
+      responses:
+        '202':
+          description: metadata is deleted
+        '400':
+          description: On failure
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '401':
+          description: Unauthorized access
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '404':
+          description: The repository or metadata is unknown to the registry.
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+  '/acr/v1/{name}/_tags':
+    get:
+      tags:
+        - AcrTag
+        - AcrMetadata
+      operationId: AcrListTags
+      description: List tags of a repository
+      parameters:
+        - $ref: '#/parameters/name'
+        - $ref: '#/parameters/queryLast'
+        - $ref: '#/parameters/queryNum'
+        - $ref: '#/parameters/queryOrderBy'
+        - $ref: '#/parameters/auth'
+        - $ref: '#/parameters/queryDigest'
+      responses:
+        '200':
+          description: Returns a list of tags
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/TagAttributeList'
+        '400':
+          description: On failure
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '401':
+          description: Unauthorized access
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '404':
+          description: The repository is unknown to the registry.
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+  '/acr/v1/{name}/_tags/{reference}':
+    parameters:
+      - $ref: '#/parameters/name'
+      - $ref: '#/parameters/reference'
+      - $ref: '#/parameters/auth'
+    delete:
+      tags:
+        - AcrTag
+        - AcrMetadata
+      operationId: AcrDeleteTag
+      description: Delete a tag
+      responses:
+        '202':
+          description: The tag is deleted
+        '400':
+          description: On failure
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '401':
+          description: Unauthorized access
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '404':
+          description: The repository or tag is unknown to the registry.
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+    get:
+      tags:
+        - AcrTag
+        - AcrMetadata
+      operationId: AcrGetTagAttributes
+      description: Get tag attributes
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: Returns attributes of a tag
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/TagAttributes'
+        '400':
+          description: On failure
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '401':
+          description: Unauthorized access
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '404':
+          description: The repository or tag is unknown to the registry.
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+    patch:
+      tags:
+        - AcrTag
+        - AcrMetadata
+      operationId: AcrUpdateTagAttributes
+      description: Update attributes of a tag
+      consumes:
+        - application/json
+      parameters:
+        - in: body
+          name: value
+          schema:
+            type: string
+      responses:
+        '204':
+          description: The attributes are updated
+        '400':
+          description: On failure
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '401':
+          description: Unauthorized access
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '404':
+          description: 'The repository or tag is unknown'
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+  '/acr/v1/{name}/_tags/{reference}/_metadata':
+    get:
+      tags:
+        - AcrTag
+        - AcrMetadata
+      operationId: AcrListTagMetadata
+      description: List tag metadata
+      parameters:
+        - $ref: '#/parameters/name'
+        - $ref: '#/parameters/reference'
+        - $ref: '#/parameters/auth'
+      responses:
+        '200':
+          description: Returns a list of tag metadata
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/TagMetadataList'
+        '400':
+          description: On failure
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '401':
+          description: Unauthorized access
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '404':
+          description: The repository or tag is unknown to the registry.
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+  '/acr/v1/{name}/_tags/{reference}/_metadata/{metadata}':
+    parameters:
+      - $ref: '#/parameters/name'
+      - $ref: '#/parameters/reference'
+      - $ref: '#/parameters/metadata'
+      - $ref: '#/parameters/auth'
+    get:
+      tags:
+        - AcrTag
+        - AcrMetadata
+      operationId: AcrGetTagMetadata
+      description: Get metadata value
+      produces:
+        - text/plain
+        - application/json
+      responses:
+        '200':
+          description: Returns the metadata value
+          schema:
+            type: string
+        '400':
+          description: On failure
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '401':
+          description: Unauthorized access
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '404':
+          description: 'The repository, tag or the metadata is unknown to the registry.'
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+    put:
+      tags:
+        - AcrTag
+        - AcrMetadata
+      operationId: AcrUpdateTagMetadata
+      description: Add or update a metadata of a tag
+      consumes:
+        - text/plain
+        - application/json
+      parameters:
+        - in: body
+          name: value
+          schema:
+            type: string
+      responses:
+        '201':
+          description: The metadata is added/updated
+        '400':
+          description: On failure
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '401':
+          description: Unauthorized access
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '404':
+          description: 'The repository, tag or metadata is unknown'
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+    delete:
+      tags:
+        - AcrTag
+        - AcrMetadata
+      operationId: AcrDeleteTagMetadata
+      description: Delete a metadata of a tag
+      responses:
+        '202':
+          description: metadata is deleted
+        '400':
+          description: On failure
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '401':
+          description: Unauthorized access
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '404':
+          description: 'The repository, tag or metadata is unknown to the registry.'
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+  '/acr/v1/{name}/_manifests':
+    get:
+      tags:
+        - AcrManifest
+        - AcrMetadata
+      operationId: AcrListManifests
+      description: List manifets of a repository
+      parameters:
+        - $ref: '#/parameters/auth'
+        - $ref: '#/parameters/name'
+        - $ref: '#/parameters/queryLast'
+        - $ref: '#/parameters/queryNum'
+        - $ref: '#/parameters/queryOrderBy'
+      responses:
+        '200':
+          description: Returns a list of manifests
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/ManifestAttributeList'
+        '400':
+          description: On failure
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '401':
+          description: Unauthorized access
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '404':
+          description: The repository is unknown to the registry.
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+  '/acr/v1/{name}/_manifests/{reference}':
+    parameters:
+      - $ref: '#/parameters/name'
+      - $ref: '#/parameters/reference'
+      - $ref: '#/parameters/auth'
+    get:
+      tags:
+        - AcrManifest
+        - AcrMetadata
+      operationId: AcrGetManifestAttributes
+      description: Get manifest attributes
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: Returns a list of attributes
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/ManifestAttributes'
+        '400':
+          description: On failure
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '401':
+          description: Unauthorized access
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '404':
+          description: The repository or manifest is unknown to the registry.
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+    patch:
+      tags:
+        - AcrManifest
+        - AcrMetadata
+      operationId: AcrUpdateManifestAttributes
+      description: Update attributes of a manifest
+      consumes:
+        - application/json
+      parameters:
+        - in: body
+          name: value
+          schema:
+            type: string
+      responses:
+        '204':
+          description: The attributes are updated
+        '400':
+          description: On failure
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '401':
+          description: Unauthorized access
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '404':
+          description: 'The repository or manifest is unknown'
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+  '/acr/v1/{name}/_manifests/{reference}/_metadata':
+    get:
+      tags:
+        - AcrManifest
+        - AcrMetadata
+      operationId: AcrListManifestMetadata
+      description: List manifest metadata
+      parameters:
+        - $ref: '#/parameters/name'
+        - $ref: '#/parameters/reference'
+        - $ref: '#/parameters/auth'
+      responses:
+        '200':
+          description: Returns a list of manifest metadata
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/ManifestMetadataList'
+        '400':
+          description: On failure
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '401':
+          description: Unauthorized access
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '404':
+          description: The repository or manifest is unknown to the registry.
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+  '/acr/v1/{name}/_manifests/{reference}/_metadata/{metadata}':
+    parameters:
+      - $ref: '#/parameters/name'
+      - $ref: '#/parameters/reference'
+      - $ref: '#/parameters/metadata'
+      - $ref: '#/parameters/auth'
+    get:
+      tags:
+        - AcrManifest
+        - AcrMetadata
+      operationId: AcrGetManifestMetadata
+      description: Get metadata value
+      produces:
+        - text/plain
+        - application/json
+      responses:
+        '200':
+          description: Returns the metadata value
+          schema:
+            type: string
+        '400':
+          description: On failure
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '401':
+          description: Unauthorized access
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '404':
+          description: 'The repository, manifest or the metadata is unknown to the registry.'
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+    put:
+      tags:
+        - AcrManifest
+        - AcrMetadata
+      operationId: AcrUpdateManifestMetadata
+      description: Add or update a metadata of a manifest
+      consumes:
+        - text/plain
+        - application/json
+      parameters:
+        - in: body
+          name: value
+          schema:
+            type: string
+      responses:
+        '201':
+          description: The metadata is added/updated
+        '400':
+          description: On failure
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '401':
+          description: Unauthorized access
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '404':
+          description: 'The repository, manifest or metadata is unknown'
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+    delete:
+      tags:
+        - AcrManifest
+        - AcrMetadata
+      operationId: AcrDeleteManifestMetadata
+      description: Delete a metadata of a manifest
+      responses:
+        '202':
+          description: metadata is deleted
+        '400':
+          description: On failure
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '401':
+          description: Unauthorized access
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+        '404':
+          description: 'The repository, manifest or metadata is unknown to the registry.'
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Error'
+definitions:
+  Error:
+    type: object
+    properties:
+      errors:
+        type: array
+        items:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            detail:
+              type: string
+  Layers:
+    type: object
+    properties:
+      name:
+        type: string
+      tag:
+        type: string
+      fsLayers:
+        type: array
+        items:
+          type: object
+          properties:
+            blobSum:
+              type: string
+      history:
+        type: string
+      signature:
+        type: string
+  Repositories:
+    type: array
+    items:
+      type: string
+  RepositoryMetadata:
+    type: object
+    properties:
+      registry:
+        type: string
+      imageName:
+        type: string
+      metadata:
+        type: array
+        items:
+          type: string
+  RepositoryAttributes:
+    type: object
+    properties:
+      registry:
+        type: string
+      imageName:
+        type: string
+      createdTime:
+        type: string
+      lastUpdateTime:
+        type: string
+      manifestCount:
+        type: number
+      tagCount:
+        type: number
+      changeableAttributes:
+        type: object
+        properties:
+          deleteEnabled:
+            type: boolean
+          writeEnabled:
+            type: boolean
+          listEnabled:
+            type: boolean
+          readEnabled:
+            type: boolean
+  TagAttributeList:
+    type: object
+    properties:
+      registry:
+        type: string
+      imageName:
+        type: string
+      tags:
+        type: array
+        items:
+          $ref: '#/definitions/TagAttributesBase'
+  TagAttributes:
+    type: object
+    properties:
+      registry:
+        type: string
+      imageName:
+        type: string
+      tag:
+        type: object
+        allOf: [
+          {
+            $ref: '#/definitions/TagAttributesBase'
+          }
+        ]
+        properties:
+          signatureRecord:
+            type: string
+  TagAttributesBase:
+    type: object
+    properties:
+      name:
+        type: string
+      digest:
+        type: string
+      createdTime:
+        type: string
+      lastUpdateTime:
+        type: string
+      signed:
+        type: boolean
+      quarantineState:
+        type: string
+      changeableAttributes:
+        type: object
+        properties:
+          deleteEnabled:
+            type: boolean
+          writeEnabled:
+            type: boolean
+          listEnabled:
+            type: boolean
+          readEnabled:
+            type: boolean
+  TagMetadataList:
+    type: object
+    properties:
+      registry:
+        type: string
+      imageName:
+        type: string
+      tagName:
+        type: string
+      metadata:
+        type: array
+        items:
+          type: string
+  ManifestMetadataList:
+    type: object
+    properties:
+      registry:
+        type: string
+      imageName:
+        type: string
+      digest:
+        type: string
+      metadata:
+        type: array
+        items:
+          type: string
+  ManifestAttributeList:
+    type: object
+    properties:
+      registry:
+        type: string
+      imageName:
+        type: string
+      manifests:
+        type: array
+        items:
+          $ref: '#/definitions/ManifestAttributesBase'
+  ManifestAttributes:
+    type: object
+    properties:
+      registry:
+        type: string
+      imageName:
+        type: string
+      manifest:
+        type: object
+        allOf: [
+          {
+            $ref: '#/definitions/ManifestAttributesBase'
+          }
+        ]
+        properties:
+          references:
+            type: array
+            items:
+              type: object
+              properties:
+                digest:
+                  type: string
+                architecture:
+                  type: string
+                os:
+                  type: string
+          quarantineTag:
+            type: string
+  ManifestAttributesBase:
+    type: object
+    properties:
+      digest:
+        type: string
+      createdTime:
+        type: string
+      lastUpdateTime:
+        type: string
+      architecture:
+        type: string
+      os:
+        type: string
+      mediaType:
+        type: string
+      tags:
+        type: array
+        items:
+          type: string
+      changeableAttributes:
+        type: object
+        properties:
+          deleteEnabled:
+            type: boolean
+          writeEnabled:
+            type: boolean
+          listEnabled:
+            type: boolean
+          readEnabled:
+            type: boolean
+          quarantineState:
+            type: string
+          quarantineDetails:
+            type: string

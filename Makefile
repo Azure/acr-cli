@@ -10,7 +10,7 @@ GO_EXTRA_FLAGS=
 GO_TAGS=
 VERSION=$(shell git describe --match 'v[0-9]*' --dirty='.m' --always)
 GITCOMMIT=$(shell git rev-parse HEAD)$(shell if ! git diff --no-ext-diff --quiet --exit-code; then echo .m; fi)
-PKG=github.com/AzureCR/acr-cli
+PKG=github.com/Azure/acr-cli
 GO_LDFLAGS=-ldflags '-s -w -X $(PKG)/version.Version=$(VERSION) -X $(PKG)/version.Revision=$(GITCOMMIT)'
 COMMANDS=acr
 BINARIES=$(addprefix bin/,$(COMMANDS))

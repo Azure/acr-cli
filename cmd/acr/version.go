@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/AzureCR/acr-cli/version"
+	"github.com/Azure/acr-cli/version"
 	"github.com/spf13/cobra"
 )
 
