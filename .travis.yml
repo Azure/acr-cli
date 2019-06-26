@@ -1,0 +1,19 @@
+sudo: false
+
+language: go
+
+go:
+  - "1.12.5"
+  
+before_script:
+  - GO_FILES=$(find . -iname '*.go' -type f | grep -v /vendor/)
+
+script:
+  - GOOS=linux scripts/setup/dev_setup
+  - make lint
+  - make build
+  - make binaries
+  - make test
+
+notifications:
+  email: false
