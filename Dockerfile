@@ -11,4 +11,9 @@ RUN make binaries && mv bin/acr /usr/bin/acr
 FROM alpine:3.9.4
 RUN apk --update add ca-certificates
 COPY --from=acr-cli /usr/bin/acr /usr/bin/acr
-ENTRYPOINT [ "acr" ]
+RUN apk add --no-cache \
+	bash \
+	jq \
+	curl
+COPY ./acr.sh /acrscripts/acr.sh
+ENTRYPOINT [ "bash","/acrscripts/acr.sh" ]

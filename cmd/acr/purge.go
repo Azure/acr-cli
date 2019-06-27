@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"regexp"
@@ -33,6 +34,7 @@ type purgeParameters struct {
 	registryName string
 	username     string
 	password     string
+	accessToken  string
 	ago          string
 	dangling     bool
 	filter       string
@@ -49,7 +51,19 @@ func newPurgeCmd(out io.Writer) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
 			loginURL := api.LoginURL(parameters.registryName)
-			auth := api.BasicAuth(parameters.username, parameters.password)
+			var auth string
+			if len(parameters.accessToken) > 0 && (len(parameters.username) > 0 || len(parameters.password) > 0) {
+				return errors.New("bearer token and username, password are mutually exclusive")
+			}
+			if len(parameters.accessToken) > 0 {
+				auth = api.BearerAuth(parameters.accessToken)
+			} else {
+				if len(parameters.username) > 0 && len(parameters.password) > 0 {
+					auth = api.BasicAuth(parameters.username, parameters.password)
+				} else {
+					return errors.New("please specify authentication credentials")
+				}
+			}
 			if !parameters.dangling {
 				err := PurgeTags(ctx, loginURL, auth, parameters.repoName, parameters.ago, parameters.filter)
 				if err != nil {
@@ -68,10 +82,8 @@ func newPurgeCmd(out io.Writer) *cobra.Command {
 	cmd.PersistentFlags().StringVarP(&parameters.registryName, "registry", "r", "", "Registry name")
 	cmd.MarkPersistentFlagRequired("registry")
 	cmd.PersistentFlags().StringVarP(&parameters.username, "username", "u", "", "Registry username")
-	cmd.MarkPersistentFlagRequired("username")
 	cmd.PersistentFlags().StringVarP(&parameters.password, "password", "p", "", "Registry password")
-	cmd.MarkPersistentFlagRequired("password")
-
+	cmd.PersistentFlags().StringVar(&parameters.accessToken, "access-token", "", "Access Token")
 	cmd.Flags().StringVar(&parameters.ago, "ago", "1d", "The images that were created before this timeStamp will be deleted")
 	cmd.Flags().BoolVar(&parameters.dangling, "dangling", false, "Just remove dangling manifests")
 	cmd.Flags().StringVarP(&parameters.filter, "filter", "f", "", "Given as a regular expression, if a tag matches the pattern and is older than the time specified in ago it gets deleted.")
