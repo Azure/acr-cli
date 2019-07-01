@@ -20,6 +20,11 @@ const (
 	registryURL = ".azurecr.io"
 )
 
+// BearerAuth returns the authentication header in case an access token was specified.
+func BearerAuth(accessToken string) string {
+	return "Bearer " + accessToken
+}
+
 // BasicAuth returns the username and the passwrod encoded in base 64.
 func BasicAuth(username string, password string) string {
 	auth := username + ":" + password

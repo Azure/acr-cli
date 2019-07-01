@@ -1,4 +1,4 @@
-module github.com/AzureCR/acr-cli
+module github.com/Azure/acr-cli
 
 go 1.12
 
