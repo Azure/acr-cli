@@ -28,6 +28,7 @@ Delete all tags that are older than 1 day and begin with hello
 
 Delete all dangling manifests
   acr purge -r MyRegistry --repository MyRepository --dangling`
+	maxConcurrentWorkers = 6
 )
 
 type purgeParameters struct {
@@ -108,8 +109,12 @@ func PurgeTags(ctx context.Context, loginURL string, auth string, repoName strin
 	}
 	var matches bool
 	var lastUpdateTime time.Time
-	var errorChannel = make(chan error, 100)
-	defer close(errorChannel)
+	tagsToDelete := make(chan string, 100)
+	errorChannel := make(chan error, 100)
+	// Generate the untag workers
+	for i := 1; i < maxConcurrentWorkers; i++ {
+		go UntagWorker(ctx, &wg, loginURL, auth, repoName, tagsToDelete, errorChannel)
+	}
 	lastTag := ""
 	resultTags, err := api.AcrListTags(ctx, loginURL, auth, repoName, "", lastTag)
 	if err != nil {
@@ -132,7 +137,7 @@ func PurgeTags(ctx context.Context, loginURL string, auth string, repoName strin
 			}
 			if lastUpdateTime.Before(timeToCompare) {
 				wg.Add(1)
-				go Untag(ctx, &wg, errorChannel, loginURL, auth, repoName, tagName)
+				tagsToDelete <- tagName
 			}
 		}
 		wg.Wait()
@@ -177,28 +182,34 @@ func ParseDuration(ago string) (time.Duration, error) {
 	return (-1 * duration), nil
 }
 
-// Untag is the function responsible for untagging an image.
-func Untag(ctx context.Context,
+// UntagWorker represents a worker in the worker pool that helps untagging older tags.
+func UntagWorker(ctx context.Context,
 	wg *sync.WaitGroup,
-	errorChannel chan error,
 	loginURL string,
 	auth string,
 	repoName string,
-	tag string) {
-	defer wg.Done()
-	err := api.AcrDeleteTag(ctx, loginURL, auth, repoName, tag)
-	if err != nil {
-		errorChannel <- err
-		return
+	tagsToDelete <-chan string,
+	errorChannel chan<- error) {
+	for tagToDelete := range tagsToDelete {
+		err := api.AcrDeleteTag(ctx, loginURL, auth, repoName, tagToDelete)
+		if err != nil {
+			errorChannel <- err
+		} else {
+			fmt.Printf("%s/%s:%s\n", loginURL, repoName, tagToDelete)
+		}
+		wg.Done()
 	}
-	fmt.Printf("%s/%s:%s\n", loginURL, repoName, tag)
 }
 
 // PurgeDanglingManifests runs if the dangling flag is specified and deletes all manifests that do not have any tags associated with them.
 func PurgeDanglingManifests(ctx context.Context, loginURL string, auth string, repoName string) error {
-	var errorChannel = make(chan error, 100)
-	defer close(errorChannel)
+	manifestsToDelete := make(chan string, 100)
+	errorChannel := make(chan error, 100)
 	var wg sync.WaitGroup
+	// Generate the manifest delete workers
+	for i := 1; i < maxConcurrentWorkers; i++ {
+		go HandleManifestWorker(ctx, &wg, loginURL, auth, repoName, manifestsToDelete, errorChannel)
+	}
 	lastManifestDigest := ""
 	resultManifests, err := api.AcrListManifests(ctx, loginURL, auth, repoName, "", lastManifestDigest)
 	if err != nil {
@@ -209,7 +220,7 @@ func PurgeDanglingManifests(ctx context.Context, loginURL string, auth string, r
 		for _, manifest := range manifests {
 			if manifest.Tags == nil {
 				wg.Add(1)
-				go HandleManifest(ctx, &wg, errorChannel, loginURL, auth, repoName, *manifest.Digest)
+				manifestsToDelete <- *manifest.Digest
 			}
 		}
 		wg.Wait()
@@ -228,19 +239,21 @@ func PurgeDanglingManifests(ctx context.Context, loginURL string, auth string, r
 	return nil
 }
 
-// HandleManifest deletes a manifest, if there is an archive repo and the manifest has existent metadata the manifest is moved instead.
-func HandleManifest(ctx context.Context,
+// HandleManifestWorker is the worker that deletes manifests, if there is an archive repo and the manifest has existent metadata the manifest is moved instead.
+func HandleManifestWorker(ctx context.Context,
 	wg *sync.WaitGroup,
-	errorChannel chan error,
 	loginURL string,
 	auth string,
 	repoName string,
-	digest string) {
-	defer wg.Done()
-	err := api.DeleteManifest(ctx, loginURL, auth, repoName, digest)
-	if err != nil {
-		errorChannel <- err
-		return
+	manifestsToDelete <-chan string,
+	errorChannel chan<- error) {
+	for manifestToDelete := range manifestsToDelete {
+		err := api.DeleteManifest(ctx, loginURL, auth, repoName, manifestToDelete)
+		if err != nil {
+			errorChannel <- err
+		} else {
+			fmt.Printf("%s/%s@%s\n", loginURL, repoName, manifestToDelete)
+		}
+		wg.Done()
 	}
-	fmt.Printf("%s/%s@%s\n", loginURL, repoName, digest)
 }
