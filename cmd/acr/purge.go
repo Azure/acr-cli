@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/Azure/acr-cli/cmd/api"
+	"github.com/Azure/acr-cli/cmd/worker"
 	"github.com/spf13/cobra"
 )
 
@@ -42,6 +43,8 @@ type purgeParameters struct {
 	repoName     string
 }
 
+var wg sync.WaitGroup
+
 func newPurgeCmd(out io.Writer) *cobra.Command {
 	var parameters purgeParameters
 	cmd := &cobra.Command{
@@ -50,6 +53,7 @@ func newPurgeCmd(out io.Writer) *cobra.Command {
 		Long:    purgeLongMessage,
 		Example: exampleMessage,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			worker.StartDispatcher(&wg, maxConcurrentWorkers)
 			ctx := context.Background()
 			loginURL := api.LoginURL(parameters.registryName)
 			var auth string
@@ -96,7 +100,6 @@ func newPurgeCmd(out io.Writer) *cobra.Command {
 
 // PurgeTags deletes all tags that are older than the ago value and that match the filter string (if present).
 func PurgeTags(ctx context.Context, loginURL string, auth string, repoName string, ago string, filter string) error {
-	var wg sync.WaitGroup
 	agoDuration, err := ParseDuration(ago)
 	if err != nil {
 		return err
@@ -109,12 +112,6 @@ func PurgeTags(ctx context.Context, loginURL string, auth string, repoName strin
 	}
 	var matches bool
 	var lastUpdateTime time.Time
-	tagsToDelete := make(chan string, 100)
-	errorChannel := make(chan error, 100)
-	// Generate the untag workers
-	for i := 1; i < maxConcurrentWorkers; i++ {
-		go UntagWorker(ctx, &wg, loginURL, auth, repoName, tagsToDelete, errorChannel)
-	}
 	lastTag := ""
 	resultTags, err := api.AcrListTags(ctx, loginURL, auth, repoName, "", lastTag)
 	if err != nil {
@@ -137,14 +134,14 @@ func PurgeTags(ctx context.Context, loginURL string, auth string, repoName strin
 			}
 			if lastUpdateTime.Before(timeToCompare) {
 				wg.Add(1)
-				tagsToDelete <- tagName
+				worker.QueuePurgeTag(loginURL, auth, repoName, tagName)
 			}
 		}
 		wg.Wait()
-		for len(errorChannel) > 0 {
-			err = <-errorChannel
-			if err != nil {
-				return err
+		for len(worker.ErrorChannel) > 0 {
+			wErr := <-worker.ErrorChannel
+			if wErr.Error != nil {
+				return wErr.Error
 			}
 		}
 		lastTag = *tags[len(tags)-1].Name
@@ -182,34 +179,8 @@ func ParseDuration(ago string) (time.Duration, error) {
 	return (-1 * duration), nil
 }
 
-// UntagWorker represents a worker in the worker pool that helps untagging older tags.
-func UntagWorker(ctx context.Context,
-	wg *sync.WaitGroup,
-	loginURL string,
-	auth string,
-	repoName string,
-	tagsToDelete <-chan string,
-	errorChannel chan<- error) {
-	for tagToDelete := range tagsToDelete {
-		err := api.AcrDeleteTag(ctx, loginURL, auth, repoName, tagToDelete)
-		if err != nil {
-			errorChannel <- err
-		} else {
-			fmt.Printf("%s/%s:%s\n", loginURL, repoName, tagToDelete)
-		}
-		wg.Done()
-	}
-}
-
-// PurgeDanglingManifests runs if the dangling flag is specified and deletes all manifests that do not have any tags associated with them.
+// PurgeDanglingManifests deletes all manifests that do not have any tags associated with them.
 func PurgeDanglingManifests(ctx context.Context, loginURL string, auth string, repoName string) error {
-	manifestsToDelete := make(chan string, 100)
-	errorChannel := make(chan error, 100)
-	var wg sync.WaitGroup
-	// Generate the manifest delete workers
-	for i := 1; i < maxConcurrentWorkers; i++ {
-		go HandleManifestWorker(ctx, &wg, loginURL, auth, repoName, manifestsToDelete, errorChannel)
-	}
 	lastManifestDigest := ""
 	resultManifests, err := api.AcrListManifests(ctx, loginURL, auth, repoName, "", lastManifestDigest)
 	if err != nil {
@@ -220,14 +191,14 @@ func PurgeDanglingManifests(ctx context.Context, loginURL string, auth string, r
 		for _, manifest := range manifests {
 			if manifest.Tags == nil {
 				wg.Add(1)
-				manifestsToDelete <- *manifest.Digest
+				worker.QueuePurgeManifest(loginURL, auth, repoName, *manifest.Digest)
 			}
 		}
 		wg.Wait()
-		for len(errorChannel) > 0 {
-			err = <-errorChannel
-			if err != nil {
-				return err
+		for len(worker.ErrorChannel) > 0 {
+			wErr := <-worker.ErrorChannel
+			if wErr.Error != nil {
+				return wErr.Error
 			}
 		}
 		lastManifestDigest = *manifests[len(manifests)-1].Digest
@@ -237,23 +208,4 @@ func PurgeDanglingManifests(ctx context.Context, loginURL string, auth string, r
 		}
 	}
 	return nil
-}
-
-// HandleManifestWorker is the worker that deletes manifests, if there is an archive repo and the manifest has existent metadata the manifest is moved instead.
-func HandleManifestWorker(ctx context.Context,
-	wg *sync.WaitGroup,
-	loginURL string,
-	auth string,
-	repoName string,
-	manifestsToDelete <-chan string,
-	errorChannel chan<- error) {
-	for manifestToDelete := range manifestsToDelete {
-		err := api.DeleteManifest(ctx, loginURL, auth, repoName, manifestToDelete)
-		if err != nil {
-			errorChannel <- err
-		} else {
-			fmt.Printf("%s/%s@%s\n", loginURL, repoName, manifestToDelete)
-		}
-		wg.Done()
-	}
 }
