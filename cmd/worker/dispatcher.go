@@ -3,16 +3,20 @@
 
 package worker
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/Azure/acr-cli/cmd/api"
+)
 
 // WorkerQueue represents the queue of the workers
 var WorkerQueue chan chan PurgeJob
 
 // StartDispatcher creates the workers and a goroutine to continously fetch jobs for them.
-func StartDispatcher(wg *sync.WaitGroup, nWorkers int) {
+func StartDispatcher(wg *sync.WaitGroup, acrClient api.AcrCLIClient, nWorkers int) {
 	WorkerQueue = make(chan chan PurgeJob, nWorkers)
 	for i := 0; i < nWorkers; i++ {
-		worker := NewPurgeWorker(wg, WorkerQueue)
+		worker := NewPurgeWorker(wg, WorkerQueue, acrClient)
 		worker.Start()
 	}
 

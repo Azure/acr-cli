@@ -1,6 +1,6 @@
-// Package acrapi implements the Azure ARM Acrapi service API version 1.0.
+// Package acr implements the Azure ARM Acr service API version 2018-08-10-preview.
 //
-// V2 API definition for the Azure Container Registry runtime
+// Metadata API definition for the Azure Container Registry runtime
 package acr
 
 // Copyright (c) Microsoft Corporation. All rights reserved.
@@ -15,1485 +15,80 @@ import (
 
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure"
+	"github.com/Azure/go-autorest/tracing"
 )
 
-const (
-	// DefaultBaseURI is the default URI used for the service Acrapi
-	DefaultBaseURI = "https://acrapi.azurecr-test.io"
-)
-
-// BaseClient is the base client for Acrapi.
+// BaseClient is the base client for Acr.
 type BaseClient struct {
 	autorest.Client
-	BaseURI       string
-	Name          string
-	Reference     string
-	Digest        string
-	Metadata      string
-	Property      string
-	Authorization string
-	Orderby       string
-	N             string
-	Last          string
-	Digest1       string
+	LoginURI string
 }
 
 // New creates an instance of the BaseClient client.
-func New(name string, reference string, digest string, metadata string, property string, authorization string, orderby string, n string, last string, digest1 string) BaseClient {
-	return NewWithBaseURI(DefaultBaseURI, name, reference, digest, metadata, property, authorization, orderby, n, last, digest1)
+func New(loginURI string) BaseClient {
+	return NewWithoutDefaults(loginURI)
 }
 
-// NewWithBaseURI creates an instance of the BaseClient client.
-func NewWithBaseURI(baseURI string, name string, reference string, digest string, metadata string, property string, authorization string, orderby string, n string, last string, digest1 string) BaseClient {
+// NewWithoutDefaults creates an instance of the BaseClient client.
+func NewWithoutDefaults(loginURI string) BaseClient {
 	return BaseClient{
-		Client:        autorest.NewClientWithUserAgent(UserAgent()),
-		BaseURI:       baseURI,
-		Name:          name,
-		Reference:     reference,
-		Digest:        digest,
-		Metadata:      metadata,
-		Property:      property,
-		Authorization: authorization,
-		Orderby:       orderby,
-		N:             n,
-		Last:          last,
-		Digest1:       digest1,
+		Client:   autorest.NewClientWithUserAgent(UserAgent()),
+		LoginURI: loginURI,
 	}
-}
-
-// AcrDeleteManifestMetadata delete a metadata of a manifest
-func (client BaseClient) AcrDeleteManifestMetadata(ctx context.Context) (result SetObject, err error) {
-	req, err := client.AcrDeleteManifestMetadataPreparer(ctx)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrDeleteManifestMetadata", nil, "Failure preparing request")
-		return
-	}
-
-	resp, err := client.AcrDeleteManifestMetadataSender(req)
-	if err != nil {
-		result.Response = autorest.Response{Response: resp}
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrDeleteManifestMetadata", resp, "Failure sending request")
-		return
-	}
-
-	result, err = client.AcrDeleteManifestMetadataResponder(resp)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrDeleteManifestMetadata", resp, "Failure responding to request")
-	}
-
-	return
-}
-
-// AcrDeleteManifestMetadataPreparer prepares the AcrDeleteManifestMetadata request.
-func (client BaseClient) AcrDeleteManifestMetadataPreparer(ctx context.Context) (*http.Request, error) {
-	pathParameters := map[string]interface{}{
-		"metadata":  autorest.Encode("path", client.Metadata),
-		"name":      autorest.Encode("path", client.Name),
-		"reference": autorest.Encode("path", client.Reference),
-	}
-
-	preparer := autorest.CreatePreparer(
-		autorest.AsDelete(),
-		autorest.WithBaseURL(client.BaseURI),
-		autorest.WithPathParameters("/acr/v1/{name}/_manifests/{reference}/_metadata/{metadata}", pathParameters),
-		autorest.WithHeader("authorization", client.Authorization))
-	return preparer.Prepare((&http.Request{}).WithContext(ctx))
-}
-
-// AcrDeleteManifestMetadataSender sends the AcrDeleteManifestMetadata request. The method will close the
-// http.Response Body if it receives an error.
-func (client BaseClient) AcrDeleteManifestMetadataSender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
-}
-
-// AcrDeleteManifestMetadataResponder handles the response to the AcrDeleteManifestMetadata request. The method always
-// closes the http.Response Body.
-func (client BaseClient) AcrDeleteManifestMetadataResponder(resp *http.Response) (result SetObject, err error) {
-	err = autorest.Respond(
-		resp,
-		client.ByInspecting(),
-		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusAccepted, http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound),
-		autorest.ByUnmarshallingJSON(&result.Value),
-		autorest.ByClosing())
-	result.Response = autorest.Response{Response: resp}
-	return
-}
-
-// AcrDeleteRepository delete a respository
-func (client BaseClient) AcrDeleteRepository(ctx context.Context) (result SetObject, err error) {
-	req, err := client.AcrDeleteRepositoryPreparer(ctx)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrDeleteRepository", nil, "Failure preparing request")
-		return
-	}
-
-	resp, err := client.AcrDeleteRepositorySender(req)
-	if err != nil {
-		result.Response = autorest.Response{Response: resp}
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrDeleteRepository", resp, "Failure sending request")
-		return
-	}
-
-	result, err = client.AcrDeleteRepositoryResponder(resp)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrDeleteRepository", resp, "Failure responding to request")
-	}
-
-	return
-}
-
-// AcrDeleteRepositoryPreparer prepares the AcrDeleteRepository request.
-func (client BaseClient) AcrDeleteRepositoryPreparer(ctx context.Context) (*http.Request, error) {
-	pathParameters := map[string]interface{}{
-		"name": autorest.Encode("path", client.Name),
-	}
-
-	preparer := autorest.CreatePreparer(
-		autorest.AsDelete(),
-		autorest.WithBaseURL(client.BaseURI),
-		autorest.WithPathParameters("/acr/v1/{name}", pathParameters),
-		autorest.WithHeader("authorization", client.Authorization))
-	return preparer.Prepare((&http.Request{}).WithContext(ctx))
-}
-
-// AcrDeleteRepositorySender sends the AcrDeleteRepository request. The method will close the
-// http.Response Body if it receives an error.
-func (client BaseClient) AcrDeleteRepositorySender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
-}
-
-// AcrDeleteRepositoryResponder handles the response to the AcrDeleteRepository request. The method always
-// closes the http.Response Body.
-func (client BaseClient) AcrDeleteRepositoryResponder(resp *http.Response) (result SetObject, err error) {
-	err = autorest.Respond(
-		resp,
-		client.ByInspecting(),
-		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusAccepted, http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound),
-		autorest.ByUnmarshallingJSON(&result.Value),
-		autorest.ByClosing())
-	result.Response = autorest.Response{Response: resp}
-	return
-}
-
-// AcrDeleteRepositoryMetadata delete a metadata of a repository
-func (client BaseClient) AcrDeleteRepositoryMetadata(ctx context.Context) (result SetObject, err error) {
-	req, err := client.AcrDeleteRepositoryMetadataPreparer(ctx)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrDeleteRepositoryMetadata", nil, "Failure preparing request")
-		return
-	}
-
-	resp, err := client.AcrDeleteRepositoryMetadataSender(req)
-	if err != nil {
-		result.Response = autorest.Response{Response: resp}
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrDeleteRepositoryMetadata", resp, "Failure sending request")
-		return
-	}
-
-	result, err = client.AcrDeleteRepositoryMetadataResponder(resp)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrDeleteRepositoryMetadata", resp, "Failure responding to request")
-	}
-
-	return
-}
-
-// AcrDeleteRepositoryMetadataPreparer prepares the AcrDeleteRepositoryMetadata request.
-func (client BaseClient) AcrDeleteRepositoryMetadataPreparer(ctx context.Context) (*http.Request, error) {
-	pathParameters := map[string]interface{}{
-		"metadata": autorest.Encode("path", client.Metadata),
-		"name":     autorest.Encode("path", client.Name),
-	}
-
-	preparer := autorest.CreatePreparer(
-		autorest.AsDelete(),
-		autorest.WithBaseURL(client.BaseURI),
-		autorest.WithPathParameters("/acr/v1/{name}/_metadata/{metadata}", pathParameters),
-		autorest.WithHeader("authorization", client.Authorization))
-	return preparer.Prepare((&http.Request{}).WithContext(ctx))
-}
-
-// AcrDeleteRepositoryMetadataSender sends the AcrDeleteRepositoryMetadata request. The method will close the
-// http.Response Body if it receives an error.
-func (client BaseClient) AcrDeleteRepositoryMetadataSender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
-}
-
-// AcrDeleteRepositoryMetadataResponder handles the response to the AcrDeleteRepositoryMetadata request. The method always
-// closes the http.Response Body.
-func (client BaseClient) AcrDeleteRepositoryMetadataResponder(resp *http.Response) (result SetObject, err error) {
-	err = autorest.Respond(
-		resp,
-		client.ByInspecting(),
-		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusAccepted, http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound),
-		autorest.ByUnmarshallingJSON(&result.Value),
-		autorest.ByClosing())
-	result.Response = autorest.Response{Response: resp}
-	return
-}
-
-// AcrDeleteTag delete a tag
-func (client BaseClient) AcrDeleteTag(ctx context.Context) (result SetObject, err error) {
-	req, err := client.AcrDeleteTagPreparer(ctx)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrDeleteTag", nil, "Failure preparing request")
-		return
-	}
-
-	resp, err := client.AcrDeleteTagSender(req)
-	if err != nil {
-		result.Response = autorest.Response{Response: resp}
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrDeleteTag", resp, "Failure sending request")
-		return
-	}
-
-	result, err = client.AcrDeleteTagResponder(resp)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrDeleteTag", resp, "Failure responding to request")
-	}
-
-	return
-}
-
-// AcrDeleteTagPreparer prepares the AcrDeleteTag request.
-func (client BaseClient) AcrDeleteTagPreparer(ctx context.Context) (*http.Request, error) {
-	pathParameters := map[string]interface{}{
-		"name":      autorest.Encode("path", client.Name),
-		"reference": autorest.Encode("path", client.Reference),
-	}
-
-	preparer := autorest.CreatePreparer(
-		autorest.AsDelete(),
-		autorest.WithBaseURL(client.BaseURI),
-		autorest.WithPathParameters("/acr/v1/{name}/_tags/{reference}", pathParameters),
-		autorest.WithHeader("authorization", client.Authorization))
-	return preparer.Prepare((&http.Request{}).WithContext(ctx))
-}
-
-// AcrDeleteTagSender sends the AcrDeleteTag request. The method will close the
-// http.Response Body if it receives an error.
-func (client BaseClient) AcrDeleteTagSender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
-}
-
-// AcrDeleteTagResponder handles the response to the AcrDeleteTag request. The method always
-// closes the http.Response Body.
-func (client BaseClient) AcrDeleteTagResponder(resp *http.Response) (result SetObject, err error) {
-	err = autorest.Respond(
-		resp,
-		client.ByInspecting(),
-		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusAccepted, http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound),
-		autorest.ByUnmarshallingJSON(&result.Value),
-		autorest.ByClosing())
-	result.Response = autorest.Response{Response: resp}
-	return
-}
-
-// AcrDeleteTagMetadata delete a metadata of a tag
-func (client BaseClient) AcrDeleteTagMetadata(ctx context.Context) (result SetObject, err error) {
-	req, err := client.AcrDeleteTagMetadataPreparer(ctx)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrDeleteTagMetadata", nil, "Failure preparing request")
-		return
-	}
-
-	resp, err := client.AcrDeleteTagMetadataSender(req)
-	if err != nil {
-		result.Response = autorest.Response{Response: resp}
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrDeleteTagMetadata", resp, "Failure sending request")
-		return
-	}
-
-	result, err = client.AcrDeleteTagMetadataResponder(resp)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrDeleteTagMetadata", resp, "Failure responding to request")
-	}
-
-	return
-}
-
-// AcrDeleteTagMetadataPreparer prepares the AcrDeleteTagMetadata request.
-func (client BaseClient) AcrDeleteTagMetadataPreparer(ctx context.Context) (*http.Request, error) {
-	pathParameters := map[string]interface{}{
-		"metadata":  autorest.Encode("path", client.Metadata),
-		"name":      autorest.Encode("path", client.Name),
-		"reference": autorest.Encode("path", client.Reference),
-	}
-
-	preparer := autorest.CreatePreparer(
-		autorest.AsDelete(),
-		autorest.WithBaseURL(client.BaseURI),
-		autorest.WithPathParameters("/acr/v1/{name}/_tags/{reference}/_metadata/{metadata}", pathParameters),
-		autorest.WithHeader("authorization", client.Authorization))
-	return preparer.Prepare((&http.Request{}).WithContext(ctx))
-}
-
-// AcrDeleteTagMetadataSender sends the AcrDeleteTagMetadata request. The method will close the
-// http.Response Body if it receives an error.
-func (client BaseClient) AcrDeleteTagMetadataSender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
-}
-
-// AcrDeleteTagMetadataResponder handles the response to the AcrDeleteTagMetadata request. The method always
-// closes the http.Response Body.
-func (client BaseClient) AcrDeleteTagMetadataResponder(resp *http.Response) (result SetObject, err error) {
-	err = autorest.Respond(
-		resp,
-		client.ByInspecting(),
-		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusAccepted, http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound),
-		autorest.ByUnmarshallingJSON(&result.Value),
-		autorest.ByClosing())
-	result.Response = autorest.Response{Response: resp}
-	return
-}
-
-// AcrGetManifestAttributes get manifest attributes
-func (client BaseClient) AcrGetManifestAttributes(ctx context.Context) (result SetObject, err error) {
-	req, err := client.AcrGetManifestAttributesPreparer(ctx)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrGetManifestAttributes", nil, "Failure preparing request")
-		return
-	}
-
-	resp, err := client.AcrGetManifestAttributesSender(req)
-	if err != nil {
-		result.Response = autorest.Response{Response: resp}
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrGetManifestAttributes", resp, "Failure sending request")
-		return
-	}
-
-	result, err = client.AcrGetManifestAttributesResponder(resp)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrGetManifestAttributes", resp, "Failure responding to request")
-	}
-
-	return
-}
-
-// AcrGetManifestAttributesPreparer prepares the AcrGetManifestAttributes request.
-func (client BaseClient) AcrGetManifestAttributesPreparer(ctx context.Context) (*http.Request, error) {
-	pathParameters := map[string]interface{}{
-		"name":      autorest.Encode("path", client.Name),
-		"reference": autorest.Encode("path", client.Reference),
-	}
-
-	preparer := autorest.CreatePreparer(
-		autorest.AsGet(),
-		autorest.WithBaseURL(client.BaseURI),
-		autorest.WithPathParameters("/acr/v1/{name}/_manifests/{reference}", pathParameters),
-		autorest.WithHeader("authorization", client.Authorization))
-	return preparer.Prepare((&http.Request{}).WithContext(ctx))
-}
-
-// AcrGetManifestAttributesSender sends the AcrGetManifestAttributes request. The method will close the
-// http.Response Body if it receives an error.
-func (client BaseClient) AcrGetManifestAttributesSender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
-}
-
-// AcrGetManifestAttributesResponder handles the response to the AcrGetManifestAttributes request. The method always
-// closes the http.Response Body.
-func (client BaseClient) AcrGetManifestAttributesResponder(resp *http.Response) (result SetObject, err error) {
-	err = autorest.Respond(
-		resp,
-		client.ByInspecting(),
-		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound),
-		autorest.ByUnmarshallingJSON(&result.Value),
-		autorest.ByClosing())
-	result.Response = autorest.Response{Response: resp}
-	return
-}
-
-// AcrGetManifestMetadata get metadata value
-func (client BaseClient) AcrGetManifestMetadata(ctx context.Context) (result SetObject, err error) {
-	req, err := client.AcrGetManifestMetadataPreparer(ctx)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrGetManifestMetadata", nil, "Failure preparing request")
-		return
-	}
-
-	resp, err := client.AcrGetManifestMetadataSender(req)
-	if err != nil {
-		result.Response = autorest.Response{Response: resp}
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrGetManifestMetadata", resp, "Failure sending request")
-		return
-	}
-
-	result, err = client.AcrGetManifestMetadataResponder(resp)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrGetManifestMetadata", resp, "Failure responding to request")
-	}
-
-	return
-}
-
-// AcrGetManifestMetadataPreparer prepares the AcrGetManifestMetadata request.
-func (client BaseClient) AcrGetManifestMetadataPreparer(ctx context.Context) (*http.Request, error) {
-	pathParameters := map[string]interface{}{
-		"metadata":  autorest.Encode("path", client.Metadata),
-		"name":      autorest.Encode("path", client.Name),
-		"reference": autorest.Encode("path", client.Reference),
-	}
-
-	preparer := autorest.CreatePreparer(
-		autorest.AsGet(),
-		autorest.WithBaseURL(client.BaseURI),
-		autorest.WithPathParameters("/acr/v1/{name}/_manifests/{reference}/_metadata/{metadata}", pathParameters),
-		autorest.WithHeader("authorization", client.Authorization))
-	return preparer.Prepare((&http.Request{}).WithContext(ctx))
-}
-
-// AcrGetManifestMetadataSender sends the AcrGetManifestMetadata request. The method will close the
-// http.Response Body if it receives an error.
-func (client BaseClient) AcrGetManifestMetadataSender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
-}
-
-// AcrGetManifestMetadataResponder handles the response to the AcrGetManifestMetadata request. The method always
-// closes the http.Response Body.
-func (client BaseClient) AcrGetManifestMetadataResponder(resp *http.Response) (result SetObject, err error) {
-	err = autorest.Respond(
-		resp,
-		client.ByInspecting(),
-		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound),
-		autorest.ByUnmarshallingJSON(&result.Value),
-		autorest.ByClosing())
-	result.Response = autorest.Response{Response: resp}
-	return
-}
-
-// AcrGetRepositoryAttributes get respository attributes
-func (client BaseClient) AcrGetRepositoryAttributes(ctx context.Context) (result SetObject, err error) {
-	req, err := client.AcrGetRepositoryAttributesPreparer(ctx)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrGetRepositoryAttributes", nil, "Failure preparing request")
-		return
-	}
-
-	resp, err := client.AcrGetRepositoryAttributesSender(req)
-	if err != nil {
-		result.Response = autorest.Response{Response: resp}
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrGetRepositoryAttributes", resp, "Failure sending request")
-		return
-	}
-
-	result, err = client.AcrGetRepositoryAttributesResponder(resp)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrGetRepositoryAttributes", resp, "Failure responding to request")
-	}
-
-	return
-}
-
-// AcrGetRepositoryAttributesPreparer prepares the AcrGetRepositoryAttributes request.
-func (client BaseClient) AcrGetRepositoryAttributesPreparer(ctx context.Context) (*http.Request, error) {
-	pathParameters := map[string]interface{}{
-		"name": autorest.Encode("path", client.Name),
-	}
-
-	preparer := autorest.CreatePreparer(
-		autorest.AsGet(),
-		autorest.WithBaseURL(client.BaseURI),
-		autorest.WithPathParameters("/acr/v1/{name}", pathParameters),
-		autorest.WithHeader("authorization", client.Authorization))
-	return preparer.Prepare((&http.Request{}).WithContext(ctx))
-}
-
-// AcrGetRepositoryAttributesSender sends the AcrGetRepositoryAttributes request. The method will close the
-// http.Response Body if it receives an error.
-func (client BaseClient) AcrGetRepositoryAttributesSender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
-}
-
-// AcrGetRepositoryAttributesResponder handles the response to the AcrGetRepositoryAttributes request. The method always
-// closes the http.Response Body.
-func (client BaseClient) AcrGetRepositoryAttributesResponder(resp *http.Response) (result SetObject, err error) {
-	err = autorest.Respond(
-		resp,
-		client.ByInspecting(),
-		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound),
-		autorest.ByUnmarshallingJSON(&result.Value),
-		autorest.ByClosing())
-	result.Response = autorest.Response{Response: resp}
-	return
-}
-
-// AcrGetRepositoryMetadata get metadata value
-func (client BaseClient) AcrGetRepositoryMetadata(ctx context.Context) (result SetObject, err error) {
-	req, err := client.AcrGetRepositoryMetadataPreparer(ctx)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrGetRepositoryMetadata", nil, "Failure preparing request")
-		return
-	}
-
-	resp, err := client.AcrGetRepositoryMetadataSender(req)
-	if err != nil {
-		result.Response = autorest.Response{Response: resp}
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrGetRepositoryMetadata", resp, "Failure sending request")
-		return
-	}
-
-	result, err = client.AcrGetRepositoryMetadataResponder(resp)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrGetRepositoryMetadata", resp, "Failure responding to request")
-	}
-
-	return
-}
-
-// AcrGetRepositoryMetadataPreparer prepares the AcrGetRepositoryMetadata request.
-func (client BaseClient) AcrGetRepositoryMetadataPreparer(ctx context.Context) (*http.Request, error) {
-	pathParameters := map[string]interface{}{
-		"metadata": autorest.Encode("path", client.Metadata),
-		"name":     autorest.Encode("path", client.Name),
-	}
-
-	preparer := autorest.CreatePreparer(
-		autorest.AsGet(),
-		autorest.WithBaseURL(client.BaseURI),
-		autorest.WithPathParameters("/acr/v1/{name}/_metadata/{metadata}", pathParameters),
-		autorest.WithHeader("authorization", client.Authorization))
-	return preparer.Prepare((&http.Request{}).WithContext(ctx))
-}
-
-// AcrGetRepositoryMetadataSender sends the AcrGetRepositoryMetadata request. The method will close the
-// http.Response Body if it receives an error.
-func (client BaseClient) AcrGetRepositoryMetadataSender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
-}
-
-// AcrGetRepositoryMetadataResponder handles the response to the AcrGetRepositoryMetadata request. The method always
-// closes the http.Response Body.
-func (client BaseClient) AcrGetRepositoryMetadataResponder(resp *http.Response) (result SetObject, err error) {
-	err = autorest.Respond(
-		resp,
-		client.ByInspecting(),
-		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound),
-		autorest.ByUnmarshallingJSON(&result.Value),
-		autorest.ByClosing())
-	result.Response = autorest.Response{Response: resp}
-	return
-}
-
-// AcrGetTagAttributes get tag attributes
-func (client BaseClient) AcrGetTagAttributes(ctx context.Context) (result SetObject, err error) {
-	req, err := client.AcrGetTagAttributesPreparer(ctx)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrGetTagAttributes", nil, "Failure preparing request")
-		return
-	}
-
-	resp, err := client.AcrGetTagAttributesSender(req)
-	if err != nil {
-		result.Response = autorest.Response{Response: resp}
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrGetTagAttributes", resp, "Failure sending request")
-		return
-	}
-
-	result, err = client.AcrGetTagAttributesResponder(resp)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrGetTagAttributes", resp, "Failure responding to request")
-	}
-
-	return
-}
-
-// AcrGetTagAttributesPreparer prepares the AcrGetTagAttributes request.
-func (client BaseClient) AcrGetTagAttributesPreparer(ctx context.Context) (*http.Request, error) {
-	pathParameters := map[string]interface{}{
-		"name":      autorest.Encode("path", client.Name),
-		"reference": autorest.Encode("path", client.Reference),
-	}
-
-	preparer := autorest.CreatePreparer(
-		autorest.AsGet(),
-		autorest.WithBaseURL(client.BaseURI),
-		autorest.WithPathParameters("/acr/v1/{name}/_tags/{reference}", pathParameters),
-		autorest.WithHeader("authorization", client.Authorization))
-	return preparer.Prepare((&http.Request{}).WithContext(ctx))
-}
-
-// AcrGetTagAttributesSender sends the AcrGetTagAttributes request. The method will close the
-// http.Response Body if it receives an error.
-func (client BaseClient) AcrGetTagAttributesSender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
-}
-
-// AcrGetTagAttributesResponder handles the response to the AcrGetTagAttributes request. The method always
-// closes the http.Response Body.
-func (client BaseClient) AcrGetTagAttributesResponder(resp *http.Response) (result SetObject, err error) {
-	err = autorest.Respond(
-		resp,
-		client.ByInspecting(),
-		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound),
-		autorest.ByUnmarshallingJSON(&result.Value),
-		autorest.ByClosing())
-	result.Response = autorest.Response{Response: resp}
-	return
-}
-
-// AcrGetTagMetadata get metadata value
-func (client BaseClient) AcrGetTagMetadata(ctx context.Context) (result SetObject, err error) {
-	req, err := client.AcrGetTagMetadataPreparer(ctx)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrGetTagMetadata", nil, "Failure preparing request")
-		return
-	}
-
-	resp, err := client.AcrGetTagMetadataSender(req)
-	if err != nil {
-		result.Response = autorest.Response{Response: resp}
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrGetTagMetadata", resp, "Failure sending request")
-		return
-	}
-
-	result, err = client.AcrGetTagMetadataResponder(resp)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrGetTagMetadata", resp, "Failure responding to request")
-	}
-
-	return
-}
-
-// AcrGetTagMetadataPreparer prepares the AcrGetTagMetadata request.
-func (client BaseClient) AcrGetTagMetadataPreparer(ctx context.Context) (*http.Request, error) {
-	pathParameters := map[string]interface{}{
-		"metadata":  autorest.Encode("path", client.Metadata),
-		"name":      autorest.Encode("path", client.Name),
-		"reference": autorest.Encode("path", client.Reference),
-	}
-
-	preparer := autorest.CreatePreparer(
-		autorest.AsGet(),
-		autorest.WithBaseURL(client.BaseURI),
-		autorest.WithPathParameters("/acr/v1/{name}/_tags/{reference}/_metadata/{metadata}", pathParameters),
-		autorest.WithHeader("authorization", client.Authorization))
-	return preparer.Prepare((&http.Request{}).WithContext(ctx))
-}
-
-// AcrGetTagMetadataSender sends the AcrGetTagMetadata request. The method will close the
-// http.Response Body if it receives an error.
-func (client BaseClient) AcrGetTagMetadataSender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
-}
-
-// AcrGetTagMetadataResponder handles the response to the AcrGetTagMetadata request. The method always
-// closes the http.Response Body.
-func (client BaseClient) AcrGetTagMetadataResponder(resp *http.Response) (result SetObject, err error) {
-	err = autorest.Respond(
-		resp,
-		client.ByInspecting(),
-		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound),
-		autorest.ByUnmarshallingJSON(&result.Value),
-		autorest.ByClosing())
-	result.Response = autorest.Response{Response: resp}
-	return
-}
-
-// AcrListManifestMetadata list manifest metadata
-func (client BaseClient) AcrListManifestMetadata(ctx context.Context) (result SetObject, err error) {
-	req, err := client.AcrListManifestMetadataPreparer(ctx)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrListManifestMetadata", nil, "Failure preparing request")
-		return
-	}
-
-	resp, err := client.AcrListManifestMetadataSender(req)
-	if err != nil {
-		result.Response = autorest.Response{Response: resp}
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrListManifestMetadata", resp, "Failure sending request")
-		return
-	}
-
-	result, err = client.AcrListManifestMetadataResponder(resp)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrListManifestMetadata", resp, "Failure responding to request")
-	}
-
-	return
-}
-
-// AcrListManifestMetadataPreparer prepares the AcrListManifestMetadata request.
-func (client BaseClient) AcrListManifestMetadataPreparer(ctx context.Context) (*http.Request, error) {
-	pathParameters := map[string]interface{}{
-		"name":      autorest.Encode("path", client.Name),
-		"reference": autorest.Encode("path", client.Reference),
-	}
-
-	preparer := autorest.CreatePreparer(
-		autorest.AsGet(),
-		autorest.WithBaseURL(client.BaseURI),
-		autorest.WithPathParameters("/acr/v1/{name}/_manifests/{reference}/_metadata", pathParameters),
-		autorest.WithHeader("authorization", client.Authorization))
-	return preparer.Prepare((&http.Request{}).WithContext(ctx))
-}
-
-// AcrListManifestMetadataSender sends the AcrListManifestMetadata request. The method will close the
-// http.Response Body if it receives an error.
-func (client BaseClient) AcrListManifestMetadataSender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
-}
-
-// AcrListManifestMetadataResponder handles the response to the AcrListManifestMetadata request. The method always
-// closes the http.Response Body.
-func (client BaseClient) AcrListManifestMetadataResponder(resp *http.Response) (result SetObject, err error) {
-	err = autorest.Respond(
-		resp,
-		client.ByInspecting(),
-		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound),
-		autorest.ByUnmarshallingJSON(&result.Value),
-		autorest.ByClosing())
-	result.Response = autorest.Response{Response: resp}
-	return
-}
-
-// AcrListManifests list manifets of a repository
-func (client BaseClient) AcrListManifests(ctx context.Context) (result SetObject, err error) {
-	req, err := client.AcrListManifestsPreparer(ctx)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrListManifests", nil, "Failure preparing request")
-		return
-	}
-
-	resp, err := client.AcrListManifestsSender(req)
-	if err != nil {
-		result.Response = autorest.Response{Response: resp}
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrListManifests", resp, "Failure sending request")
-		return
-	}
-
-	result, err = client.AcrListManifestsResponder(resp)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrListManifests", resp, "Failure responding to request")
-	}
-
-	return
-}
-
-// AcrListManifestsPreparer prepares the AcrListManifests request.
-func (client BaseClient) AcrListManifestsPreparer(ctx context.Context) (*http.Request, error) {
-	pathParameters := map[string]interface{}{
-		"name": autorest.Encode("path", client.Name),
-	}
-
-	queryParameters := map[string]interface{}{}
-	if len(client.Last) > 0 {
-		queryParameters["last"] = autorest.Encode("query", client.Last)
-	}
-	if len(client.N) > 0 {
-		queryParameters["n"] = autorest.Encode("query", client.N)
-	}
-	if len(client.Orderby) > 0 {
-		queryParameters["orderby"] = autorest.Encode("query", client.Orderby)
-	}
-
-	preparer := autorest.CreatePreparer(
-		autorest.AsGet(),
-		autorest.WithBaseURL(client.BaseURI),
-		autorest.WithPathParameters("/acr/v1/{name}/_manifests", pathParameters),
-		autorest.WithQueryParameters(queryParameters),
-		autorest.WithHeader("authorization", client.Authorization))
-	return preparer.Prepare((&http.Request{}).WithContext(ctx))
-}
-
-// AcrListManifestsSender sends the AcrListManifests request. The method will close the
-// http.Response Body if it receives an error.
-func (client BaseClient) AcrListManifestsSender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
-}
-
-// AcrListManifestsResponder handles the response to the AcrListManifests request. The method always
-// closes the http.Response Body.
-func (client BaseClient) AcrListManifestsResponder(resp *http.Response) (result SetObject, err error) {
-	err = autorest.Respond(
-		resp,
-		client.ByInspecting(),
-		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound),
-		autorest.ByUnmarshallingJSON(&result.Value),
-		autorest.ByClosing())
-	result.Response = autorest.Response{Response: resp}
-	return
-}
-
-// AcrListRepositories list respositories
-func (client BaseClient) AcrListRepositories(ctx context.Context) (result SetObject, err error) {
-	req, err := client.AcrListRepositoriesPreparer(ctx)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrListRepositories", nil, "Failure preparing request")
-		return
-	}
-
-	resp, err := client.AcrListRepositoriesSender(req)
-	if err != nil {
-		result.Response = autorest.Response{Response: resp}
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrListRepositories", resp, "Failure sending request")
-		return
-	}
-
-	result, err = client.AcrListRepositoriesResponder(resp)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrListRepositories", resp, "Failure responding to request")
-	}
-
-	return
-}
-
-// AcrListRepositoriesPreparer prepares the AcrListRepositories request.
-func (client BaseClient) AcrListRepositoriesPreparer(ctx context.Context) (*http.Request, error) {
-	queryParameters := map[string]interface{}{}
-	if len(client.Last) > 0 {
-		queryParameters["last"] = autorest.Encode("query", client.Last)
-	}
-	if len(client.N) > 0 {
-		queryParameters["n"] = autorest.Encode("query", client.N)
-	}
-
-	preparer := autorest.CreatePreparer(
-		autorest.AsGet(),
-		autorest.WithBaseURL(client.BaseURI),
-		autorest.WithPath("/acr/v1/_catalog"),
-		autorest.WithQueryParameters(queryParameters),
-		autorest.WithHeader("authorization", client.Authorization))
-	return preparer.Prepare((&http.Request{}).WithContext(ctx))
-}
-
-// AcrListRepositoriesSender sends the AcrListRepositories request. The method will close the
-// http.Response Body if it receives an error.
-func (client BaseClient) AcrListRepositoriesSender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
-}
-
-// AcrListRepositoriesResponder handles the response to the AcrListRepositories request. The method always
-// closes the http.Response Body.
-func (client BaseClient) AcrListRepositoriesResponder(resp *http.Response) (result SetObject, err error) {
-	err = autorest.Respond(
-		resp,
-		client.ByInspecting(),
-		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusBadRequest, http.StatusUnauthorized),
-		autorest.ByUnmarshallingJSON(&result.Value),
-		autorest.ByClosing())
-	result.Response = autorest.Response{Response: resp}
-	return
-}
-
-// AcrListRepositoryMetadata list respository metadata
-func (client BaseClient) AcrListRepositoryMetadata(ctx context.Context) (result SetObject, err error) {
-	req, err := client.AcrListRepositoryMetadataPreparer(ctx)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrListRepositoryMetadata", nil, "Failure preparing request")
-		return
-	}
-
-	resp, err := client.AcrListRepositoryMetadataSender(req)
-	if err != nil {
-		result.Response = autorest.Response{Response: resp}
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrListRepositoryMetadata", resp, "Failure sending request")
-		return
-	}
-
-	result, err = client.AcrListRepositoryMetadataResponder(resp)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrListRepositoryMetadata", resp, "Failure responding to request")
-	}
-
-	return
-}
-
-// AcrListRepositoryMetadataPreparer prepares the AcrListRepositoryMetadata request.
-func (client BaseClient) AcrListRepositoryMetadataPreparer(ctx context.Context) (*http.Request, error) {
-	pathParameters := map[string]interface{}{
-		"name": autorest.Encode("path", client.Name),
-	}
-
-	preparer := autorest.CreatePreparer(
-		autorest.AsGet(),
-		autorest.WithBaseURL(client.BaseURI),
-		autorest.WithPathParameters("/acr/v1/{name}/_metadata", pathParameters),
-		autorest.WithHeader("authorization", client.Authorization))
-	return preparer.Prepare((&http.Request{}).WithContext(ctx))
-}
-
-// AcrListRepositoryMetadataSender sends the AcrListRepositoryMetadata request. The method will close the
-// http.Response Body if it receives an error.
-func (client BaseClient) AcrListRepositoryMetadataSender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
-}
-
-// AcrListRepositoryMetadataResponder handles the response to the AcrListRepositoryMetadata request. The method always
-// closes the http.Response Body.
-func (client BaseClient) AcrListRepositoryMetadataResponder(resp *http.Response) (result SetObject, err error) {
-	err = autorest.Respond(
-		resp,
-		client.ByInspecting(),
-		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound),
-		autorest.ByUnmarshallingJSON(&result.Value),
-		autorest.ByClosing())
-	result.Response = autorest.Response{Response: resp}
-	return
-}
-
-// AcrListTagMetadata list tag metadata
-func (client BaseClient) AcrListTagMetadata(ctx context.Context) (result SetObject, err error) {
-	req, err := client.AcrListTagMetadataPreparer(ctx)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrListTagMetadata", nil, "Failure preparing request")
-		return
-	}
-
-	resp, err := client.AcrListTagMetadataSender(req)
-	if err != nil {
-		result.Response = autorest.Response{Response: resp}
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrListTagMetadata", resp, "Failure sending request")
-		return
-	}
-
-	result, err = client.AcrListTagMetadataResponder(resp)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrListTagMetadata", resp, "Failure responding to request")
-	}
-
-	return
-}
-
-// AcrListTagMetadataPreparer prepares the AcrListTagMetadata request.
-func (client BaseClient) AcrListTagMetadataPreparer(ctx context.Context) (*http.Request, error) {
-	pathParameters := map[string]interface{}{
-		"name":      autorest.Encode("path", client.Name),
-		"reference": autorest.Encode("path", client.Reference),
-	}
-
-	preparer := autorest.CreatePreparer(
-		autorest.AsGet(),
-		autorest.WithBaseURL(client.BaseURI),
-		autorest.WithPathParameters("/acr/v1/{name}/_tags/{reference}/_metadata", pathParameters),
-		autorest.WithHeader("authorization", client.Authorization))
-	return preparer.Prepare((&http.Request{}).WithContext(ctx))
-}
-
-// AcrListTagMetadataSender sends the AcrListTagMetadata request. The method will close the
-// http.Response Body if it receives an error.
-func (client BaseClient) AcrListTagMetadataSender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
-}
-
-// AcrListTagMetadataResponder handles the response to the AcrListTagMetadata request. The method always
-// closes the http.Response Body.
-func (client BaseClient) AcrListTagMetadataResponder(resp *http.Response) (result SetObject, err error) {
-	err = autorest.Respond(
-		resp,
-		client.ByInspecting(),
-		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound),
-		autorest.ByUnmarshallingJSON(&result.Value),
-		autorest.ByClosing())
-	result.Response = autorest.Response{Response: resp}
-	return
-}
-
-// AcrListTags list tags of a repository
-func (client BaseClient) AcrListTags(ctx context.Context) (result SetObject, err error) {
-	req, err := client.AcrListTagsPreparer(ctx)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrListTags", nil, "Failure preparing request")
-		return
-	}
-
-	resp, err := client.AcrListTagsSender(req)
-	if err != nil {
-		result.Response = autorest.Response{Response: resp}
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrListTags", resp, "Failure sending request")
-		return
-	}
-
-	result, err = client.AcrListTagsResponder(resp)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrListTags", resp, "Failure responding to request")
-	}
-
-	return
-}
-
-// AcrListTagsPreparer prepares the AcrListTags request.
-func (client BaseClient) AcrListTagsPreparer(ctx context.Context) (*http.Request, error) {
-	pathParameters := map[string]interface{}{
-		"name": autorest.Encode("path", client.Name),
-	}
-
-	queryParameters := map[string]interface{}{}
-	if len(client.Last) > 0 {
-		queryParameters["last"] = autorest.Encode("query", client.Last)
-	}
-	if len(client.N) > 0 {
-		queryParameters["n"] = autorest.Encode("query", client.N)
-	}
-	if len(client.Orderby) > 0 {
-		queryParameters["orderby"] = autorest.Encode("query", client.Orderby)
-	}
-	if len(client.Digest) > 0 {
-		queryParameters["digest"] = autorest.Encode("query", client.Digest)
-	}
-
-	preparer := autorest.CreatePreparer(
-		autorest.AsGet(),
-		autorest.WithBaseURL(client.BaseURI),
-		autorest.WithPathParameters("/acr/v1/{name}/_tags", pathParameters),
-		autorest.WithQueryParameters(queryParameters),
-		autorest.WithHeader("authorization", client.Authorization))
-	return preparer.Prepare((&http.Request{}).WithContext(ctx))
-}
-
-// AcrListTagsSender sends the AcrListTags request. The method will close the
-// http.Response Body if it receives an error.
-func (client BaseClient) AcrListTagsSender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
-}
-
-// AcrListTagsResponder handles the response to the AcrListTags request. The method always
-// closes the http.Response Body.
-func (client BaseClient) AcrListTagsResponder(resp *http.Response) (result SetObject, err error) {
-	err = autorest.Respond(
-		resp,
-		client.ByInspecting(),
-		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound),
-		autorest.ByUnmarshallingJSON(&result.Value),
-		autorest.ByClosing())
-	result.Response = autorest.Response{Response: resp}
-	return
-}
-
-// AcrUpdateManifestAttributes update attributes of a manifest
-func (client BaseClient) AcrUpdateManifestAttributes(ctx context.Context, value string) (result SetObject, err error) {
-	req, err := client.AcrUpdateManifestAttributesPreparer(ctx, value)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrUpdateManifestAttributes", nil, "Failure preparing request")
-		return
-	}
-
-	resp, err := client.AcrUpdateManifestAttributesSender(req)
-	if err != nil {
-		result.Response = autorest.Response{Response: resp}
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrUpdateManifestAttributes", resp, "Failure sending request")
-		return
-	}
-
-	result, err = client.AcrUpdateManifestAttributesResponder(resp)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrUpdateManifestAttributes", resp, "Failure responding to request")
-	}
-
-	return
-}
-
-// AcrUpdateManifestAttributesPreparer prepares the AcrUpdateManifestAttributes request.
-func (client BaseClient) AcrUpdateManifestAttributesPreparer(ctx context.Context, value string) (*http.Request, error) {
-	pathParameters := map[string]interface{}{
-		"name":      autorest.Encode("path", client.Name),
-		"reference": autorest.Encode("path", client.Reference),
-	}
-
-	preparer := autorest.CreatePreparer(
-		autorest.AsContentType("application/json; charset=utf-8"),
-		autorest.AsPatch(),
-		autorest.WithBaseURL(client.BaseURI),
-		autorest.WithPathParameters("/acr/v1/{name}/_manifests/{reference}", pathParameters),
-		autorest.WithHeader("authorization", client.Authorization))
-	if len(value) > 0 {
-		preparer = autorest.DecoratePreparer(preparer,
-			autorest.WithJSON(value))
-	}
-	return preparer.Prepare((&http.Request{}).WithContext(ctx))
-}
-
-// AcrUpdateManifestAttributesSender sends the AcrUpdateManifestAttributes request. The method will close the
-// http.Response Body if it receives an error.
-func (client BaseClient) AcrUpdateManifestAttributesSender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
-}
-
-// AcrUpdateManifestAttributesResponder handles the response to the AcrUpdateManifestAttributes request. The method always
-// closes the http.Response Body.
-func (client BaseClient) AcrUpdateManifestAttributesResponder(resp *http.Response) (result SetObject, err error) {
-	err = autorest.Respond(
-		resp,
-		client.ByInspecting(),
-		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusNoContent, http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound),
-		autorest.ByUnmarshallingJSON(&result.Value),
-		autorest.ByClosing())
-	result.Response = autorest.Response{Response: resp}
-	return
-}
-
-// AcrUpdateManifestMetadata add or update a metadata of a manifest
-func (client BaseClient) AcrUpdateManifestMetadata(ctx context.Context, value string) (result SetObject, err error) {
-	req, err := client.AcrUpdateManifestMetadataPreparer(ctx, value)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrUpdateManifestMetadata", nil, "Failure preparing request")
-		return
-	}
-
-	resp, err := client.AcrUpdateManifestMetadataSender(req)
-	if err != nil {
-		result.Response = autorest.Response{Response: resp}
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrUpdateManifestMetadata", resp, "Failure sending request")
-		return
-	}
-
-	result, err = client.AcrUpdateManifestMetadataResponder(resp)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrUpdateManifestMetadata", resp, "Failure responding to request")
-	}
-
-	return
-}
-
-// AcrUpdateManifestMetadataPreparer prepares the AcrUpdateManifestMetadata request.
-func (client BaseClient) AcrUpdateManifestMetadataPreparer(ctx context.Context, value string) (*http.Request, error) {
-	pathParameters := map[string]interface{}{
-		"metadata":  autorest.Encode("path", client.Metadata),
-		"name":      autorest.Encode("path", client.Name),
-		"reference": autorest.Encode("path", client.Reference),
-	}
-
-	preparer := autorest.CreatePreparer(
-		autorest.AsContentType("application/json; charset=utf-8"),
-		autorest.AsPut(),
-		autorest.WithBaseURL(client.BaseURI),
-		autorest.WithPathParameters("/acr/v1/{name}/_manifests/{reference}/_metadata/{metadata}", pathParameters),
-		autorest.WithHeader("authorization", client.Authorization))
-	if len(value) > 0 {
-		preparer = autorest.DecoratePreparer(preparer,
-			autorest.WithJSON(value))
-	}
-	return preparer.Prepare((&http.Request{}).WithContext(ctx))
-}
-
-// AcrUpdateManifestMetadataSender sends the AcrUpdateManifestMetadata request. The method will close the
-// http.Response Body if it receives an error.
-func (client BaseClient) AcrUpdateManifestMetadataSender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
-}
-
-// AcrUpdateManifestMetadataResponder handles the response to the AcrUpdateManifestMetadata request. The method always
-// closes the http.Response Body.
-func (client BaseClient) AcrUpdateManifestMetadataResponder(resp *http.Response) (result SetObject, err error) {
-	err = autorest.Respond(
-		resp,
-		client.ByInspecting(),
-		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusCreated, http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound),
-		autorest.ByUnmarshallingJSON(&result.Value),
-		autorest.ByClosing())
-	result.Response = autorest.Response{Response: resp}
-	return
-}
-
-// AcrUpdateRepositoryAttributes update attributes of a repository
-func (client BaseClient) AcrUpdateRepositoryAttributes(ctx context.Context, value string) (result SetObject, err error) {
-	req, err := client.AcrUpdateRepositoryAttributesPreparer(ctx, value)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrUpdateRepositoryAttributes", nil, "Failure preparing request")
-		return
-	}
-
-	resp, err := client.AcrUpdateRepositoryAttributesSender(req)
-	if err != nil {
-		result.Response = autorest.Response{Response: resp}
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrUpdateRepositoryAttributes", resp, "Failure sending request")
-		return
-	}
-
-	result, err = client.AcrUpdateRepositoryAttributesResponder(resp)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrUpdateRepositoryAttributes", resp, "Failure responding to request")
-	}
-
-	return
-}
-
-// AcrUpdateRepositoryAttributesPreparer prepares the AcrUpdateRepositoryAttributes request.
-func (client BaseClient) AcrUpdateRepositoryAttributesPreparer(ctx context.Context, value string) (*http.Request, error) {
-	pathParameters := map[string]interface{}{
-		"name": autorest.Encode("path", client.Name),
-	}
-
-	preparer := autorest.CreatePreparer(
-		autorest.AsContentType("application/json; charset=utf-8"),
-		autorest.AsPatch(),
-		autorest.WithBaseURL(client.BaseURI),
-		autorest.WithPathParameters("/acr/v1/{name}", pathParameters),
-		autorest.WithHeader("authorization", client.Authorization))
-	if len(value) > 0 {
-		preparer = autorest.DecoratePreparer(preparer,
-			autorest.WithJSON(value))
-	}
-	return preparer.Prepare((&http.Request{}).WithContext(ctx))
-}
-
-// AcrUpdateRepositoryAttributesSender sends the AcrUpdateRepositoryAttributes request. The method will close the
-// http.Response Body if it receives an error.
-func (client BaseClient) AcrUpdateRepositoryAttributesSender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
-}
-
-// AcrUpdateRepositoryAttributesResponder handles the response to the AcrUpdateRepositoryAttributes request. The method always
-// closes the http.Response Body.
-func (client BaseClient) AcrUpdateRepositoryAttributesResponder(resp *http.Response) (result SetObject, err error) {
-	err = autorest.Respond(
-		resp,
-		client.ByInspecting(),
-		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusNoContent, http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound),
-		autorest.ByUnmarshallingJSON(&result.Value),
-		autorest.ByClosing())
-	result.Response = autorest.Response{Response: resp}
-	return
-}
-
-// AcrUpdateRepositoryMetadata add or update a metadata of a repository
-func (client BaseClient) AcrUpdateRepositoryMetadata(ctx context.Context, value string) (result SetObject, err error) {
-	req, err := client.AcrUpdateRepositoryMetadataPreparer(ctx, value)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrUpdateRepositoryMetadata", nil, "Failure preparing request")
-		return
-	}
-
-	resp, err := client.AcrUpdateRepositoryMetadataSender(req)
-	if err != nil {
-		result.Response = autorest.Response{Response: resp}
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrUpdateRepositoryMetadata", resp, "Failure sending request")
-		return
-	}
-
-	result, err = client.AcrUpdateRepositoryMetadataResponder(resp)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrUpdateRepositoryMetadata", resp, "Failure responding to request")
-	}
-
-	return
-}
-
-// AcrUpdateRepositoryMetadataPreparer prepares the AcrUpdateRepositoryMetadata request.
-func (client BaseClient) AcrUpdateRepositoryMetadataPreparer(ctx context.Context, value string) (*http.Request, error) {
-	pathParameters := map[string]interface{}{
-		"metadata": autorest.Encode("path", client.Metadata),
-		"name":     autorest.Encode("path", client.Name),
-	}
-
-	preparer := autorest.CreatePreparer(
-		autorest.AsContentType("application/json; charset=utf-8"),
-		autorest.AsPut(),
-		autorest.WithBaseURL(client.BaseURI),
-		autorest.WithPathParameters("/acr/v1/{name}/_metadata/{metadata}", pathParameters),
-		autorest.WithHeader("authorization", client.Authorization))
-	if len(value) > 0 {
-		preparer = autorest.DecoratePreparer(preparer,
-			autorest.WithJSON(value))
-	}
-	return preparer.Prepare((&http.Request{}).WithContext(ctx))
-}
-
-// AcrUpdateRepositoryMetadataSender sends the AcrUpdateRepositoryMetadata request. The method will close the
-// http.Response Body if it receives an error.
-func (client BaseClient) AcrUpdateRepositoryMetadataSender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
-}
-
-// AcrUpdateRepositoryMetadataResponder handles the response to the AcrUpdateRepositoryMetadata request. The method always
-// closes the http.Response Body.
-func (client BaseClient) AcrUpdateRepositoryMetadataResponder(resp *http.Response) (result SetObject, err error) {
-	err = autorest.Respond(
-		resp,
-		client.ByInspecting(),
-		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusCreated, http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound),
-		autorest.ByUnmarshallingJSON(&result.Value),
-		autorest.ByClosing())
-	result.Response = autorest.Response{Response: resp}
-	return
-}
-
-// AcrUpdateTagAttributes update attributes of a tag
-func (client BaseClient) AcrUpdateTagAttributes(ctx context.Context, value string) (result SetObject, err error) {
-	req, err := client.AcrUpdateTagAttributesPreparer(ctx, value)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrUpdateTagAttributes", nil, "Failure preparing request")
-		return
-	}
-
-	resp, err := client.AcrUpdateTagAttributesSender(req)
-	if err != nil {
-		result.Response = autorest.Response{Response: resp}
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrUpdateTagAttributes", resp, "Failure sending request")
-		return
-	}
-
-	result, err = client.AcrUpdateTagAttributesResponder(resp)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrUpdateTagAttributes", resp, "Failure responding to request")
-	}
-
-	return
-}
-
-// AcrUpdateTagAttributesPreparer prepares the AcrUpdateTagAttributes request.
-func (client BaseClient) AcrUpdateTagAttributesPreparer(ctx context.Context, value string) (*http.Request, error) {
-	pathParameters := map[string]interface{}{
-		"name":      autorest.Encode("path", client.Name),
-		"reference": autorest.Encode("path", client.Reference),
-	}
-
-	preparer := autorest.CreatePreparer(
-		autorest.AsContentType("application/json; charset=utf-8"),
-		autorest.AsPatch(),
-		autorest.WithBaseURL(client.BaseURI),
-		autorest.WithPathParameters("/acr/v1/{name}/_tags/{reference}", pathParameters),
-		autorest.WithHeader("authorization", client.Authorization))
-	if len(value) > 0 {
-		preparer = autorest.DecoratePreparer(preparer,
-			autorest.WithJSON(value))
-	}
-	return preparer.Prepare((&http.Request{}).WithContext(ctx))
-}
-
-// AcrUpdateTagAttributesSender sends the AcrUpdateTagAttributes request. The method will close the
-// http.Response Body if it receives an error.
-func (client BaseClient) AcrUpdateTagAttributesSender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
-}
-
-// AcrUpdateTagAttributesResponder handles the response to the AcrUpdateTagAttributes request. The method always
-// closes the http.Response Body.
-func (client BaseClient) AcrUpdateTagAttributesResponder(resp *http.Response) (result SetObject, err error) {
-	err = autorest.Respond(
-		resp,
-		client.ByInspecting(),
-		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusNoContent, http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound),
-		autorest.ByUnmarshallingJSON(&result.Value),
-		autorest.ByClosing())
-	result.Response = autorest.Response{Response: resp}
-	return
-}
-
-// AcrUpdateTagMetadata add or update a metadata of a tag
-func (client BaseClient) AcrUpdateTagMetadata(ctx context.Context, value string) (result SetObject, err error) {
-	req, err := client.AcrUpdateTagMetadataPreparer(ctx, value)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrUpdateTagMetadata", nil, "Failure preparing request")
-		return
-	}
-
-	resp, err := client.AcrUpdateTagMetadataSender(req)
-	if err != nil {
-		result.Response = autorest.Response{Response: resp}
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrUpdateTagMetadata", resp, "Failure sending request")
-		return
-	}
-
-	result, err = client.AcrUpdateTagMetadataResponder(resp)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "AcrUpdateTagMetadata", resp, "Failure responding to request")
-	}
-
-	return
-}
-
-// AcrUpdateTagMetadataPreparer prepares the AcrUpdateTagMetadata request.
-func (client BaseClient) AcrUpdateTagMetadataPreparer(ctx context.Context, value string) (*http.Request, error) {
-	pathParameters := map[string]interface{}{
-		"metadata":  autorest.Encode("path", client.Metadata),
-		"name":      autorest.Encode("path", client.Name),
-		"reference": autorest.Encode("path", client.Reference),
-	}
-
-	preparer := autorest.CreatePreparer(
-		autorest.AsContentType("application/json; charset=utf-8"),
-		autorest.AsPut(),
-		autorest.WithBaseURL(client.BaseURI),
-		autorest.WithPathParameters("/acr/v1/{name}/_tags/{reference}/_metadata/{metadata}", pathParameters),
-		autorest.WithHeader("authorization", client.Authorization))
-	if len(value) > 0 {
-		preparer = autorest.DecoratePreparer(preparer,
-			autorest.WithJSON(value))
-	}
-	return preparer.Prepare((&http.Request{}).WithContext(ctx))
-}
-
-// AcrUpdateTagMetadataSender sends the AcrUpdateTagMetadata request. The method will close the
-// http.Response Body if it receives an error.
-func (client BaseClient) AcrUpdateTagMetadataSender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
-}
-
-// AcrUpdateTagMetadataResponder handles the response to the AcrUpdateTagMetadata request. The method always
-// closes the http.Response Body.
-func (client BaseClient) AcrUpdateTagMetadataResponder(resp *http.Response) (result SetObject, err error) {
-	err = autorest.Respond(
-		resp,
-		client.ByInspecting(),
-		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusCreated, http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound),
-		autorest.ByUnmarshallingJSON(&result.Value),
-		autorest.ByClosing())
-	result.Response = autorest.Response{Response: resp}
-	return
 }
 
 // CancelBlobUpload cancel outstanding upload processes, releasing associated resources. If this is not called, the
 // unfinished uploads will eventually timeout.
 // Parameters:
+// name - name of the image (including the namespace)
 // UUID - a uuid identifying the upload.
-func (client BaseClient) CancelBlobUpload(ctx context.Context, UUID string) (result SetObject, err error) {
-	req, err := client.CancelBlobUploadPreparer(ctx, UUID)
+func (client BaseClient) CancelBlobUpload(ctx context.Context, name string, UUID string) (result autorest.Response, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.CancelBlobUpload")
+		defer func() {
+			sc := -1
+			if result.Response != nil {
+				sc = result.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	req, err := client.CancelBlobUploadPreparer(ctx, name, UUID)
 	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "CancelBlobUpload", nil, "Failure preparing request")
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "CancelBlobUpload", nil, "Failure preparing request")
 		return
 	}
 
 	resp, err := client.CancelBlobUploadSender(req)
 	if err != nil {
-		result.Response = autorest.Response{Response: resp}
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "CancelBlobUpload", resp, "Failure sending request")
+		result.Response = resp
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "CancelBlobUpload", resp, "Failure sending request")
 		return
 	}
 
 	result, err = client.CancelBlobUploadResponder(resp)
 	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "CancelBlobUpload", resp, "Failure responding to request")
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "CancelBlobUpload", resp, "Failure responding to request")
 	}
 
 	return
 }
 
 // CancelBlobUploadPreparer prepares the CancelBlobUpload request.
-func (client BaseClient) CancelBlobUploadPreparer(ctx context.Context, UUID string) (*http.Request, error) {
+func (client BaseClient) CancelBlobUploadPreparer(ctx context.Context, name string, UUID string) (*http.Request, error) {
+	urlParameters := map[string]interface{}{
+		"url": client.LoginURI,
+	}
+
 	pathParameters := map[string]interface{}{
-		"name": autorest.Encode("path", client.Name),
+		"name": autorest.Encode("path", name),
 		"uuid": autorest.Encode("path", UUID),
 	}
 
 	preparer := autorest.CreatePreparer(
 		autorest.AsDelete(),
-		autorest.WithBaseURL(client.BaseURI),
-		autorest.WithPathParameters("/v2/{name}/blobs/uploads/{uuid}", pathParameters),
-		autorest.WithHeader("authorization", client.Authorization))
+		autorest.WithCustomBaseURL("{url}", urlParameters),
+		autorest.WithPathParameters("/v2/{name}/blobs/uploads/{uuid}", pathParameters))
 	return preparer.Prepare((&http.Request{}).WithContext(ctx))
 }
 
@@ -1506,52 +101,67 @@ func (client BaseClient) CancelBlobUploadSender(req *http.Request) (*http.Respon
 
 // CancelBlobUploadResponder handles the response to the CancelBlobUpload request. The method always
 // closes the http.Response Body.
-func (client BaseClient) CancelBlobUploadResponder(resp *http.Response) (result SetObject, err error) {
+func (client BaseClient) CancelBlobUploadResponder(resp *http.Response) (result autorest.Response, err error) {
 	err = autorest.Respond(
 		resp,
 		client.ByInspecting(),
-		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusNoContent, http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound),
-		autorest.ByUnmarshallingJSON(&result.Value),
+		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusNoContent),
 		autorest.ByClosing())
-	result.Response = autorest.Response{Response: resp}
+	result.Response = resp
 	return
 }
 
 // CheckBlobExistence same as GET, except only the headers are returned.
-func (client BaseClient) CheckBlobExistence(ctx context.Context) (result autorest.Response, err error) {
-	req, err := client.CheckBlobExistencePreparer(ctx)
+// Parameters:
+// name - name of the image (including the namespace)
+// digest - digest of a desired BLOB
+func (client BaseClient) CheckBlobExistence(ctx context.Context, name string, digest string) (result autorest.Response, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.CheckBlobExistence")
+		defer func() {
+			sc := -1
+			if result.Response != nil {
+				sc = result.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	req, err := client.CheckBlobExistencePreparer(ctx, name, digest)
 	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "CheckBlobExistence", nil, "Failure preparing request")
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "CheckBlobExistence", nil, "Failure preparing request")
 		return
 	}
 
 	resp, err := client.CheckBlobExistenceSender(req)
 	if err != nil {
 		result.Response = resp
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "CheckBlobExistence", resp, "Failure sending request")
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "CheckBlobExistence", resp, "Failure sending request")
 		return
 	}
 
 	result, err = client.CheckBlobExistenceResponder(resp)
 	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "CheckBlobExistence", resp, "Failure responding to request")
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "CheckBlobExistence", resp, "Failure responding to request")
 	}
 
 	return
 }
 
 // CheckBlobExistencePreparer prepares the CheckBlobExistence request.
-func (client BaseClient) CheckBlobExistencePreparer(ctx context.Context) (*http.Request, error) {
+func (client BaseClient) CheckBlobExistencePreparer(ctx context.Context, name string, digest string) (*http.Request, error) {
+	urlParameters := map[string]interface{}{
+		"url": client.LoginURI,
+	}
+
 	pathParameters := map[string]interface{}{
-		"digest": autorest.Encode("path", client.Digest),
-		"name":   autorest.Encode("path", client.Name),
+		"digest": autorest.Encode("path", digest),
+		"name":   autorest.Encode("path", name),
 	}
 
 	preparer := autorest.CreatePreparer(
 		autorest.AsHead(),
-		autorest.WithBaseURL(client.BaseURI),
-		autorest.WithPathParameters("/v2/{name}/blobs/{digest}", pathParameters),
-		autorest.WithHeader("authorization", client.Authorization))
+		autorest.WithCustomBaseURL("{url}", urlParameters),
+		autorest.WithPathParameters("/v2/{name}/blobs/{digest}", pathParameters))
 	return preparer.Prepare((&http.Request{}).WithContext(ctx))
 }
 
@@ -1568,30 +178,40 @@ func (client BaseClient) CheckBlobExistenceResponder(resp *http.Response) (resul
 	err = autorest.Respond(
 		resp,
 		client.ByInspecting(),
-		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusPartialContent, http.StatusTemporaryRedirect, http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound, http.StatusRequestedRangeNotSatisfiable),
+		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusPartialContent, http.StatusTemporaryRedirect),
 		autorest.ByClosing())
 	result.Response = resp
 	return
 }
 
 // CheckDockerRegistryV2Support tells whether this Docker Registry instance supports Docker Registry HTTP API v2
-func (client BaseClient) CheckDockerRegistryV2Support(ctx context.Context) (result CheckDockerRegistryV2SupportUnauthorizedResponse, err error) {
+func (client BaseClient) CheckDockerRegistryV2Support(ctx context.Context) (result autorest.Response, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.CheckDockerRegistryV2Support")
+		defer func() {
+			sc := -1
+			if result.Response != nil {
+				sc = result.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
 	req, err := client.CheckDockerRegistryV2SupportPreparer(ctx)
 	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "CheckDockerRegistryV2Support", nil, "Failure preparing request")
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "CheckDockerRegistryV2Support", nil, "Failure preparing request")
 		return
 	}
 
 	resp, err := client.CheckDockerRegistryV2SupportSender(req)
 	if err != nil {
-		result.Response = autorest.Response{Response: resp}
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "CheckDockerRegistryV2Support", resp, "Failure sending request")
+		result.Response = resp
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "CheckDockerRegistryV2Support", resp, "Failure sending request")
 		return
 	}
 
 	result, err = client.CheckDockerRegistryV2SupportResponder(resp)
 	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "CheckDockerRegistryV2Support", resp, "Failure responding to request")
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "CheckDockerRegistryV2Support", resp, "Failure responding to request")
 	}
 
 	return
@@ -1599,11 +219,14 @@ func (client BaseClient) CheckDockerRegistryV2Support(ctx context.Context) (resu
 
 // CheckDockerRegistryV2SupportPreparer prepares the CheckDockerRegistryV2Support request.
 func (client BaseClient) CheckDockerRegistryV2SupportPreparer(ctx context.Context) (*http.Request, error) {
+	urlParameters := map[string]interface{}{
+		"url": client.LoginURI,
+	}
+
 	preparer := autorest.CreatePreparer(
 		autorest.AsGet(),
-		autorest.WithBaseURL(client.BaseURI),
-		autorest.WithPath("/v2/"),
-		autorest.WithHeader("authorization", client.Authorization))
+		autorest.WithCustomBaseURL("{url}", urlParameters),
+		autorest.WithPath("/v2/"))
 	return preparer.Prepare((&http.Request{}).WithContext(ctx))
 }
 
@@ -1616,52 +239,434 @@ func (client BaseClient) CheckDockerRegistryV2SupportSender(req *http.Request) (
 
 // CheckDockerRegistryV2SupportResponder handles the response to the CheckDockerRegistryV2Support request. The method always
 // closes the http.Response Body.
-func (client BaseClient) CheckDockerRegistryV2SupportResponder(resp *http.Response) (result CheckDockerRegistryV2SupportUnauthorizedResponse, err error) {
+func (client BaseClient) CheckDockerRegistryV2SupportResponder(resp *http.Response) (result autorest.Response, err error) {
 	err = autorest.Respond(
 		resp,
 		client.ByInspecting(),
-		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusUnauthorized, http.StatusNotFound),
+		azure.WithErrorUnlessStatusCode(http.StatusOK),
+		autorest.ByClosing())
+	result.Response = resp
+	return
+}
+
+// DeleteAcrManifestMetadata delete a metadata of a manifest
+// Parameters:
+// name - name of the image (including the namespace)
+// reference - tag or digest of the target manifest
+// metadata - name of the metadata
+func (client BaseClient) DeleteAcrManifestMetadata(ctx context.Context, name string, reference string, metadata string) (result autorest.Response, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.DeleteAcrManifestMetadata")
+		defer func() {
+			sc := -1
+			if result.Response != nil {
+				sc = result.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	req, err := client.DeleteAcrManifestMetadataPreparer(ctx, name, reference, metadata)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "DeleteAcrManifestMetadata", nil, "Failure preparing request")
+		return
+	}
+
+	resp, err := client.DeleteAcrManifestMetadataSender(req)
+	if err != nil {
+		result.Response = resp
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "DeleteAcrManifestMetadata", resp, "Failure sending request")
+		return
+	}
+
+	result, err = client.DeleteAcrManifestMetadataResponder(resp)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "DeleteAcrManifestMetadata", resp, "Failure responding to request")
+	}
+
+	return
+}
+
+// DeleteAcrManifestMetadataPreparer prepares the DeleteAcrManifestMetadata request.
+func (client BaseClient) DeleteAcrManifestMetadataPreparer(ctx context.Context, name string, reference string, metadata string) (*http.Request, error) {
+	urlParameters := map[string]interface{}{
+		"url": client.LoginURI,
+	}
+
+	pathParameters := map[string]interface{}{
+		"metadata":  autorest.Encode("path", metadata),
+		"name":      autorest.Encode("path", name),
+		"reference": autorest.Encode("path", reference),
+	}
+
+	preparer := autorest.CreatePreparer(
+		autorest.AsDelete(),
+		autorest.WithCustomBaseURL("{url}", urlParameters),
+		autorest.WithPathParameters("/acr/v1/{name}/_manifests/{reference}/_metadata/{metadata}", pathParameters))
+	return preparer.Prepare((&http.Request{}).WithContext(ctx))
+}
+
+// DeleteAcrManifestMetadataSender sends the DeleteAcrManifestMetadata request. The method will close the
+// http.Response Body if it receives an error.
+func (client BaseClient) DeleteAcrManifestMetadataSender(req *http.Request) (*http.Response, error) {
+	return autorest.SendWithSender(client, req,
+		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
+}
+
+// DeleteAcrManifestMetadataResponder handles the response to the DeleteAcrManifestMetadata request. The method always
+// closes the http.Response Body.
+func (client BaseClient) DeleteAcrManifestMetadataResponder(resp *http.Response) (result autorest.Response, err error) {
+	err = autorest.Respond(
+		resp,
+		client.ByInspecting(),
+		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusAccepted),
+		autorest.ByClosing())
+	result.Response = resp
+	return
+}
+
+// DeleteAcrRepository delete a respository
+// Parameters:
+// name - name of the image (including the namespace)
+func (client BaseClient) DeleteAcrRepository(ctx context.Context, name string) (result DeletedRepository, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.DeleteAcrRepository")
+		defer func() {
+			sc := -1
+			if result.Response.Response != nil {
+				sc = result.Response.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	req, err := client.DeleteAcrRepositoryPreparer(ctx, name)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "DeleteAcrRepository", nil, "Failure preparing request")
+		return
+	}
+
+	resp, err := client.DeleteAcrRepositorySender(req)
+	if err != nil {
+		result.Response = autorest.Response{Response: resp}
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "DeleteAcrRepository", resp, "Failure sending request")
+		return
+	}
+
+	result, err = client.DeleteAcrRepositoryResponder(resp)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "DeleteAcrRepository", resp, "Failure responding to request")
+	}
+
+	return
+}
+
+// DeleteAcrRepositoryPreparer prepares the DeleteAcrRepository request.
+func (client BaseClient) DeleteAcrRepositoryPreparer(ctx context.Context, name string) (*http.Request, error) {
+	urlParameters := map[string]interface{}{
+		"url": client.LoginURI,
+	}
+
+	pathParameters := map[string]interface{}{
+		"name": autorest.Encode("path", name),
+	}
+
+	preparer := autorest.CreatePreparer(
+		autorest.AsDelete(),
+		autorest.WithCustomBaseURL("{url}", urlParameters),
+		autorest.WithPathParameters("/acr/v1/{name}", pathParameters))
+	return preparer.Prepare((&http.Request{}).WithContext(ctx))
+}
+
+// DeleteAcrRepositorySender sends the DeleteAcrRepository request. The method will close the
+// http.Response Body if it receives an error.
+func (client BaseClient) DeleteAcrRepositorySender(req *http.Request) (*http.Response, error) {
+	return autorest.SendWithSender(client, req,
+		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
+}
+
+// DeleteAcrRepositoryResponder handles the response to the DeleteAcrRepository request. The method always
+// closes the http.Response Body.
+func (client BaseClient) DeleteAcrRepositoryResponder(resp *http.Response) (result DeletedRepository, err error) {
+	err = autorest.Respond(
+		resp,
+		client.ByInspecting(),
+		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusAccepted),
 		autorest.ByUnmarshallingJSON(&result),
 		autorest.ByClosing())
 	result.Response = autorest.Response{Response: resp}
 	return
 }
 
-// DeleteManifest delete the manifest identified by name and reference where reference can be a tag or digest.
-func (client BaseClient) DeleteManifest(ctx context.Context) (result SetObject, err error) {
-	req, err := client.DeleteManifestPreparer(ctx)
+// DeleteAcrRepositoryMetadata delete a metadata of a repository
+// Parameters:
+// name - name of the image (including the namespace)
+// metadata - name of the metadata
+func (client BaseClient) DeleteAcrRepositoryMetadata(ctx context.Context, name string, metadata string) (result autorest.Response, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.DeleteAcrRepositoryMetadata")
+		defer func() {
+			sc := -1
+			if result.Response != nil {
+				sc = result.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	req, err := client.DeleteAcrRepositoryMetadataPreparer(ctx, name, metadata)
 	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "DeleteManifest", nil, "Failure preparing request")
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "DeleteAcrRepositoryMetadata", nil, "Failure preparing request")
+		return
+	}
+
+	resp, err := client.DeleteAcrRepositoryMetadataSender(req)
+	if err != nil {
+		result.Response = resp
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "DeleteAcrRepositoryMetadata", resp, "Failure sending request")
+		return
+	}
+
+	result, err = client.DeleteAcrRepositoryMetadataResponder(resp)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "DeleteAcrRepositoryMetadata", resp, "Failure responding to request")
+	}
+
+	return
+}
+
+// DeleteAcrRepositoryMetadataPreparer prepares the DeleteAcrRepositoryMetadata request.
+func (client BaseClient) DeleteAcrRepositoryMetadataPreparer(ctx context.Context, name string, metadata string) (*http.Request, error) {
+	urlParameters := map[string]interface{}{
+		"url": client.LoginURI,
+	}
+
+	pathParameters := map[string]interface{}{
+		"metadata": autorest.Encode("path", metadata),
+		"name":     autorest.Encode("path", name),
+	}
+
+	preparer := autorest.CreatePreparer(
+		autorest.AsDelete(),
+		autorest.WithCustomBaseURL("{url}", urlParameters),
+		autorest.WithPathParameters("/acr/v1/{name}/_metadata/{metadata}", pathParameters))
+	return preparer.Prepare((&http.Request{}).WithContext(ctx))
+}
+
+// DeleteAcrRepositoryMetadataSender sends the DeleteAcrRepositoryMetadata request. The method will close the
+// http.Response Body if it receives an error.
+func (client BaseClient) DeleteAcrRepositoryMetadataSender(req *http.Request) (*http.Response, error) {
+	return autorest.SendWithSender(client, req,
+		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
+}
+
+// DeleteAcrRepositoryMetadataResponder handles the response to the DeleteAcrRepositoryMetadata request. The method always
+// closes the http.Response Body.
+func (client BaseClient) DeleteAcrRepositoryMetadataResponder(resp *http.Response) (result autorest.Response, err error) {
+	err = autorest.Respond(
+		resp,
+		client.ByInspecting(),
+		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusAccepted),
+		autorest.ByClosing())
+	result.Response = resp
+	return
+}
+
+// DeleteAcrTag delete a tag
+// Parameters:
+// name - name of the image (including the namespace)
+// reference - tag or digest of the target manifest
+func (client BaseClient) DeleteAcrTag(ctx context.Context, name string, reference string) (result autorest.Response, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.DeleteAcrTag")
+		defer func() {
+			sc := -1
+			if result.Response != nil {
+				sc = result.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	req, err := client.DeleteAcrTagPreparer(ctx, name, reference)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "DeleteAcrTag", nil, "Failure preparing request")
+		return
+	}
+
+	resp, err := client.DeleteAcrTagSender(req)
+	if err != nil {
+		result.Response = resp
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "DeleteAcrTag", resp, "Failure sending request")
+		return
+	}
+
+	result, err = client.DeleteAcrTagResponder(resp)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "DeleteAcrTag", resp, "Failure responding to request")
+	}
+
+	return
+}
+
+// DeleteAcrTagPreparer prepares the DeleteAcrTag request.
+func (client BaseClient) DeleteAcrTagPreparer(ctx context.Context, name string, reference string) (*http.Request, error) {
+	urlParameters := map[string]interface{}{
+		"url": client.LoginURI,
+	}
+
+	pathParameters := map[string]interface{}{
+		"name":      autorest.Encode("path", name),
+		"reference": autorest.Encode("path", reference),
+	}
+	preparer := autorest.CreatePreparer(
+		autorest.AsDelete(),
+		autorest.WithCustomBaseURL("{url}", urlParameters),
+		autorest.WithPathParameters("/acr/v1/{name}/_tags/{reference}", pathParameters))
+	return preparer.Prepare((&http.Request{}).WithContext(ctx))
+}
+
+// DeleteAcrTagSender sends the DeleteAcrTag request. The method will close the
+// http.Response Body if it receives an error.
+func (client BaseClient) DeleteAcrTagSender(req *http.Request) (*http.Response, error) {
+	return autorest.SendWithSender(client, req,
+		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
+}
+
+// DeleteAcrTagResponder handles the response to the DeleteAcrTag request. The method always
+// closes the http.Response Body.
+func (client BaseClient) DeleteAcrTagResponder(resp *http.Response) (result autorest.Response, err error) {
+	err = autorest.Respond(
+		resp,
+		client.ByInspecting(),
+		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusAccepted),
+		autorest.ByClosing())
+	result.Response = resp
+	return
+}
+
+// DeleteAcrTagMetadata delete a metadata of a tag
+// Parameters:
+// name - name of the image (including the namespace)
+// reference - tag or digest of the target manifest
+// metadata - name of the metadata
+func (client BaseClient) DeleteAcrTagMetadata(ctx context.Context, name string, reference string, metadata string) (result autorest.Response, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.DeleteAcrTagMetadata")
+		defer func() {
+			sc := -1
+			if result.Response != nil {
+				sc = result.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	req, err := client.DeleteAcrTagMetadataPreparer(ctx, name, reference, metadata)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "DeleteAcrTagMetadata", nil, "Failure preparing request")
+		return
+	}
+
+	resp, err := client.DeleteAcrTagMetadataSender(req)
+	if err != nil {
+		result.Response = resp
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "DeleteAcrTagMetadata", resp, "Failure sending request")
+		return
+	}
+
+	result, err = client.DeleteAcrTagMetadataResponder(resp)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "DeleteAcrTagMetadata", resp, "Failure responding to request")
+	}
+
+	return
+}
+
+// DeleteAcrTagMetadataPreparer prepares the DeleteAcrTagMetadata request.
+func (client BaseClient) DeleteAcrTagMetadataPreparer(ctx context.Context, name string, reference string, metadata string) (*http.Request, error) {
+	urlParameters := map[string]interface{}{
+		"url": client.LoginURI,
+	}
+
+	pathParameters := map[string]interface{}{
+		"metadata":  autorest.Encode("path", metadata),
+		"name":      autorest.Encode("path", name),
+		"reference": autorest.Encode("path", reference),
+	}
+
+	preparer := autorest.CreatePreparer(
+		autorest.AsDelete(),
+		autorest.WithCustomBaseURL("{url}", urlParameters),
+		autorest.WithPathParameters("/acr/v1/{name}/_tags/{reference}/_metadata/{metadata}", pathParameters))
+	return preparer.Prepare((&http.Request{}).WithContext(ctx))
+}
+
+// DeleteAcrTagMetadataSender sends the DeleteAcrTagMetadata request. The method will close the
+// http.Response Body if it receives an error.
+func (client BaseClient) DeleteAcrTagMetadataSender(req *http.Request) (*http.Response, error) {
+	return autorest.SendWithSender(client, req,
+		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
+}
+
+// DeleteAcrTagMetadataResponder handles the response to the DeleteAcrTagMetadata request. The method always
+// closes the http.Response Body.
+func (client BaseClient) DeleteAcrTagMetadataResponder(resp *http.Response) (result autorest.Response, err error) {
+	err = autorest.Respond(
+		resp,
+		client.ByInspecting(),
+		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusAccepted),
+		autorest.ByClosing())
+	result.Response = resp
+	return
+}
+
+// DeleteManifest delete the manifest identified by digest.
+// Parameters:
+// name - name of the image (including the namespace)
+// reference - a tag or a digest, pointing to a specific image
+func (client BaseClient) DeleteManifest(ctx context.Context, name string, reference string) (result autorest.Response, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.DeleteManifest")
+		defer func() {
+			sc := -1
+			if result.Response != nil {
+				sc = result.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	req, err := client.DeleteManifestPreparer(ctx, name, reference)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "DeleteManifest", nil, "Failure preparing request")
 		return
 	}
 
 	resp, err := client.DeleteManifestSender(req)
 	if err != nil {
-		result.Response = autorest.Response{Response: resp}
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "DeleteManifest", resp, "Failure sending request")
+		result.Response = resp
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "DeleteManifest", resp, "Failure sending request")
 		return
 	}
 
 	result, err = client.DeleteManifestResponder(resp)
 	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "DeleteManifest", resp, "Failure responding to request")
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "DeleteManifest", resp, "Failure responding to request")
 	}
 
 	return
 }
 
 // DeleteManifestPreparer prepares the DeleteManifest request.
-func (client BaseClient) DeleteManifestPreparer(ctx context.Context) (*http.Request, error) {
+func (client BaseClient) DeleteManifestPreparer(ctx context.Context, name string, reference string) (*http.Request, error) {
+	urlParameters := map[string]interface{}{
+		"url": client.LoginURI,
+	}
+
 	pathParameters := map[string]interface{}{
-		"name":      autorest.Encode("path", client.Name),
-		"reference": autorest.Encode("path", client.Reference),
+		"name":      autorest.Encode("path", name),
+		"reference": autorest.Encode("path", reference),
 	}
 
 	preparer := autorest.CreatePreparer(
 		autorest.AsDelete(),
-		autorest.WithBaseURL(client.BaseURI),
-		autorest.WithPathParameters("/v2/{name}/manifests/{reference}", pathParameters),
-		autorest.WithHeader("authorization", client.Authorization))
+		autorest.WithCustomBaseURL("{url}", urlParameters),
+		autorest.WithPathParameters("/v2/{name}/manifests/{reference}", pathParameters))
 	return preparer.Prepare((&http.Request{}).WithContext(ctx))
 }
 
@@ -1674,14 +679,13 @@ func (client BaseClient) DeleteManifestSender(req *http.Request) (*http.Response
 
 // DeleteManifestResponder handles the response to the DeleteManifest request. The method always
 // closes the http.Response Body.
-func (client BaseClient) DeleteManifestResponder(resp *http.Response) (result SetObject, err error) {
+func (client BaseClient) DeleteManifestResponder(resp *http.Response) (result autorest.Response, err error) {
 	err = autorest.Respond(
 		resp,
 		client.ByInspecting(),
-		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusAccepted, http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound),
-		autorest.ByUnmarshallingJSON(&result.Value),
+		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusAccepted),
 		autorest.ByClosing())
-	result.Response = autorest.Response{Response: resp}
+	result.Response = resp
 	return
 }
 
@@ -1690,33 +694,48 @@ func (client BaseClient) DeleteManifestResponder(resp *http.Response) (result Se
 // Parameters:
 // digest - digest of uploaded blob. If present, the upload will be completed, in a single request, with
 // contents of the request body as the resulting blob.
+// name - name of the image (including the namespace)
 // UUID - a uuid identifying the upload.
-func (client BaseClient) EndBlobUpload(ctx context.Context, digest string, UUID string) (result SetObject, err error) {
-	req, err := client.EndBlobUploadPreparer(ctx, digest, UUID)
+func (client BaseClient) EndBlobUpload(ctx context.Context, digest string, name string, UUID string) (result autorest.Response, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.EndBlobUpload")
+		defer func() {
+			sc := -1
+			if result.Response != nil {
+				sc = result.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	req, err := client.EndBlobUploadPreparer(ctx, digest, name, UUID)
 	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "EndBlobUpload", nil, "Failure preparing request")
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "EndBlobUpload", nil, "Failure preparing request")
 		return
 	}
 
 	resp, err := client.EndBlobUploadSender(req)
 	if err != nil {
-		result.Response = autorest.Response{Response: resp}
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "EndBlobUpload", resp, "Failure sending request")
+		result.Response = resp
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "EndBlobUpload", resp, "Failure sending request")
 		return
 	}
 
 	result, err = client.EndBlobUploadResponder(resp)
 	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "EndBlobUpload", resp, "Failure responding to request")
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "EndBlobUpload", resp, "Failure responding to request")
 	}
 
 	return
 }
 
 // EndBlobUploadPreparer prepares the EndBlobUpload request.
-func (client BaseClient) EndBlobUploadPreparer(ctx context.Context, digest string, UUID string) (*http.Request, error) {
+func (client BaseClient) EndBlobUploadPreparer(ctx context.Context, digest string, name string, UUID string) (*http.Request, error) {
+	urlParameters := map[string]interface{}{
+		"url": client.LoginURI,
+	}
+
 	pathParameters := map[string]interface{}{
-		"name": autorest.Encode("path", client.Name),
+		"name": autorest.Encode("path", name),
 		"uuid": autorest.Encode("path", UUID),
 	}
 
@@ -1726,10 +745,9 @@ func (client BaseClient) EndBlobUploadPreparer(ctx context.Context, digest strin
 
 	preparer := autorest.CreatePreparer(
 		autorest.AsPut(),
-		autorest.WithBaseURL(client.BaseURI),
+		autorest.WithCustomBaseURL("{url}", urlParameters),
 		autorest.WithPathParameters("/v2/{name}/blobs/uploads/{uuid}", pathParameters),
-		autorest.WithQueryParameters(queryParameters),
-		autorest.WithHeader("authorization", client.Authorization))
+		autorest.WithQueryParameters(queryParameters))
 	return preparer.Prepare((&http.Request{}).WithContext(ctx))
 }
 
@@ -1742,52 +760,769 @@ func (client BaseClient) EndBlobUploadSender(req *http.Request) (*http.Response,
 
 // EndBlobUploadResponder handles the response to the EndBlobUpload request. The method always
 // closes the http.Response Body.
-func (client BaseClient) EndBlobUploadResponder(resp *http.Response) (result SetObject, err error) {
+func (client BaseClient) EndBlobUploadResponder(resp *http.Response) (result autorest.Response, err error) {
 	err = autorest.Respond(
 		resp,
 		client.ByInspecting(),
-		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusNoContent, http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound),
+		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusNoContent),
+		autorest.ByClosing())
+	result.Response = resp
+	return
+}
+
+// GetAcrManifestAttributes get manifest attributes
+// Parameters:
+// name - name of the image (including the namespace)
+// reference - a digest pointing to a specific image,
+func (client BaseClient) GetAcrManifestAttributes(ctx context.Context, name string, reference string) (result ManifestAttributes, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.GetAcrManifestAttributes")
+		defer func() {
+			sc := -1
+			if result.Response.Response != nil {
+				sc = result.Response.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	req, err := client.GetAcrManifestAttributesPreparer(ctx, name, reference)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrManifestAttributes", nil, "Failure preparing request")
+		return
+	}
+
+	resp, err := client.GetAcrManifestAttributesSender(req)
+	if err != nil {
+		result.Response = autorest.Response{Response: resp}
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrManifestAttributes", resp, "Failure sending request")
+		return
+	}
+
+	result, err = client.GetAcrManifestAttributesResponder(resp)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrManifestAttributes", resp, "Failure responding to request")
+	}
+
+	return
+}
+
+// GetAcrManifestAttributesPreparer prepares the GetAcrManifestAttributes request.
+func (client BaseClient) GetAcrManifestAttributesPreparer(ctx context.Context, name string, reference string) (*http.Request, error) {
+	urlParameters := map[string]interface{}{
+		"url": client.LoginURI,
+	}
+
+	pathParameters := map[string]interface{}{
+		"name":      autorest.Encode("path", name),
+		"reference": autorest.Encode("path", reference),
+	}
+
+	preparer := autorest.CreatePreparer(
+		autorest.AsGet(),
+		autorest.WithCustomBaseURL("{url}", urlParameters),
+		autorest.WithPathParameters("/acr/v1/{name}/_manifests/{reference}", pathParameters))
+	return preparer.Prepare((&http.Request{}).WithContext(ctx))
+}
+
+// GetAcrManifestAttributesSender sends the GetAcrManifestAttributes request. The method will close the
+// http.Response Body if it receives an error.
+func (client BaseClient) GetAcrManifestAttributesSender(req *http.Request) (*http.Response, error) {
+	return autorest.SendWithSender(client, req,
+		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
+}
+
+// GetAcrManifestAttributesResponder handles the response to the GetAcrManifestAttributes request. The method always
+// closes the http.Response Body.
+func (client BaseClient) GetAcrManifestAttributesResponder(resp *http.Response) (result ManifestAttributes, err error) {
+	err = autorest.Respond(
+		resp,
+		client.ByInspecting(),
+		azure.WithErrorUnlessStatusCode(http.StatusOK),
+		autorest.ByUnmarshallingJSON(&result),
+		autorest.ByClosing())
+	result.Response = autorest.Response{Response: resp}
+	return
+}
+
+// GetAcrManifestMetadata get metadata value
+// Parameters:
+// name - name of the image (including the namespace)
+// reference - tag or digest of the target manifest
+// metadata - name of the metadata
+func (client BaseClient) GetAcrManifestMetadata(ctx context.Context, name string, reference string, metadata string) (result SetObject, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.GetAcrManifestMetadata")
+		defer func() {
+			sc := -1
+			if result.Response.Response != nil {
+				sc = result.Response.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	req, err := client.GetAcrManifestMetadataPreparer(ctx, name, reference, metadata)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrManifestMetadata", nil, "Failure preparing request")
+		return
+	}
+
+	resp, err := client.GetAcrManifestMetadataSender(req)
+	if err != nil {
+		result.Response = autorest.Response{Response: resp}
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrManifestMetadata", resp, "Failure sending request")
+		return
+	}
+
+	result, err = client.GetAcrManifestMetadataResponder(resp)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrManifestMetadata", resp, "Failure responding to request")
+	}
+
+	return
+}
+
+// GetAcrManifestMetadataPreparer prepares the GetAcrManifestMetadata request.
+func (client BaseClient) GetAcrManifestMetadataPreparer(ctx context.Context, name string, reference string, metadata string) (*http.Request, error) {
+	urlParameters := map[string]interface{}{
+		"url": client.LoginURI,
+	}
+
+	pathParameters := map[string]interface{}{
+		"metadata":  autorest.Encode("path", metadata),
+		"name":      autorest.Encode("path", name),
+		"reference": autorest.Encode("path", reference),
+	}
+
+	preparer := autorest.CreatePreparer(
+		autorest.AsGet(),
+		autorest.WithCustomBaseURL("{url}", urlParameters),
+		autorest.WithPathParameters("/acr/v1/{name}/_manifests/{reference}/_metadata/{metadata}", pathParameters))
+	return preparer.Prepare((&http.Request{}).WithContext(ctx))
+}
+
+// GetAcrManifestMetadataSender sends the GetAcrManifestMetadata request. The method will close the
+// http.Response Body if it receives an error.
+func (client BaseClient) GetAcrManifestMetadataSender(req *http.Request) (*http.Response, error) {
+	return autorest.SendWithSender(client, req,
+		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
+}
+
+// GetAcrManifestMetadataResponder handles the response to the GetAcrManifestMetadata request. The method always
+// closes the http.Response Body.
+func (client BaseClient) GetAcrManifestMetadataResponder(resp *http.Response) (result SetObject, err error) {
+	err = autorest.Respond(
+		resp,
+		client.ByInspecting(),
+		azure.WithErrorUnlessStatusCode(http.StatusOK),
 		autorest.ByUnmarshallingJSON(&result.Value),
 		autorest.ByClosing())
 	result.Response = autorest.Response{Response: resp}
 	return
 }
 
-// GetBlob retrieve the blob from the registry identified by digest.
-func (client BaseClient) GetBlob(ctx context.Context) (result SetObject, err error) {
-	req, err := client.GetBlobPreparer(ctx)
+// GetAcrManifests list manifests of a repository
+// Parameters:
+// name - name of the image (including the namespace)
+// last - query parameter for the last item in previous query
+// n - query parameter for max number of items
+// orderby - orderby query parameter
+func (client BaseClient) GetAcrManifests(ctx context.Context, name string, last string, n *int32, orderby string) (result Manifests, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.GetAcrManifests")
+		defer func() {
+			sc := -1
+			if result.Response.Response != nil {
+				sc = result.Response.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	req, err := client.GetAcrManifestsPreparer(ctx, name, last, n, orderby)
 	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "GetBlob", nil, "Failure preparing request")
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrManifests", nil, "Failure preparing request")
+		return
+	}
+
+	resp, err := client.GetAcrManifestsSender(req)
+	if err != nil {
+		result.Response = autorest.Response{Response: resp}
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrManifests", resp, "Failure sending request")
+		return
+	}
+
+	result, err = client.GetAcrManifestsResponder(resp)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrManifests", resp, "Failure responding to request")
+	}
+
+	return
+}
+
+// GetAcrManifestsPreparer prepares the GetAcrManifests request.
+func (client BaseClient) GetAcrManifestsPreparer(ctx context.Context, name string, last string, n *int32, orderby string) (*http.Request, error) {
+	urlParameters := map[string]interface{}{
+		"url": client.LoginURI,
+	}
+
+	pathParameters := map[string]interface{}{
+		"name": autorest.Encode("path", name),
+	}
+
+	queryParameters := map[string]interface{}{}
+	if len(last) > 0 {
+		queryParameters["last"] = autorest.Encode("query", last)
+	}
+	if n != nil {
+		queryParameters["n"] = autorest.Encode("query", *n)
+	}
+	if len(orderby) > 0 {
+		queryParameters["orderby"] = autorest.Encode("query", orderby)
+	}
+
+	preparer := autorest.CreatePreparer(
+		autorest.AsGet(),
+		autorest.WithCustomBaseURL("{url}", urlParameters),
+		autorest.WithPathParameters("/acr/v1/{name}/_manifests", pathParameters),
+		autorest.WithQueryParameters(queryParameters))
+	return preparer.Prepare((&http.Request{}).WithContext(ctx))
+}
+
+// GetAcrManifestsSender sends the GetAcrManifests request. The method will close the
+// http.Response Body if it receives an error.
+func (client BaseClient) GetAcrManifestsSender(req *http.Request) (*http.Response, error) {
+	return autorest.SendWithSender(client, req,
+		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
+}
+
+// GetAcrManifestsResponder handles the response to the GetAcrManifests request. The method always
+// closes the http.Response Body.
+func (client BaseClient) GetAcrManifestsResponder(resp *http.Response) (result Manifests, err error) {
+	err = autorest.Respond(
+		resp,
+		client.ByInspecting(),
+		azure.WithErrorUnlessStatusCode(http.StatusOK),
+		autorest.ByUnmarshallingJSON(&result),
+		autorest.ByClosing())
+	result.Response = autorest.Response{Response: resp}
+	return
+}
+
+// GetAcrRepositories list respositories
+// Parameters:
+// last - query parameter for the last item in previous query
+// n - query parameter for max number of items
+func (client BaseClient) GetAcrRepositories(ctx context.Context, last string, n *int32) (result Repositories, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.GetAcrRepositories")
+		defer func() {
+			sc := -1
+			if result.Response.Response != nil {
+				sc = result.Response.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	req, err := client.GetAcrRepositoriesPreparer(ctx, last, n)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrRepositories", nil, "Failure preparing request")
+		return
+	}
+
+	resp, err := client.GetAcrRepositoriesSender(req)
+	if err != nil {
+		result.Response = autorest.Response{Response: resp}
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrRepositories", resp, "Failure sending request")
+		return
+	}
+
+	result, err = client.GetAcrRepositoriesResponder(resp)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrRepositories", resp, "Failure responding to request")
+	}
+
+	return
+}
+
+// GetAcrRepositoriesPreparer prepares the GetAcrRepositories request.
+func (client BaseClient) GetAcrRepositoriesPreparer(ctx context.Context, last string, n *int32) (*http.Request, error) {
+	urlParameters := map[string]interface{}{
+		"url": client.LoginURI,
+	}
+
+	queryParameters := map[string]interface{}{}
+	if len(last) > 0 {
+		queryParameters["last"] = autorest.Encode("query", last)
+	}
+	if n != nil {
+		queryParameters["n"] = autorest.Encode("query", *n)
+	}
+
+	preparer := autorest.CreatePreparer(
+		autorest.AsGet(),
+		autorest.WithCustomBaseURL("{url}", urlParameters),
+		autorest.WithPath("/acr/v1/_catalog"),
+		autorest.WithQueryParameters(queryParameters))
+	return preparer.Prepare((&http.Request{}).WithContext(ctx))
+}
+
+// GetAcrRepositoriesSender sends the GetAcrRepositories request. The method will close the
+// http.Response Body if it receives an error.
+func (client BaseClient) GetAcrRepositoriesSender(req *http.Request) (*http.Response, error) {
+	return autorest.SendWithSender(client, req,
+		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
+}
+
+// GetAcrRepositoriesResponder handles the response to the GetAcrRepositories request. The method always
+// closes the http.Response Body.
+func (client BaseClient) GetAcrRepositoriesResponder(resp *http.Response) (result Repositories, err error) {
+	err = autorest.Respond(
+		resp,
+		client.ByInspecting(),
+		azure.WithErrorUnlessStatusCode(http.StatusOK),
+		autorest.ByUnmarshallingJSON(&result),
+		autorest.ByClosing())
+	result.Response = autorest.Response{Response: resp}
+	return
+}
+
+// GetAcrRepositoryAttributes get respository attributes
+// Parameters:
+// name - name of the image (including the namespace)
+func (client BaseClient) GetAcrRepositoryAttributes(ctx context.Context, name string) (result RepositoryAttributes, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.GetAcrRepositoryAttributes")
+		defer func() {
+			sc := -1
+			if result.Response.Response != nil {
+				sc = result.Response.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	req, err := client.GetAcrRepositoryAttributesPreparer(ctx, name)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrRepositoryAttributes", nil, "Failure preparing request")
+		return
+	}
+
+	resp, err := client.GetAcrRepositoryAttributesSender(req)
+	if err != nil {
+		result.Response = autorest.Response{Response: resp}
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrRepositoryAttributes", resp, "Failure sending request")
+		return
+	}
+
+	result, err = client.GetAcrRepositoryAttributesResponder(resp)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrRepositoryAttributes", resp, "Failure responding to request")
+	}
+
+	return
+}
+
+// GetAcrRepositoryAttributesPreparer prepares the GetAcrRepositoryAttributes request.
+func (client BaseClient) GetAcrRepositoryAttributesPreparer(ctx context.Context, name string) (*http.Request, error) {
+	urlParameters := map[string]interface{}{
+		"url": client.LoginURI,
+	}
+
+	pathParameters := map[string]interface{}{
+		"name": autorest.Encode("path", name),
+	}
+
+	preparer := autorest.CreatePreparer(
+		autorest.AsGet(),
+		autorest.WithCustomBaseURL("{url}", urlParameters),
+		autorest.WithPathParameters("/acr/v1/{name}", pathParameters))
+	return preparer.Prepare((&http.Request{}).WithContext(ctx))
+}
+
+// GetAcrRepositoryAttributesSender sends the GetAcrRepositoryAttributes request. The method will close the
+// http.Response Body if it receives an error.
+func (client BaseClient) GetAcrRepositoryAttributesSender(req *http.Request) (*http.Response, error) {
+	return autorest.SendWithSender(client, req,
+		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
+}
+
+// GetAcrRepositoryAttributesResponder handles the response to the GetAcrRepositoryAttributes request. The method always
+// closes the http.Response Body.
+func (client BaseClient) GetAcrRepositoryAttributesResponder(resp *http.Response) (result RepositoryAttributes, err error) {
+	err = autorest.Respond(
+		resp,
+		client.ByInspecting(),
+		azure.WithErrorUnlessStatusCode(http.StatusOK),
+		autorest.ByUnmarshallingJSON(&result),
+		autorest.ByClosing())
+	result.Response = autorest.Response{Response: resp}
+	return
+}
+
+// GetAcrRepositoryMetadata get metadata value
+// Parameters:
+// name - name of the image (including the namespace)
+// metadata - name of the metadata
+func (client BaseClient) GetAcrRepositoryMetadata(ctx context.Context, name string, metadata string) (result SetObject, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.GetAcrRepositoryMetadata")
+		defer func() {
+			sc := -1
+			if result.Response.Response != nil {
+				sc = result.Response.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	req, err := client.GetAcrRepositoryMetadataPreparer(ctx, name, metadata)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrRepositoryMetadata", nil, "Failure preparing request")
+		return
+	}
+
+	resp, err := client.GetAcrRepositoryMetadataSender(req)
+	if err != nil {
+		result.Response = autorest.Response{Response: resp}
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrRepositoryMetadata", resp, "Failure sending request")
+		return
+	}
+
+	result, err = client.GetAcrRepositoryMetadataResponder(resp)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrRepositoryMetadata", resp, "Failure responding to request")
+	}
+
+	return
+}
+
+// GetAcrRepositoryMetadataPreparer prepares the GetAcrRepositoryMetadata request.
+func (client BaseClient) GetAcrRepositoryMetadataPreparer(ctx context.Context, name string, metadata string) (*http.Request, error) {
+	urlParameters := map[string]interface{}{
+		"url": client.LoginURI,
+	}
+
+	pathParameters := map[string]interface{}{
+		"metadata": autorest.Encode("path", metadata),
+		"name":     autorest.Encode("path", name),
+	}
+
+	preparer := autorest.CreatePreparer(
+		autorest.AsGet(),
+		autorest.WithCustomBaseURL("{url}", urlParameters),
+		autorest.WithPathParameters("/acr/v1/{name}/_metadata/{metadata}", pathParameters))
+	return preparer.Prepare((&http.Request{}).WithContext(ctx))
+}
+
+// GetAcrRepositoryMetadataSender sends the GetAcrRepositoryMetadata request. The method will close the
+// http.Response Body if it receives an error.
+func (client BaseClient) GetAcrRepositoryMetadataSender(req *http.Request) (*http.Response, error) {
+	return autorest.SendWithSender(client, req,
+		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
+}
+
+// GetAcrRepositoryMetadataResponder handles the response to the GetAcrRepositoryMetadata request. The method always
+// closes the http.Response Body.
+func (client BaseClient) GetAcrRepositoryMetadataResponder(resp *http.Response) (result SetObject, err error) {
+	err = autorest.Respond(
+		resp,
+		client.ByInspecting(),
+		azure.WithErrorUnlessStatusCode(http.StatusOK),
+		autorest.ByUnmarshallingJSON(&result.Value),
+		autorest.ByClosing())
+	result.Response = autorest.Response{Response: resp}
+	return
+}
+
+// GetAcrTagAttributes get tag attributes by tag
+// Parameters:
+// name - name of the image (including the namespace)
+// reference - tag or digest of the target manifest
+func (client BaseClient) GetAcrTagAttributes(ctx context.Context, name string, reference string) (result TagAttributesType, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.GetAcrTagAttributes")
+		defer func() {
+			sc := -1
+			if result.Response.Response != nil {
+				sc = result.Response.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	req, err := client.GetAcrTagAttributesPreparer(ctx, name, reference)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrTagAttributes", nil, "Failure preparing request")
+		return
+	}
+
+	resp, err := client.GetAcrTagAttributesSender(req)
+	if err != nil {
+		result.Response = autorest.Response{Response: resp}
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrTagAttributes", resp, "Failure sending request")
+		return
+	}
+
+	result, err = client.GetAcrTagAttributesResponder(resp)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrTagAttributes", resp, "Failure responding to request")
+	}
+
+	return
+}
+
+// GetAcrTagAttributesPreparer prepares the GetAcrTagAttributes request.
+func (client BaseClient) GetAcrTagAttributesPreparer(ctx context.Context, name string, reference string) (*http.Request, error) {
+	urlParameters := map[string]interface{}{
+		"url": client.LoginURI,
+	}
+
+	pathParameters := map[string]interface{}{
+		"name":      autorest.Encode("path", name),
+		"reference": autorest.Encode("path", reference),
+	}
+
+	preparer := autorest.CreatePreparer(
+		autorest.AsGet(),
+		autorest.WithCustomBaseURL("{url}", urlParameters),
+		autorest.WithPathParameters("/acr/v1/{name}/_tags/{reference}", pathParameters))
+	return preparer.Prepare((&http.Request{}).WithContext(ctx))
+}
+
+// GetAcrTagAttributesSender sends the GetAcrTagAttributes request. The method will close the
+// http.Response Body if it receives an error.
+func (client BaseClient) GetAcrTagAttributesSender(req *http.Request) (*http.Response, error) {
+	return autorest.SendWithSender(client, req,
+		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
+}
+
+// GetAcrTagAttributesResponder handles the response to the GetAcrTagAttributes request. The method always
+// closes the http.Response Body.
+func (client BaseClient) GetAcrTagAttributesResponder(resp *http.Response) (result TagAttributesType, err error) {
+	err = autorest.Respond(
+		resp,
+		client.ByInspecting(),
+		azure.WithErrorUnlessStatusCode(http.StatusOK),
+		autorest.ByUnmarshallingJSON(&result),
+		autorest.ByClosing())
+	result.Response = autorest.Response{Response: resp}
+	return
+}
+
+// GetAcrTagMetadata get metadata value
+// Parameters:
+// name - name of the image (including the namespace)
+// reference - tag or digest of the target manifest
+// metadata - name of the metadata
+func (client BaseClient) GetAcrTagMetadata(ctx context.Context, name string, reference string, metadata string) (result SetObject, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.GetAcrTagMetadata")
+		defer func() {
+			sc := -1
+			if result.Response.Response != nil {
+				sc = result.Response.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	req, err := client.GetAcrTagMetadataPreparer(ctx, name, reference, metadata)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrTagMetadata", nil, "Failure preparing request")
+		return
+	}
+
+	resp, err := client.GetAcrTagMetadataSender(req)
+	if err != nil {
+		result.Response = autorest.Response{Response: resp}
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrTagMetadata", resp, "Failure sending request")
+		return
+	}
+
+	result, err = client.GetAcrTagMetadataResponder(resp)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrTagMetadata", resp, "Failure responding to request")
+	}
+
+	return
+}
+
+// GetAcrTagMetadataPreparer prepares the GetAcrTagMetadata request.
+func (client BaseClient) GetAcrTagMetadataPreparer(ctx context.Context, name string, reference string, metadata string) (*http.Request, error) {
+	urlParameters := map[string]interface{}{
+		"url": client.LoginURI,
+	}
+
+	pathParameters := map[string]interface{}{
+		"metadata":  autorest.Encode("path", metadata),
+		"name":      autorest.Encode("path", name),
+		"reference": autorest.Encode("path", reference),
+	}
+
+	preparer := autorest.CreatePreparer(
+		autorest.AsGet(),
+		autorest.WithCustomBaseURL("{url}", urlParameters),
+		autorest.WithPathParameters("/acr/v1/{name}/_tags/{reference}/_metadata/{metadata}", pathParameters))
+	return preparer.Prepare((&http.Request{}).WithContext(ctx))
+}
+
+// GetAcrTagMetadataSender sends the GetAcrTagMetadata request. The method will close the
+// http.Response Body if it receives an error.
+func (client BaseClient) GetAcrTagMetadataSender(req *http.Request) (*http.Response, error) {
+	return autorest.SendWithSender(client, req,
+		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
+}
+
+// GetAcrTagMetadataResponder handles the response to the GetAcrTagMetadata request. The method always
+// closes the http.Response Body.
+func (client BaseClient) GetAcrTagMetadataResponder(resp *http.Response) (result SetObject, err error) {
+	err = autorest.Respond(
+		resp,
+		client.ByInspecting(),
+		azure.WithErrorUnlessStatusCode(http.StatusOK),
+		autorest.ByUnmarshallingJSON(&result.Value),
+		autorest.ByClosing())
+	result.Response = autorest.Response{Response: resp}
+	return
+}
+
+// GetAcrTags list tags of a repository
+// Parameters:
+// name - name of the image (including the namespace)
+// last - query parameter for the last item in previous query
+// n - query parameter for max number of items
+// orderby - orderby query parameter
+// digest - filter by digest
+func (client BaseClient) GetAcrTags(ctx context.Context, name string, last string, n *int32, orderby string, digest string) (result RepositoryTagsType, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.GetAcrTags")
+		defer func() {
+			sc := -1
+			if result.Response.Response != nil {
+				sc = result.Response.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	req, err := client.GetAcrTagsPreparer(ctx, name, last, n, orderby, digest)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrTags", nil, "Failure preparing request")
+		return
+	}
+
+	resp, err := client.GetAcrTagsSender(req)
+	if err != nil {
+		result.Response = autorest.Response{Response: resp}
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrTags", resp, "Failure sending request")
+		return
+	}
+
+	result, err = client.GetAcrTagsResponder(resp)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrTags", resp, "Failure responding to request")
+	}
+
+	return
+}
+
+// GetAcrTagsPreparer prepares the GetAcrTags request.
+func (client BaseClient) GetAcrTagsPreparer(ctx context.Context, name string, last string, n *int32, orderby string, digest string) (*http.Request, error) {
+	urlParameters := map[string]interface{}{
+		"url": client.LoginURI,
+	}
+
+	pathParameters := map[string]interface{}{
+		"name": autorest.Encode("path", name),
+	}
+
+	queryParameters := map[string]interface{}{}
+	if len(last) > 0 {
+		queryParameters["last"] = autorest.Encode("query", last)
+	}
+	if n != nil {
+		queryParameters["n"] = autorest.Encode("query", *n)
+	}
+	if len(orderby) > 0 {
+		queryParameters["orderby"] = autorest.Encode("query", orderby)
+	}
+	if len(digest) > 0 {
+		queryParameters["digest"] = autorest.Encode("query", digest)
+	}
+
+	preparer := autorest.CreatePreparer(
+		autorest.AsGet(),
+		autorest.WithCustomBaseURL("{url}", urlParameters),
+		autorest.WithPathParameters("/acr/v1/{name}/_tags", pathParameters),
+		autorest.WithQueryParameters(queryParameters))
+	return preparer.Prepare((&http.Request{}).WithContext(ctx))
+}
+
+// GetAcrTagsSender sends the GetAcrTags request. The method will close the
+// http.Response Body if it receives an error.
+func (client BaseClient) GetAcrTagsSender(req *http.Request) (*http.Response, error) {
+	return autorest.SendWithSender(client, req,
+		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
+}
+
+// GetAcrTagsResponder handles the response to the GetAcrTags request. The method always
+// closes the http.Response Body.
+func (client BaseClient) GetAcrTagsResponder(resp *http.Response) (result RepositoryTagsType, err error) {
+	err = autorest.Respond(
+		resp,
+		client.ByInspecting(),
+		azure.WithErrorUnlessStatusCode(http.StatusOK),
+		autorest.ByUnmarshallingJSON(&result),
+		autorest.ByClosing())
+	result.Response = autorest.Response{Response: resp}
+	return
+}
+
+// GetBlob retrieve the blob from the registry identified by digest.
+// Parameters:
+// name - name of the image (including the namespace)
+// digest - digest of a desired BLOB
+func (client BaseClient) GetBlob(ctx context.Context, name string, digest string) (result String, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.GetBlob")
+		defer func() {
+			sc := -1
+			if result.Response.Response != nil {
+				sc = result.Response.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	req, err := client.GetBlobPreparer(ctx, name, digest)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetBlob", nil, "Failure preparing request")
 		return
 	}
 
 	resp, err := client.GetBlobSender(req)
 	if err != nil {
 		result.Response = autorest.Response{Response: resp}
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "GetBlob", resp, "Failure sending request")
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetBlob", resp, "Failure sending request")
 		return
 	}
 
 	result, err = client.GetBlobResponder(resp)
 	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "GetBlob", resp, "Failure responding to request")
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetBlob", resp, "Failure responding to request")
 	}
 
 	return
 }
 
 // GetBlobPreparer prepares the GetBlob request.
-func (client BaseClient) GetBlobPreparer(ctx context.Context) (*http.Request, error) {
+func (client BaseClient) GetBlobPreparer(ctx context.Context, name string, digest string) (*http.Request, error) {
+	urlParameters := map[string]interface{}{
+		"url": client.LoginURI,
+	}
+
 	pathParameters := map[string]interface{}{
-		"digest": autorest.Encode("path", client.Digest),
-		"name":   autorest.Encode("path", client.Name),
+		"digest": autorest.Encode("path", digest),
+		"name":   autorest.Encode("path", name),
 	}
 
 	preparer := autorest.CreatePreparer(
 		autorest.AsGet(),
-		autorest.WithBaseURL(client.BaseURI),
-		autorest.WithPathParameters("/v2/{name}/blobs/{digest}", pathParameters),
-		autorest.WithHeader("authorization", client.Authorization))
+		autorest.WithCustomBaseURL("{url}", urlParameters),
+		autorest.WithPathParameters("/v2/{name}/blobs/{digest}", pathParameters))
 	return preparer.Prepare((&http.Request{}).WithContext(ctx))
 }
 
@@ -1800,11 +1535,11 @@ func (client BaseClient) GetBlobSender(req *http.Request) (*http.Response, error
 
 // GetBlobResponder handles the response to the GetBlob request. The method always
 // closes the http.Response Body.
-func (client BaseClient) GetBlobResponder(resp *http.Response) (result SetObject, err error) {
+func (client BaseClient) GetBlobResponder(resp *http.Response) (result String, err error) {
 	err = autorest.Respond(
 		resp,
 		client.ByInspecting(),
-		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusPartialContent, http.StatusTemporaryRedirect, http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound, http.StatusRequestedRangeNotSatisfiable),
+		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusPartialContent, http.StatusTemporaryRedirect),
 		autorest.ByUnmarshallingJSON(&result.Value),
 		autorest.ByClosing())
 	result.Response = autorest.Response{Response: resp}
@@ -1814,41 +1549,55 @@ func (client BaseClient) GetBlobResponder(resp *http.Response) (result SetObject
 // GetBlobUploadStatus retrieve status of upload identified by uuid. The primary purpose of this endpoint is to resolve
 // the current status of a resumable upload.
 // Parameters:
+// name - name of the image (including the namespace)
 // UUID - a uuid identifying the upload.
-func (client BaseClient) GetBlobUploadStatus(ctx context.Context, UUID string) (result SetObject, err error) {
-	req, err := client.GetBlobUploadStatusPreparer(ctx, UUID)
+func (client BaseClient) GetBlobUploadStatus(ctx context.Context, name string, UUID string) (result autorest.Response, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.GetBlobUploadStatus")
+		defer func() {
+			sc := -1
+			if result.Response != nil {
+				sc = result.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	req, err := client.GetBlobUploadStatusPreparer(ctx, name, UUID)
 	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "GetBlobUploadStatus", nil, "Failure preparing request")
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetBlobUploadStatus", nil, "Failure preparing request")
 		return
 	}
 
 	resp, err := client.GetBlobUploadStatusSender(req)
 	if err != nil {
-		result.Response = autorest.Response{Response: resp}
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "GetBlobUploadStatus", resp, "Failure sending request")
+		result.Response = resp
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetBlobUploadStatus", resp, "Failure sending request")
 		return
 	}
 
 	result, err = client.GetBlobUploadStatusResponder(resp)
 	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "GetBlobUploadStatus", resp, "Failure responding to request")
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetBlobUploadStatus", resp, "Failure responding to request")
 	}
 
 	return
 }
 
 // GetBlobUploadStatusPreparer prepares the GetBlobUploadStatus request.
-func (client BaseClient) GetBlobUploadStatusPreparer(ctx context.Context, UUID string) (*http.Request, error) {
+func (client BaseClient) GetBlobUploadStatusPreparer(ctx context.Context, name string, UUID string) (*http.Request, error) {
+	urlParameters := map[string]interface{}{
+		"url": client.LoginURI,
+	}
+
 	pathParameters := map[string]interface{}{
-		"name": autorest.Encode("path", client.Name),
+		"name": autorest.Encode("path", name),
 		"uuid": autorest.Encode("path", UUID),
 	}
 
 	preparer := autorest.CreatePreparer(
 		autorest.AsGet(),
-		autorest.WithBaseURL(client.BaseURI),
-		autorest.WithPathParameters("/v2/{name}/blobs/uploads/{uuid}", pathParameters),
-		autorest.WithHeader("authorization", client.Authorization))
+		autorest.WithCustomBaseURL("{url}", urlParameters),
+		autorest.WithPathParameters("/v2/{name}/blobs/uploads/{uuid}", pathParameters))
 	return preparer.Prepare((&http.Request{}).WithContext(ctx))
 }
 
@@ -1861,53 +1610,74 @@ func (client BaseClient) GetBlobUploadStatusSender(req *http.Request) (*http.Res
 
 // GetBlobUploadStatusResponder handles the response to the GetBlobUploadStatus request. The method always
 // closes the http.Response Body.
-func (client BaseClient) GetBlobUploadStatusResponder(resp *http.Response) (result SetObject, err error) {
+func (client BaseClient) GetBlobUploadStatusResponder(resp *http.Response) (result autorest.Response, err error) {
 	err = autorest.Respond(
 		resp,
 		client.ByInspecting(),
-		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusNoContent, http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound),
-		autorest.ByUnmarshallingJSON(&result.Value),
+		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusNoContent),
 		autorest.ByClosing())
-	result.Response = autorest.Response{Response: resp}
+	result.Response = resp
 	return
 }
 
 // GetManifest pulls the image manifest file associated with the specified name and reference. Reference may be a tag
-// or a digest
-func (client BaseClient) GetManifest(ctx context.Context) (result SetObject, err error) {
-	req, err := client.GetManifestPreparer(ctx)
+// or a digest.
+// Parameters:
+// name - name of the image (including the namespace)
+// reference - a tag or a digest, pointing to a specific image
+// accept - accept header string delimited by comma. For example,
+// application/vnd.docker.distribution.manifest.v2+json
+func (client BaseClient) GetManifest(ctx context.Context, name string, reference string, accept string) (result Manifest, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.GetManifest")
+		defer func() {
+			sc := -1
+			if result.Response.Response != nil {
+				sc = result.Response.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	req, err := client.GetManifestPreparer(ctx, name, reference, accept)
 	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "GetManifest", nil, "Failure preparing request")
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetManifest", nil, "Failure preparing request")
 		return
 	}
 
 	resp, err := client.GetManifestSender(req)
 	if err != nil {
 		result.Response = autorest.Response{Response: resp}
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "GetManifest", resp, "Failure sending request")
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetManifest", resp, "Failure sending request")
 		return
 	}
 
 	result, err = client.GetManifestResponder(resp)
 	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "GetManifest", resp, "Failure responding to request")
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetManifest", resp, "Failure responding to request")
 	}
 
 	return
 }
 
 // GetManifestPreparer prepares the GetManifest request.
-func (client BaseClient) GetManifestPreparer(ctx context.Context) (*http.Request, error) {
+func (client BaseClient) GetManifestPreparer(ctx context.Context, name string, reference string, accept string) (*http.Request, error) {
+	urlParameters := map[string]interface{}{
+		"url": client.LoginURI,
+	}
+
 	pathParameters := map[string]interface{}{
-		"name":      autorest.Encode("path", client.Name),
-		"reference": autorest.Encode("path", client.Reference),
+		"name":      autorest.Encode("path", name),
+		"reference": autorest.Encode("path", reference),
 	}
 
 	preparer := autorest.CreatePreparer(
 		autorest.AsGet(),
-		autorest.WithBaseURL(client.BaseURI),
-		autorest.WithPathParameters("/v2/{name}/manifests/{reference}", pathParameters),
-		autorest.WithHeader("authorization", client.Authorization))
+		autorest.WithCustomBaseURL("{url}", urlParameters),
+		autorest.WithPathParameters("/v2/{name}/manifests/{reference}", pathParameters))
+	if len(accept) > 0 {
+		preparer = autorest.DecoratePreparer(preparer,
+			autorest.WithHeader("accept", autorest.String(accept)))
+	}
 	return preparer.Prepare((&http.Request{}).WithContext(ctx))
 }
 
@@ -1920,167 +1690,508 @@ func (client BaseClient) GetManifestSender(req *http.Request) (*http.Response, e
 
 // GetManifestResponder handles the response to the GetManifest request. The method always
 // closes the http.Response Body.
-func (client BaseClient) GetManifestResponder(resp *http.Response) (result SetObject, err error) {
+func (client BaseClient) GetManifestResponder(resp *http.Response) (result Manifest, err error) {
 	err = autorest.Respond(
 		resp,
 		client.ByInspecting(),
-		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound),
-		autorest.ByUnmarshallingJSON(&result.Value),
+		azure.WithErrorUnlessStatusCode(http.StatusOK),
+		autorest.ByUnmarshallingJSON(&result),
 		autorest.ByClosing())
 	result.Response = autorest.Response{Response: resp}
 	return
 }
 
-// ListRepositories list respositories
-func (client BaseClient) ListRepositories(ctx context.Context) (result SetObject, err error) {
-	req, err := client.ListRepositoriesPreparer(ctx)
+// GetRepositories list respositories
+// Parameters:
+// last - query parameter for the last item in previous query
+// n - query parameter for max number of items
+func (client BaseClient) GetRepositories(ctx context.Context, last string, n *int32) (result Repositories, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.GetRepositories")
+		defer func() {
+			sc := -1
+			if result.Response.Response != nil {
+				sc = result.Response.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	req, err := client.GetRepositoriesPreparer(ctx, last, n)
 	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "ListRepositories", nil, "Failure preparing request")
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetRepositories", nil, "Failure preparing request")
 		return
 	}
 
-	resp, err := client.ListRepositoriesSender(req)
+	resp, err := client.GetRepositoriesSender(req)
 	if err != nil {
 		result.Response = autorest.Response{Response: resp}
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "ListRepositories", resp, "Failure sending request")
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetRepositories", resp, "Failure sending request")
 		return
 	}
 
-	result, err = client.ListRepositoriesResponder(resp)
+	result, err = client.GetRepositoriesResponder(resp)
 	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "ListRepositories", resp, "Failure responding to request")
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetRepositories", resp, "Failure responding to request")
 	}
 
 	return
 }
 
-// ListRepositoriesPreparer prepares the ListRepositories request.
-func (client BaseClient) ListRepositoriesPreparer(ctx context.Context) (*http.Request, error) {
+// GetRepositoriesPreparer prepares the GetRepositories request.
+func (client BaseClient) GetRepositoriesPreparer(ctx context.Context, last string, n *int32) (*http.Request, error) {
+	urlParameters := map[string]interface{}{
+		"url": client.LoginURI,
+	}
+
 	queryParameters := map[string]interface{}{}
-	if len(client.Last) > 0 {
-		queryParameters["last"] = autorest.Encode("query", client.Last)
+	if len(last) > 0 {
+		queryParameters["last"] = autorest.Encode("query", last)
 	}
-	if len(client.N) > 0 {
-		queryParameters["n"] = autorest.Encode("query", client.N)
+	if n != nil {
+		queryParameters["n"] = autorest.Encode("query", *n)
 	}
 
 	preparer := autorest.CreatePreparer(
 		autorest.AsGet(),
-		autorest.WithBaseURL(client.BaseURI),
+		autorest.WithCustomBaseURL("{url}", urlParameters),
 		autorest.WithPath("/v2/_catalog"),
-		autorest.WithQueryParameters(queryParameters),
-		autorest.WithHeader("authorization", client.Authorization))
+		autorest.WithQueryParameters(queryParameters))
 	return preparer.Prepare((&http.Request{}).WithContext(ctx))
 }
 
-// ListRepositoriesSender sends the ListRepositories request. The method will close the
+// GetRepositoriesSender sends the GetRepositories request. The method will close the
 // http.Response Body if it receives an error.
-func (client BaseClient) ListRepositoriesSender(req *http.Request) (*http.Response, error) {
+func (client BaseClient) GetRepositoriesSender(req *http.Request) (*http.Response, error) {
 	return autorest.SendWithSender(client, req,
 		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
 }
 
-// ListRepositoriesResponder handles the response to the ListRepositories request. The method always
+// GetRepositoriesResponder handles the response to the GetRepositories request. The method always
 // closes the http.Response Body.
-func (client BaseClient) ListRepositoriesResponder(resp *http.Response) (result SetObject, err error) {
+func (client BaseClient) GetRepositoriesResponder(resp *http.Response) (result Repositories, err error) {
 	err = autorest.Respond(
 		resp,
 		client.ByInspecting(),
-		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusBadRequest, http.StatusUnauthorized),
-		autorest.ByUnmarshallingJSON(&result.Value),
+		azure.WithErrorUnlessStatusCode(http.StatusOK),
+		autorest.ByUnmarshallingJSON(&result),
 		autorest.ByClosing())
 	result.Response = autorest.Response{Response: resp}
 	return
 }
 
-// ListTags fetch the tags under the repository identified by 'name'
-func (client BaseClient) ListTags(ctx context.Context) (result SetObject, err error) {
-	req, err := client.ListTagsPreparer(ctx)
+// GetTagList fetch the tags under the repository identified by 'name'
+// Parameters:
+// name - name of the image (including the namespace)
+func (client BaseClient) GetTagList(ctx context.Context, name string) (result RepositoryTags, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.GetTagList")
+		defer func() {
+			sc := -1
+			if result.Response.Response != nil {
+				sc = result.Response.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	req, err := client.GetTagListPreparer(ctx, name)
 	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "ListTags", nil, "Failure preparing request")
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetTagList", nil, "Failure preparing request")
 		return
 	}
 
-	resp, err := client.ListTagsSender(req)
+	resp, err := client.GetTagListSender(req)
 	if err != nil {
 		result.Response = autorest.Response{Response: resp}
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "ListTags", resp, "Failure sending request")
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetTagList", resp, "Failure sending request")
 		return
 	}
 
-	result, err = client.ListTagsResponder(resp)
+	result, err = client.GetTagListResponder(resp)
 	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "ListTags", resp, "Failure responding to request")
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetTagList", resp, "Failure responding to request")
 	}
 
 	return
 }
 
-// ListTagsPreparer prepares the ListTags request.
-func (client BaseClient) ListTagsPreparer(ctx context.Context) (*http.Request, error) {
+// GetTagListPreparer prepares the GetTagList request.
+func (client BaseClient) GetTagListPreparer(ctx context.Context, name string) (*http.Request, error) {
+	urlParameters := map[string]interface{}{
+		"url": client.LoginURI,
+	}
+
 	pathParameters := map[string]interface{}{
-		"name": autorest.Encode("path", client.Name),
+		"name": autorest.Encode("path", name),
 	}
 
 	preparer := autorest.CreatePreparer(
 		autorest.AsGet(),
-		autorest.WithBaseURL(client.BaseURI),
-		autorest.WithPathParameters("/v2/{name}/tags/list", pathParameters),
-		autorest.WithHeader("authorization", client.Authorization))
+		autorest.WithCustomBaseURL("{url}", urlParameters),
+		autorest.WithPathParameters("/v2/{name}/tags/list", pathParameters))
 	return preparer.Prepare((&http.Request{}).WithContext(ctx))
 }
 
-// ListTagsSender sends the ListTags request. The method will close the
+// GetTagListSender sends the GetTagList request. The method will close the
 // http.Response Body if it receives an error.
-func (client BaseClient) ListTagsSender(req *http.Request) (*http.Response, error) {
+func (client BaseClient) GetTagListSender(req *http.Request) (*http.Response, error) {
 	return autorest.SendWithSender(client, req,
 		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
 }
 
-// ListTagsResponder handles the response to the ListTags request. The method always
+// GetTagListResponder handles the response to the GetTagList request. The method always
 // closes the http.Response Body.
-func (client BaseClient) ListTagsResponder(resp *http.Response) (result SetObject, err error) {
+func (client BaseClient) GetTagListResponder(resp *http.Response) (result RepositoryTags, err error) {
 	err = autorest.Respond(
 		resp,
 		client.ByInspecting(),
-		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusUnauthorized, http.StatusNotFound),
-		autorest.ByUnmarshallingJSON(&result.Value),
+		azure.WithErrorUnlessStatusCode(http.StatusOK),
+		autorest.ByUnmarshallingJSON(&result),
 		autorest.ByClosing())
 	result.Response = autorest.Response{Response: resp}
+	return
+}
+
+// ListManifestMetadata list manifest metadata
+// Parameters:
+// name - name of the image (including the namespace)
+// reference - tag or digest of the target manifest
+func (client BaseClient) ListManifestMetadata(ctx context.Context, name string, reference string) (result ManifestMetadataList, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.ListManifestMetadata")
+		defer func() {
+			sc := -1
+			if result.Response.Response != nil {
+				sc = result.Response.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	req, err := client.ListManifestMetadataPreparer(ctx, name, reference)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "ListManifestMetadata", nil, "Failure preparing request")
+		return
+	}
+
+	resp, err := client.ListManifestMetadataSender(req)
+	if err != nil {
+		result.Response = autorest.Response{Response: resp}
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "ListManifestMetadata", resp, "Failure sending request")
+		return
+	}
+
+	result, err = client.ListManifestMetadataResponder(resp)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "ListManifestMetadata", resp, "Failure responding to request")
+	}
+
+	return
+}
+
+// ListManifestMetadataPreparer prepares the ListManifestMetadata request.
+func (client BaseClient) ListManifestMetadataPreparer(ctx context.Context, name string, reference string) (*http.Request, error) {
+	urlParameters := map[string]interface{}{
+		"url": client.LoginURI,
+	}
+
+	pathParameters := map[string]interface{}{
+		"name":      autorest.Encode("path", name),
+		"reference": autorest.Encode("path", reference),
+	}
+
+	preparer := autorest.CreatePreparer(
+		autorest.AsGet(),
+		autorest.WithCustomBaseURL("{url}", urlParameters),
+		autorest.WithPathParameters("/acr/v1/{name}/_manifests/{reference}/_metadata", pathParameters))
+	return preparer.Prepare((&http.Request{}).WithContext(ctx))
+}
+
+// ListManifestMetadataSender sends the ListManifestMetadata request. The method will close the
+// http.Response Body if it receives an error.
+func (client BaseClient) ListManifestMetadataSender(req *http.Request) (*http.Response, error) {
+	return autorest.SendWithSender(client, req,
+		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
+}
+
+// ListManifestMetadataResponder handles the response to the ListManifestMetadata request. The method always
+// closes the http.Response Body.
+func (client BaseClient) ListManifestMetadataResponder(resp *http.Response) (result ManifestMetadataList, err error) {
+	err = autorest.Respond(
+		resp,
+		client.ByInspecting(),
+		azure.WithErrorUnlessStatusCode(http.StatusOK),
+		autorest.ByUnmarshallingJSON(&result),
+		autorest.ByClosing())
+	result.Response = autorest.Response{Response: resp}
+	return
+}
+
+// ListRepositoryMetadata list respository metadata
+// Parameters:
+// name - name of the image (including the namespace)
+func (client BaseClient) ListRepositoryMetadata(ctx context.Context, name string) (result RepositoryMetadata, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.ListRepositoryMetadata")
+		defer func() {
+			sc := -1
+			if result.Response.Response != nil {
+				sc = result.Response.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	req, err := client.ListRepositoryMetadataPreparer(ctx, name)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "ListRepositoryMetadata", nil, "Failure preparing request")
+		return
+	}
+
+	resp, err := client.ListRepositoryMetadataSender(req)
+	if err != nil {
+		result.Response = autorest.Response{Response: resp}
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "ListRepositoryMetadata", resp, "Failure sending request")
+		return
+	}
+
+	result, err = client.ListRepositoryMetadataResponder(resp)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "ListRepositoryMetadata", resp, "Failure responding to request")
+	}
+
+	return
+}
+
+// ListRepositoryMetadataPreparer prepares the ListRepositoryMetadata request.
+func (client BaseClient) ListRepositoryMetadataPreparer(ctx context.Context, name string) (*http.Request, error) {
+	urlParameters := map[string]interface{}{
+		"url": client.LoginURI,
+	}
+
+	pathParameters := map[string]interface{}{
+		"name": autorest.Encode("path", name),
+	}
+
+	preparer := autorest.CreatePreparer(
+		autorest.AsGet(),
+		autorest.WithCustomBaseURL("{url}", urlParameters),
+		autorest.WithPathParameters("/acr/v1/{name}/_metadata", pathParameters))
+	return preparer.Prepare((&http.Request{}).WithContext(ctx))
+}
+
+// ListRepositoryMetadataSender sends the ListRepositoryMetadata request. The method will close the
+// http.Response Body if it receives an error.
+func (client BaseClient) ListRepositoryMetadataSender(req *http.Request) (*http.Response, error) {
+	return autorest.SendWithSender(client, req,
+		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
+}
+
+// ListRepositoryMetadataResponder handles the response to the ListRepositoryMetadata request. The method always
+// closes the http.Response Body.
+func (client BaseClient) ListRepositoryMetadataResponder(resp *http.Response) (result RepositoryMetadata, err error) {
+	err = autorest.Respond(
+		resp,
+		client.ByInspecting(),
+		azure.WithErrorUnlessStatusCode(http.StatusOK),
+		autorest.ByUnmarshallingJSON(&result),
+		autorest.ByClosing())
+	result.Response = autorest.Response{Response: resp}
+	return
+}
+
+// ListTagMetadata list tag metadata
+// Parameters:
+// name - name of the image (including the namespace)
+// reference - tag or digest of the target manifest
+func (client BaseClient) ListTagMetadata(ctx context.Context, name string, reference string) (result TagMetadataList, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.ListTagMetadata")
+		defer func() {
+			sc := -1
+			if result.Response.Response != nil {
+				sc = result.Response.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	req, err := client.ListTagMetadataPreparer(ctx, name, reference)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "ListTagMetadata", nil, "Failure preparing request")
+		return
+	}
+
+	resp, err := client.ListTagMetadataSender(req)
+	if err != nil {
+		result.Response = autorest.Response{Response: resp}
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "ListTagMetadata", resp, "Failure sending request")
+		return
+	}
+
+	result, err = client.ListTagMetadataResponder(resp)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "ListTagMetadata", resp, "Failure responding to request")
+	}
+
+	return
+}
+
+// ListTagMetadataPreparer prepares the ListTagMetadata request.
+func (client BaseClient) ListTagMetadataPreparer(ctx context.Context, name string, reference string) (*http.Request, error) {
+	urlParameters := map[string]interface{}{
+		"url": client.LoginURI,
+	}
+
+	pathParameters := map[string]interface{}{
+		"name":      autorest.Encode("path", name),
+		"reference": autorest.Encode("path", reference),
+	}
+
+	preparer := autorest.CreatePreparer(
+		autorest.AsGet(),
+		autorest.WithCustomBaseURL("{url}", urlParameters),
+		autorest.WithPathParameters("/acr/v1/{name}/_tags/{reference}/_metadata", pathParameters))
+	return preparer.Prepare((&http.Request{}).WithContext(ctx))
+}
+
+// ListTagMetadataSender sends the ListTagMetadata request. The method will close the
+// http.Response Body if it receives an error.
+func (client BaseClient) ListTagMetadataSender(req *http.Request) (*http.Response, error) {
+	return autorest.SendWithSender(client, req,
+		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
+}
+
+// ListTagMetadataResponder handles the response to the ListTagMetadata request. The method always
+// closes the http.Response Body.
+func (client BaseClient) ListTagMetadataResponder(resp *http.Response) (result TagMetadataList, err error) {
+	err = autorest.Respond(
+		resp,
+		client.ByInspecting(),
+		azure.WithErrorUnlessStatusCode(http.StatusOK),
+		autorest.ByUnmarshallingJSON(&result),
+		autorest.ByClosing())
+	result.Response = autorest.Response{Response: resp}
+	return
+}
+
+// PutManifest put the manifest identified by name and reference where reference can be a tag or digest.
+// Parameters:
+// name - name of the image (including the namespace)
+// reference - a tag or a digest, pointing to a specific image
+func (client BaseClient) PutManifest(ctx context.Context, name string, reference string, payload Manifest) (result autorest.Response, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.PutManifest")
+		defer func() {
+			sc := -1
+			if result.Response != nil {
+				sc = result.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	req, err := client.PutManifestPreparer(ctx, name, reference, payload)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "PutManifest", nil, "Failure preparing request")
+		return
+	}
+
+	resp, err := client.PutManifestSender(req)
+	if err != nil {
+		result.Response = resp
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "PutManifest", resp, "Failure sending request")
+		return
+	}
+
+	result, err = client.PutManifestResponder(resp)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "PutManifest", resp, "Failure responding to request")
+	}
+
+	return
+}
+
+// PutManifestPreparer prepares the PutManifest request.
+func (client BaseClient) PutManifestPreparer(ctx context.Context, name string, reference string, payload Manifest) (*http.Request, error) {
+	urlParameters := map[string]interface{}{
+		"url": client.LoginURI,
+	}
+
+	pathParameters := map[string]interface{}{
+		"name":      autorest.Encode("path", name),
+		"reference": autorest.Encode("path", reference),
+	}
+
+	preparer := autorest.CreatePreparer(
+		autorest.AsContentType("application/vnd.docker.distribution.manifest.v2+json"),
+		autorest.AsPut(),
+		autorest.WithCustomBaseURL("{url}", urlParameters),
+		autorest.WithPathParameters("/v2/{name}/manifests/{reference}", pathParameters),
+		autorest.WithJSON(payload))
+	return preparer.Prepare((&http.Request{}).WithContext(ctx))
+}
+
+// PutManifestSender sends the PutManifest request. The method will close the
+// http.Response Body if it receives an error.
+func (client BaseClient) PutManifestSender(req *http.Request) (*http.Response, error) {
+	return autorest.SendWithSender(client, req,
+		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
+}
+
+// PutManifestResponder handles the response to the PutManifest request. The method always
+// closes the http.Response Body.
+func (client BaseClient) PutManifestResponder(resp *http.Response) (result autorest.Response, err error) {
+	err = autorest.Respond(
+		resp,
+		client.ByInspecting(),
+		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusCreated),
+		autorest.ByClosing())
+	result.Response = resp
 	return
 }
 
 // StartBlobUpload upload a blob identified by the digest parameter in single request. This upload will not be
 // resumable unless a recoverable error is returned.
 // Parameters:
+// name - name of the image (including the namespace)
 // digest - digest of uploaded blob. If present, the upload will be completed, in a single request, with
 // contents of the request body as the resulting blob.
-func (client BaseClient) StartBlobUpload(ctx context.Context, digest string) (result SetObject, err error) {
-	req, err := client.StartBlobUploadPreparer(ctx, digest)
+func (client BaseClient) StartBlobUpload(ctx context.Context, name string, digest string) (result autorest.Response, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.StartBlobUpload")
+		defer func() {
+			sc := -1
+			if result.Response != nil {
+				sc = result.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	req, err := client.StartBlobUploadPreparer(ctx, name, digest)
 	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "StartBlobUpload", nil, "Failure preparing request")
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "StartBlobUpload", nil, "Failure preparing request")
 		return
 	}
 
 	resp, err := client.StartBlobUploadSender(req)
 	if err != nil {
-		result.Response = autorest.Response{Response: resp}
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "StartBlobUpload", resp, "Failure sending request")
+		result.Response = resp
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "StartBlobUpload", resp, "Failure sending request")
 		return
 	}
 
 	result, err = client.StartBlobUploadResponder(resp)
 	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "StartBlobUpload", resp, "Failure responding to request")
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "StartBlobUpload", resp, "Failure responding to request")
 	}
 
 	return
 }
 
 // StartBlobUploadPreparer prepares the StartBlobUpload request.
-func (client BaseClient) StartBlobUploadPreparer(ctx context.Context, digest string) (*http.Request, error) {
+func (client BaseClient) StartBlobUploadPreparer(ctx context.Context, name string, digest string) (*http.Request, error) {
+	urlParameters := map[string]interface{}{
+		"url": client.LoginURI,
+	}
+
 	pathParameters := map[string]interface{}{
-		"name": autorest.Encode("path", client.Name),
+		"name": autorest.Encode("path", name),
 	}
 
 	queryParameters := map[string]interface{}{}
@@ -2090,10 +2201,9 @@ func (client BaseClient) StartBlobUploadPreparer(ctx context.Context, digest str
 
 	preparer := autorest.CreatePreparer(
 		autorest.AsPost(),
-		autorest.WithBaseURL(client.BaseURI),
+		autorest.WithCustomBaseURL("{url}", urlParameters),
 		autorest.WithPathParameters("/v2/{name}/blobs/uploads", pathParameters),
-		autorest.WithQueryParameters(queryParameters),
-		autorest.WithHeader("authorization", client.Authorization))
+		autorest.WithQueryParameters(queryParameters))
 	return preparer.Prepare((&http.Request{}).WithContext(ctx))
 }
 
@@ -2106,54 +2216,539 @@ func (client BaseClient) StartBlobUploadSender(req *http.Request) (*http.Respons
 
 // StartBlobUploadResponder handles the response to the StartBlobUpload request. The method always
 // closes the http.Response Body.
-func (client BaseClient) StartBlobUploadResponder(resp *http.Response) (result SetObject, err error) {
+func (client BaseClient) StartBlobUploadResponder(resp *http.Response) (result autorest.Response, err error) {
 	err = autorest.Respond(
 		resp,
 		client.ByInspecting(),
-		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusCreated, http.StatusAccepted, http.StatusBadRequest, http.StatusUnauthorized),
-		autorest.ByUnmarshallingJSON(&result.Value),
+		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusCreated, http.StatusAccepted),
 		autorest.ByClosing())
-	result.Response = autorest.Response{Response: resp}
+	result.Response = resp
+	return
+}
+
+// UpdateAcrManifestAttributes update attributes of a manifest
+// Parameters:
+// name - name of the image (including the namespace)
+// reference - a tag or a digest, pointing to a specific image
+// value - repository attribute value
+func (client BaseClient) UpdateAcrManifestAttributes(ctx context.Context, name string, reference string, value *ChangeableAttributes) (result autorest.Response, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.UpdateAcrManifestAttributes")
+		defer func() {
+			sc := -1
+			if result.Response != nil {
+				sc = result.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	req, err := client.UpdateAcrManifestAttributesPreparer(ctx, name, reference, value)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "UpdateAcrManifestAttributes", nil, "Failure preparing request")
+		return
+	}
+
+	resp, err := client.UpdateAcrManifestAttributesSender(req)
+	if err != nil {
+		result.Response = resp
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "UpdateAcrManifestAttributes", resp, "Failure sending request")
+		return
+	}
+
+	result, err = client.UpdateAcrManifestAttributesResponder(resp)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "UpdateAcrManifestAttributes", resp, "Failure responding to request")
+	}
+
+	return
+}
+
+// UpdateAcrManifestAttributesPreparer prepares the UpdateAcrManifestAttributes request.
+func (client BaseClient) UpdateAcrManifestAttributesPreparer(ctx context.Context, name string, reference string, value *ChangeableAttributes) (*http.Request, error) {
+	urlParameters := map[string]interface{}{
+		"url": client.LoginURI,
+	}
+
+	pathParameters := map[string]interface{}{
+		"name":      autorest.Encode("path", name),
+		"reference": autorest.Encode("path", reference),
+	}
+
+	preparer := autorest.CreatePreparer(
+		autorest.AsContentType("application/json; charset=utf-8"),
+		autorest.AsPatch(),
+		autorest.WithCustomBaseURL("{url}", urlParameters),
+		autorest.WithPathParameters("/acr/v1/{name}/_manifests/{reference}", pathParameters))
+	if value != nil {
+		preparer = autorest.DecoratePreparer(preparer,
+			autorest.WithJSON(value))
+	}
+	return preparer.Prepare((&http.Request{}).WithContext(ctx))
+}
+
+// UpdateAcrManifestAttributesSender sends the UpdateAcrManifestAttributes request. The method will close the
+// http.Response Body if it receives an error.
+func (client BaseClient) UpdateAcrManifestAttributesSender(req *http.Request) (*http.Response, error) {
+	return autorest.SendWithSender(client, req,
+		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
+}
+
+// UpdateAcrManifestAttributesResponder handles the response to the UpdateAcrManifestAttributes request. The method always
+// closes the http.Response Body.
+func (client BaseClient) UpdateAcrManifestAttributesResponder(resp *http.Response) (result autorest.Response, err error) {
+	err = autorest.Respond(
+		resp,
+		client.ByInspecting(),
+		azure.WithErrorUnlessStatusCode(http.StatusOK),
+		autorest.ByClosing())
+	result.Response = resp
+	return
+}
+
+// UpdateAcrManifestMetadata add or update a metadata of a manifest
+// Parameters:
+// name - name of the image (including the namespace)
+// reference - tag or digest of the target manifest
+// metadata - name of the metadata
+func (client BaseClient) UpdateAcrManifestMetadata(ctx context.Context, name string, reference string, metadata string, value *interface{}) (result autorest.Response, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.UpdateAcrManifestMetadata")
+		defer func() {
+			sc := -1
+			if result.Response != nil {
+				sc = result.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	req, err := client.UpdateAcrManifestMetadataPreparer(ctx, name, reference, metadata, value)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "UpdateAcrManifestMetadata", nil, "Failure preparing request")
+		return
+	}
+
+	resp, err := client.UpdateAcrManifestMetadataSender(req)
+	if err != nil {
+		result.Response = resp
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "UpdateAcrManifestMetadata", resp, "Failure sending request")
+		return
+	}
+
+	result, err = client.UpdateAcrManifestMetadataResponder(resp)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "UpdateAcrManifestMetadata", resp, "Failure responding to request")
+	}
+
+	return
+}
+
+// UpdateAcrManifestMetadataPreparer prepares the UpdateAcrManifestMetadata request.
+func (client BaseClient) UpdateAcrManifestMetadataPreparer(ctx context.Context, name string, reference string, metadata string, value *interface{}) (*http.Request, error) {
+	urlParameters := map[string]interface{}{
+		"url": client.LoginURI,
+	}
+
+	pathParameters := map[string]interface{}{
+		"metadata":  autorest.Encode("path", metadata),
+		"name":      autorest.Encode("path", name),
+		"reference": autorest.Encode("path", reference),
+	}
+
+	preparer := autorest.CreatePreparer(
+		autorest.AsContentType("application/json; charset=utf-8"),
+		autorest.AsPut(),
+		autorest.WithCustomBaseURL("{url}", urlParameters),
+		autorest.WithPathParameters("/acr/v1/{name}/_manifests/{reference}/_metadata/{metadata}", pathParameters))
+	if value != nil {
+		preparer = autorest.DecoratePreparer(preparer,
+			autorest.WithJSON(value))
+	}
+	return preparer.Prepare((&http.Request{}).WithContext(ctx))
+}
+
+// UpdateAcrManifestMetadataSender sends the UpdateAcrManifestMetadata request. The method will close the
+// http.Response Body if it receives an error.
+func (client BaseClient) UpdateAcrManifestMetadataSender(req *http.Request) (*http.Response, error) {
+	return autorest.SendWithSender(client, req,
+		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
+}
+
+// UpdateAcrManifestMetadataResponder handles the response to the UpdateAcrManifestMetadata request. The method always
+// closes the http.Response Body.
+func (client BaseClient) UpdateAcrManifestMetadataResponder(resp *http.Response) (result autorest.Response, err error) {
+	err = autorest.Respond(
+		resp,
+		client.ByInspecting(),
+		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusCreated),
+		autorest.ByClosing())
+	result.Response = resp
+	return
+}
+
+// UpdateAcrRepositoryAttributes update attributes of a repository
+// Parameters:
+// name - name of the image (including the namespace)
+func (client BaseClient) UpdateAcrRepositoryAttributes(ctx context.Context, name string, value *ChangeableAttributes) (result autorest.Response, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.UpdateAcrRepositoryAttributes")
+		defer func() {
+			sc := -1
+			if result.Response != nil {
+				sc = result.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	req, err := client.UpdateAcrRepositoryAttributesPreparer(ctx, name, value)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "UpdateAcrRepositoryAttributes", nil, "Failure preparing request")
+		return
+	}
+
+	resp, err := client.UpdateAcrRepositoryAttributesSender(req)
+	if err != nil {
+		result.Response = resp
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "UpdateAcrRepositoryAttributes", resp, "Failure sending request")
+		return
+	}
+
+	result, err = client.UpdateAcrRepositoryAttributesResponder(resp)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "UpdateAcrRepositoryAttributes", resp, "Failure responding to request")
+	}
+
+	return
+}
+
+// UpdateAcrRepositoryAttributesPreparer prepares the UpdateAcrRepositoryAttributes request.
+func (client BaseClient) UpdateAcrRepositoryAttributesPreparer(ctx context.Context, name string, value *ChangeableAttributes) (*http.Request, error) {
+	urlParameters := map[string]interface{}{
+		"url": client.LoginURI,
+	}
+
+	pathParameters := map[string]interface{}{
+		"name": autorest.Encode("path", name),
+	}
+
+	preparer := autorest.CreatePreparer(
+		autorest.AsContentType("application/json; charset=utf-8"),
+		autorest.AsPatch(),
+		autorest.WithCustomBaseURL("{url}", urlParameters),
+		autorest.WithPathParameters("/acr/v1/{name}", pathParameters))
+	if value != nil {
+		preparer = autorest.DecoratePreparer(preparer,
+			autorest.WithJSON(value))
+	}
+	return preparer.Prepare((&http.Request{}).WithContext(ctx))
+}
+
+// UpdateAcrRepositoryAttributesSender sends the UpdateAcrRepositoryAttributes request. The method will close the
+// http.Response Body if it receives an error.
+func (client BaseClient) UpdateAcrRepositoryAttributesSender(req *http.Request) (*http.Response, error) {
+	return autorest.SendWithSender(client, req,
+		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
+}
+
+// UpdateAcrRepositoryAttributesResponder handles the response to the UpdateAcrRepositoryAttributes request. The method always
+// closes the http.Response Body.
+func (client BaseClient) UpdateAcrRepositoryAttributesResponder(resp *http.Response) (result autorest.Response, err error) {
+	err = autorest.Respond(
+		resp,
+		client.ByInspecting(),
+		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusNoContent),
+		autorest.ByClosing())
+	result.Response = resp
+	return
+}
+
+// UpdateAcrRepositoryMetadata add or update a metadata of a repository
+// Parameters:
+// name - name of the image (including the namespace)
+// metadata - name of the metadata
+func (client BaseClient) UpdateAcrRepositoryMetadata(ctx context.Context, name string, metadata string, value *interface{}) (result autorest.Response, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.UpdateAcrRepositoryMetadata")
+		defer func() {
+			sc := -1
+			if result.Response != nil {
+				sc = result.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	req, err := client.UpdateAcrRepositoryMetadataPreparer(ctx, name, metadata, value)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "UpdateAcrRepositoryMetadata", nil, "Failure preparing request")
+		return
+	}
+
+	resp, err := client.UpdateAcrRepositoryMetadataSender(req)
+	if err != nil {
+		result.Response = resp
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "UpdateAcrRepositoryMetadata", resp, "Failure sending request")
+		return
+	}
+
+	result, err = client.UpdateAcrRepositoryMetadataResponder(resp)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "UpdateAcrRepositoryMetadata", resp, "Failure responding to request")
+	}
+
+	return
+}
+
+// UpdateAcrRepositoryMetadataPreparer prepares the UpdateAcrRepositoryMetadata request.
+func (client BaseClient) UpdateAcrRepositoryMetadataPreparer(ctx context.Context, name string, metadata string, value *interface{}) (*http.Request, error) {
+	urlParameters := map[string]interface{}{
+		"url": client.LoginURI,
+	}
+
+	pathParameters := map[string]interface{}{
+		"metadata": autorest.Encode("path", metadata),
+		"name":     autorest.Encode("path", name),
+	}
+
+	preparer := autorest.CreatePreparer(
+		autorest.AsContentType("application/json; charset=utf-8"),
+		autorest.AsPut(),
+		autorest.WithCustomBaseURL("{url}", urlParameters),
+		autorest.WithPathParameters("/acr/v1/{name}/_metadata/{metadata}", pathParameters))
+	if value != nil {
+		preparer = autorest.DecoratePreparer(preparer,
+			autorest.WithJSON(value))
+	}
+	return preparer.Prepare((&http.Request{}).WithContext(ctx))
+}
+
+// UpdateAcrRepositoryMetadataSender sends the UpdateAcrRepositoryMetadata request. The method will close the
+// http.Response Body if it receives an error.
+func (client BaseClient) UpdateAcrRepositoryMetadataSender(req *http.Request) (*http.Response, error) {
+	return autorest.SendWithSender(client, req,
+		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
+}
+
+// UpdateAcrRepositoryMetadataResponder handles the response to the UpdateAcrRepositoryMetadata request. The method always
+// closes the http.Response Body.
+func (client BaseClient) UpdateAcrRepositoryMetadataResponder(resp *http.Response) (result autorest.Response, err error) {
+	err = autorest.Respond(
+		resp,
+		client.ByInspecting(),
+		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusCreated),
+		autorest.ByClosing())
+	result.Response = resp
+	return
+}
+
+// UpdateAcrTagAttributes update attributes of a tag
+// Parameters:
+// name - name of the image (including the namespace)
+// reference - tag or digest of the target manifest
+// value - repository attribute value
+func (client BaseClient) UpdateAcrTagAttributes(ctx context.Context, name string, reference string, value *ChangeableAttributes) (result autorest.Response, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.UpdateAcrTagAttributes")
+		defer func() {
+			sc := -1
+			if result.Response != nil {
+				sc = result.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	req, err := client.UpdateAcrTagAttributesPreparer(ctx, name, reference, value)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "UpdateAcrTagAttributes", nil, "Failure preparing request")
+		return
+	}
+
+	resp, err := client.UpdateAcrTagAttributesSender(req)
+	if err != nil {
+		result.Response = resp
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "UpdateAcrTagAttributes", resp, "Failure sending request")
+		return
+	}
+
+	result, err = client.UpdateAcrTagAttributesResponder(resp)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "UpdateAcrTagAttributes", resp, "Failure responding to request")
+	}
+
+	return
+}
+
+// UpdateAcrTagAttributesPreparer prepares the UpdateAcrTagAttributes request.
+func (client BaseClient) UpdateAcrTagAttributesPreparer(ctx context.Context, name string, reference string, value *ChangeableAttributes) (*http.Request, error) {
+	urlParameters := map[string]interface{}{
+		"url": client.LoginURI,
+	}
+
+	pathParameters := map[string]interface{}{
+		"name":      autorest.Encode("path", name),
+		"reference": autorest.Encode("path", reference),
+	}
+
+	preparer := autorest.CreatePreparer(
+		autorest.AsContentType("application/json; charset=utf-8"),
+		autorest.AsPatch(),
+		autorest.WithCustomBaseURL("{url}", urlParameters),
+		autorest.WithPathParameters("/acr/v1/{name}/_tags/{reference}", pathParameters))
+	if value != nil {
+		preparer = autorest.DecoratePreparer(preparer,
+			autorest.WithJSON(value))
+	}
+	return preparer.Prepare((&http.Request{}).WithContext(ctx))
+}
+
+// UpdateAcrTagAttributesSender sends the UpdateAcrTagAttributes request. The method will close the
+// http.Response Body if it receives an error.
+func (client BaseClient) UpdateAcrTagAttributesSender(req *http.Request) (*http.Response, error) {
+	return autorest.SendWithSender(client, req,
+		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
+}
+
+// UpdateAcrTagAttributesResponder handles the response to the UpdateAcrTagAttributes request. The method always
+// closes the http.Response Body.
+func (client BaseClient) UpdateAcrTagAttributesResponder(resp *http.Response) (result autorest.Response, err error) {
+	err = autorest.Respond(
+		resp,
+		client.ByInspecting(),
+		azure.WithErrorUnlessStatusCode(http.StatusOK),
+		autorest.ByClosing())
+	result.Response = resp
+	return
+}
+
+// UpdateAcrTagMetadata add or update a metadata of a tag
+// Parameters:
+// name - name of the image (including the namespace)
+// reference - tag or digest of the target manifest
+// metadata - name of the metadata
+func (client BaseClient) UpdateAcrTagMetadata(ctx context.Context, name string, reference string, metadata string, value *interface{}) (result autorest.Response, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.UpdateAcrTagMetadata")
+		defer func() {
+			sc := -1
+			if result.Response != nil {
+				sc = result.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	req, err := client.UpdateAcrTagMetadataPreparer(ctx, name, reference, metadata, value)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "UpdateAcrTagMetadata", nil, "Failure preparing request")
+		return
+	}
+
+	resp, err := client.UpdateAcrTagMetadataSender(req)
+	if err != nil {
+		result.Response = resp
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "UpdateAcrTagMetadata", resp, "Failure sending request")
+		return
+	}
+
+	result, err = client.UpdateAcrTagMetadataResponder(resp)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "UpdateAcrTagMetadata", resp, "Failure responding to request")
+	}
+
+	return
+}
+
+// UpdateAcrTagMetadataPreparer prepares the UpdateAcrTagMetadata request.
+func (client BaseClient) UpdateAcrTagMetadataPreparer(ctx context.Context, name string, reference string, metadata string, value *interface{}) (*http.Request, error) {
+	urlParameters := map[string]interface{}{
+		"url": client.LoginURI,
+	}
+
+	pathParameters := map[string]interface{}{
+		"metadata":  autorest.Encode("path", metadata),
+		"name":      autorest.Encode("path", name),
+		"reference": autorest.Encode("path", reference),
+	}
+
+	preparer := autorest.CreatePreparer(
+		autorest.AsContentType("application/json; charset=utf-8"),
+		autorest.AsPut(),
+		autorest.WithCustomBaseURL("{url}", urlParameters),
+		autorest.WithPathParameters("/acr/v1/{name}/_tags/{reference}/_metadata/{metadata}", pathParameters))
+	if value != nil {
+		preparer = autorest.DecoratePreparer(preparer,
+			autorest.WithJSON(value))
+	}
+	return preparer.Prepare((&http.Request{}).WithContext(ctx))
+}
+
+// UpdateAcrTagMetadataSender sends the UpdateAcrTagMetadata request. The method will close the
+// http.Response Body if it receives an error.
+func (client BaseClient) UpdateAcrTagMetadataSender(req *http.Request) (*http.Response, error) {
+	return autorest.SendWithSender(client, req,
+		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
+}
+
+// UpdateAcrTagMetadataResponder handles the response to the UpdateAcrTagMetadata request. The method always
+// closes the http.Response Body.
+func (client BaseClient) UpdateAcrTagMetadataResponder(resp *http.Response) (result autorest.Response, err error) {
+	err = autorest.Respond(
+		resp,
+		client.ByInspecting(),
+		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusCreated),
+		autorest.ByClosing())
+	result.Response = resp
 	return
 }
 
 // UploadBlobContent upload a stream of data without completing the upload.
 // Parameters:
+// name - name of the image (including the namespace)
 // UUID - a uuid identifying the upload.
-func (client BaseClient) UploadBlobContent(ctx context.Context, UUID string) (result SetObject, err error) {
-	req, err := client.UploadBlobContentPreparer(ctx, UUID)
+func (client BaseClient) UploadBlobContent(ctx context.Context, name string, UUID string) (result autorest.Response, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.UploadBlobContent")
+		defer func() {
+			sc := -1
+			if result.Response != nil {
+				sc = result.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	req, err := client.UploadBlobContentPreparer(ctx, name, UUID)
 	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "UploadBlobContent", nil, "Failure preparing request")
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "UploadBlobContent", nil, "Failure preparing request")
 		return
 	}
 
 	resp, err := client.UploadBlobContentSender(req)
 	if err != nil {
-		result.Response = autorest.Response{Response: resp}
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "UploadBlobContent", resp, "Failure sending request")
+		result.Response = resp
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "UploadBlobContent", resp, "Failure sending request")
 		return
 	}
 
 	result, err = client.UploadBlobContentResponder(resp)
 	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "UploadBlobContent", resp, "Failure responding to request")
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "UploadBlobContent", resp, "Failure responding to request")
 	}
 
 	return
 }
 
 // UploadBlobContentPreparer prepares the UploadBlobContent request.
-func (client BaseClient) UploadBlobContentPreparer(ctx context.Context, UUID string) (*http.Request, error) {
+func (client BaseClient) UploadBlobContentPreparer(ctx context.Context, name string, UUID string) (*http.Request, error) {
+	urlParameters := map[string]interface{}{
+		"url": client.LoginURI,
+	}
+
 	pathParameters := map[string]interface{}{
-		"name": autorest.Encode("path", client.Name),
+		"name": autorest.Encode("path", name),
 		"uuid": autorest.Encode("path", UUID),
 	}
 
 	preparer := autorest.CreatePreparer(
 		autorest.AsPatch(),
-		autorest.WithBaseURL(client.BaseURI),
-		autorest.WithPathParameters("/v2/{name}/blobs/uploads/{uuid}", pathParameters),
-		autorest.WithHeader("authorization", client.Authorization))
+		autorest.WithCustomBaseURL("{url}", urlParameters),
+		autorest.WithPathParameters("/v2/{name}/blobs/uploads/{uuid}", pathParameters))
 	return preparer.Prepare((&http.Request{}).WithContext(ctx))
 }
 
@@ -2166,71 +2761,12 @@ func (client BaseClient) UploadBlobContentSender(req *http.Request) (*http.Respo
 
 // UploadBlobContentResponder handles the response to the UploadBlobContent request. The method always
 // closes the http.Response Body.
-func (client BaseClient) UploadBlobContentResponder(resp *http.Response) (result SetObject, err error) {
+func (client BaseClient) UploadBlobContentResponder(resp *http.Response) (result autorest.Response, err error) {
 	err = autorest.Respond(
 		resp,
 		client.ByInspecting(),
-		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusNoContent, http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound, http.StatusRequestedRangeNotSatisfiable),
-		autorest.ByUnmarshallingJSON(&result.Value),
+		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusNoContent),
 		autorest.ByClosing())
-	result.Response = autorest.Response{Response: resp}
-	return
-}
-
-// UploadManifest put the manifest identified by name and reference where reference can be a tag or digest.
-func (client BaseClient) UploadManifest(ctx context.Context) (result SetObject, err error) {
-	req, err := client.UploadManifestPreparer(ctx)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "UploadManifest", nil, "Failure preparing request")
-		return
-	}
-
-	resp, err := client.UploadManifestSender(req)
-	if err != nil {
-		result.Response = autorest.Response{Response: resp}
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "UploadManifest", resp, "Failure sending request")
-		return
-	}
-
-	result, err = client.UploadManifestResponder(resp)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acrapi.BaseClient", "UploadManifest", resp, "Failure responding to request")
-	}
-
-	return
-}
-
-// UploadManifestPreparer prepares the UploadManifest request.
-func (client BaseClient) UploadManifestPreparer(ctx context.Context) (*http.Request, error) {
-	pathParameters := map[string]interface{}{
-		"name":      autorest.Encode("path", client.Name),
-		"reference": autorest.Encode("path", client.Reference),
-	}
-
-	preparer := autorest.CreatePreparer(
-		autorest.AsPut(),
-		autorest.WithBaseURL(client.BaseURI),
-		autorest.WithPathParameters("/v2/{name}/manifests/{reference}", pathParameters),
-		autorest.WithHeader("authorization", client.Authorization))
-	return preparer.Prepare((&http.Request{}).WithContext(ctx))
-}
-
-// UploadManifestSender sends the UploadManifest request. The method will close the
-// http.Response Body if it receives an error.
-func (client BaseClient) UploadManifestSender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
-}
-
-// UploadManifestResponder handles the response to the UploadManifest request. The method always
-// closes the http.Response Body.
-func (client BaseClient) UploadManifestResponder(resp *http.Response) (result SetObject, err error) {
-	err = autorest.Respond(
-		resp,
-		client.ByInspecting(),
-		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusAccepted, http.StatusBadRequest, http.StatusUnauthorized),
-		autorest.ByUnmarshallingJSON(&result.Value),
-		autorest.ByClosing())
-	result.Response = autorest.Response{Response: resp}
+	result.Response = resp
 	return
 }

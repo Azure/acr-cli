@@ -6,19 +6,23 @@ package api
 import (
 	"context"
 	"encoding/base64"
-	"fmt"
-	"net/http"
 	"strings"
 
+	"github.com/Azure/go-autorest/autorest"
+
 	acrapi "github.com/Azure/acr-cli/acr"
-	"github.com/mitchellh/mapstructure"
-	"github.com/pkg/errors"
 )
 
 const (
-	prefixHTTPS = "https://"
-	registryURL = ".azurecr.io"
+	prefixHTTPS           = "https://"
+	registryURL           = ".azurecr.io"
+	manifestTagFetchCount = 100
 )
+
+type AcrCLIClient struct {
+	AutorestClient        acrapi.BaseClient
+	manifestTagFetchCount int32
+}
 
 // BearerAuth returns the authentication header in case an access token was specified.
 func BearerAuth(accessToken string) string {
@@ -49,175 +53,56 @@ func LoginURLWithPrefix(loginURL string) string {
 	return urlWithPrefix
 }
 
+func NewAcrCLIClient(loginURL string) AcrCLIClient {
+	loginURL = LoginURLWithPrefix(loginURL)
+	return AcrCLIClient{
+		acrapi.NewWithoutDefaults(loginURL),
+		100,
+	}
+}
+
+func NewAcrCLIClientWithBasicAuth(loginURL string, username string, password string) AcrCLIClient {
+	newAcrCLIClient := NewAcrCLIClient(loginURL)
+	newAcrCLIClient.AutorestClient.Authorizer = autorest.NewBasicAuthorizer(username, password)
+	return newAcrCLIClient
+}
+
 // AcrListTags list the tags of a repository with their attributes.
-func AcrListTags(ctx context.Context,
-	loginURL string,
-	auth string,
-	repoName string,
-	orderBy string,
-	last string) (*acrapi.TagAttributeList, error) {
-	hostname := LoginURLWithPrefix(loginURL)
-	client := acrapi.NewWithBaseURI(hostname,
-		repoName,
-		"",
-		"",
-		"",
-		"",
-		auth,
-		orderBy,
-		"100",
-		last,
-		"")
-	tags, err := client.AcrListTags(ctx)
+func (c *AcrCLIClient) GetAcrTags(ctx context.Context, repoName string, orderBy string, last string) (*acrapi.RepositoryTagsType, error) {
+	tags, err := c.AutorestClient.GetAcrTags(ctx, repoName, last, &c.manifestTagFetchCount, orderBy, "")
 	if err != nil {
 		return nil, err
 	}
-	var listTagResult acrapi.TagAttributeList
-	switch tags.StatusCode {
-	case http.StatusOK:
-		if err = mapstructure.Decode(tags.Value, &listTagResult); err != nil {
-			return nil, err
-		}
-		return &listTagResult, nil
-
-	case http.StatusUnauthorized, http.StatusNotFound:
-		var apiError acrapi.Error
-		if err = mapstructure.Decode(tags.Value, &apiError); err != nil {
-			return nil, errors.Wrap(err, "unable to decode error")
-		}
-		if apiError.Errors != nil && len(*apiError.Errors) > 0 {
-			return nil, fmt.Errorf("%s %s", *(*apiError.Errors)[0].Code, *(*apiError.Errors)[0].Message)
-		}
-		return nil, errors.New("unable to decode apiError")
-
-	default:
-		return nil, fmt.Errorf("unexpected response code: %v", tags.StatusCode)
-	}
+	return &tags, nil
 }
 
-// AcrDeleteTag deletes the tag by reference.
-func AcrDeleteTag(ctx context.Context,
-	loginURL string,
-	auth string,
-	repoName string,
-	reference string) error {
-	hostname := LoginURLWithPrefix(loginURL)
-	client := acrapi.NewWithBaseURI(hostname,
-		repoName,
-		reference,
-		"",
-		"",
-		"",
-		auth,
-		"",
-		"",
-		"",
-		"")
-	tag, err := client.AcrDeleteTag(ctx)
+// DeleteTag deletes the tag by reference.
+func (c *AcrCLIClient) DeleteAcrTag(ctx context.Context, repoName string, reference string) error {
+	_, err := c.AutorestClient.DeleteAcrTag(ctx, repoName, reference)
 	if err != nil {
 		return err
 	}
-	switch tag.StatusCode {
-	case http.StatusAccepted:
-		return nil
-	case http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound, http.StatusMethodNotAllowed:
-		var apiError acrapi.Error
-		if err = mapstructure.Decode(tag, &apiError); err != nil {
-			return errors.Wrap(err, "unable to decode error")
-		}
-		if apiError.Errors != nil && len(*apiError.Errors) > 0 {
-			return fmt.Errorf("%s %s", *(*apiError.Errors)[0].Code, *(*apiError.Errors)[0].Message)
-		}
-		return errors.New("unable to decode apiError")
-
-	default:
-		return fmt.Errorf("unexpected response code: %v", tag.StatusCode)
-	}
+	return nil
 }
 
-// AcrListManifests list all the manifest in a repository with their attributes.
-func AcrListManifests(ctx context.Context,
-	loginURL string,
-	auth string,
-	repoName string,
-	orderBy string,
-	last string) (*acrapi.ManifestAttributeList, error) {
-	hostname := LoginURLWithPrefix(loginURL)
-	client := acrapi.NewWithBaseURI(hostname,
-		repoName,
-		"",
-		"",
-		"",
-		"",
-		auth,
-		orderBy,
-		"100",
-		last,
-		"")
-	manifests, err := client.AcrListManifests(ctx)
+// ListManifestsAttributes list all the manifest in a repository with their attributes.
+func (c *AcrCLIClient) GetAcrManifests(ctx context.Context, repoName string, orderBy string, last string) (*acrapi.Manifests, error) {
+	manifests, err := c.AutorestClient.GetAcrManifests(ctx, repoName, last, &c.manifestTagFetchCount, orderBy)
 	if err != nil {
 		return nil, err
 	}
-	switch manifests.StatusCode {
-	case http.StatusOK:
-		var acrListManifestsAttributesResult acrapi.ManifestAttributeList
-		if err = mapstructure.Decode(manifests.Value, &acrListManifestsAttributesResult); err != nil {
-			return nil, err
-		}
-		return &acrListManifestsAttributesResult, nil
-
-	case http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound, http.StatusMethodNotAllowed:
-		var apiError acrapi.Error
-		if err = mapstructure.Decode(manifests.Value, &apiError); err != nil {
-			return nil, errors.Wrap(err, "unable to decode error")
-		}
-		if apiError.Errors != nil && len(*apiError.Errors) > 0 {
-			return nil, fmt.Errorf("%s %s", *(*apiError.Errors)[0].Code, *(*apiError.Errors)[0].Message)
-		}
-		return nil, errors.New("unable to decode apiError")
-
-	default:
-		return nil, fmt.Errorf("unexpected response code: %v", manifests.StatusCode)
-	}
+	return &manifests, nil
 }
 
-// DeleteManifest deletes a manifest using the digest as a reference.
-func DeleteManifest(ctx context.Context,
-	loginURL string,
-	auth string,
-	repoName string,
-	reference string) error {
-	hostname := LoginURLWithPrefix(loginURL)
-	client := acrapi.NewWithBaseURI(hostname,
-		repoName,
-		reference,
-		"",
-		"",
-		"",
-		auth,
-		"",
-		"",
-		"",
-		"")
-	deleteManifest, err := client.DeleteManifest(ctx)
+// DeleteManifestByDigest deletes a manifest using the digest as a reference.
+func (c *AcrCLIClient) DeleteManifest(ctx context.Context, repoName string, reference string) error {
+	_, err := c.AutorestClient.DeleteManifest(ctx, repoName, reference)
 	if err != nil {
 		return err
 	}
-	switch deleteManifest.StatusCode {
-	case http.StatusAccepted:
-		return nil
+	return nil
+}
 
-	case http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound, http.StatusMethodNotAllowed:
-		var apiError acrapi.Error
-		if err = mapstructure.Decode(deleteManifest, &apiError); err != nil {
-			return errors.Wrap(err, "unable to decode error")
-		}
-		if apiError.Errors != nil && len(*apiError.Errors) > 0 {
-			return fmt.Errorf("%s %s", *(*apiError.Errors)[0].Code, *(*apiError.Errors)[0].Message)
-		}
-		return errors.New("unable to decode apiError")
-
-	default:
-		return fmt.Errorf("unexpected response code: %v", deleteManifest.StatusCode)
-	}
+type AcrCLIClientInterface interface {
+	AcrListTags(ctx context.Context, loginURL string, auth string, repoName string, orderBy string, last string)
 }
