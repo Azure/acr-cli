@@ -60,12 +60,12 @@ func (pw *PurgeWorker) Stop() {
 func (pw *PurgeWorker) ProcessJob(ctx context.Context, job PurgeJob) {
 	go func() {
 		defer pw.wg.Done()
-		var wErr WorkerError
+		var wErr workerError
 		switch job.JobType {
 		case PurgeTag:
 			err := api.AcrDeleteTag(ctx, job.LoginURL, job.Auth, job.RepoName, job.Tag)
 			if err != nil {
-				wErr = WorkerError{
+				wErr = workerError{
 					JobType: PurgeTag,
 					Error:   err,
 				}
@@ -75,7 +75,7 @@ func (pw *PurgeWorker) ProcessJob(ctx context.Context, job PurgeJob) {
 		case PurgeManifest:
 			err := api.DeleteManifest(ctx, job.LoginURL, job.Auth, job.RepoName, job.Digest)
 			if err != nil {
-				wErr = WorkerError{
+				wErr = workerError{
 					JobType: PurgeTag,
 					Error:   err,
 				}
