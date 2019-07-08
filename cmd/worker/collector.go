@@ -8,7 +8,7 @@ var JobQueue = make(chan PurgeJob, 100)
 
 // ErrorChannel is a channel for communication with the cobra command to verify
 // that no errors have happened so far.
-var ErrorChannel = make(chan WorkerError, 100)
+var ErrorChannel = make(chan workerError, 100)
 
 // QueuePurgeTag creates a PurgeTag job and queues it.
 func QueuePurgeTag(loginURL string,
