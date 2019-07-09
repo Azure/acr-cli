@@ -20,15 +20,20 @@ import (
 
 const (
 	purgeLongMessage = `acr purge: untag old images and delete dangling manifests.`
-	exampleMessage   = `
-Delete all tags that are older than 1 day
-  acr purge -r MyRegistry --repository MyRepository --ago 1d
+	exampleMessage   = `Untag old images and delete dangling manifests
 
-Delete all tags that are older than 1 day and begin with hello
-  acr purge -r MyRegistry --repository MyRepository --ago 1d --filter "^hello.*"
+Examples:
 
-Delete all dangling manifests
-  acr purge -r MyRegistry --repository MyRepository --dangling`
+  - Delete all tags that are older than 1 day
+    acr purge -r MyRegistry --repository MyRepository --ago 1d
+
+  - Delete all tags that are older than 1 day and begin with hello
+    acr purge -r MyRegistry --repository MyRepository --ago 1d --filter "^hello.*"
+
+  - Delete all dangling manifests
+	acr purge -r MyRegistry --repository MyRepository --dangling
+`
+
 	maxConcurrentWorkers = 6
 )
 
@@ -88,8 +93,8 @@ func newPurgeCmd(out io.Writer) *cobra.Command {
 	cmd.MarkPersistentFlagRequired("registry")
 	cmd.PersistentFlags().StringVarP(&parameters.username, "username", "u", "", "Registry username")
 	cmd.PersistentFlags().StringVarP(&parameters.password, "password", "p", "", "Registry password")
-	cmd.PersistentFlags().StringVar(&parameters.accessToken, "access-token", "", "Access Token")
-	cmd.Flags().StringVar(&parameters.ago, "ago", "1d", "The images that were created before this timeStamp will be deleted")
+	cmd.PersistentFlags().StringVar(&parameters.accessToken, "access-token", "", "Access token")
+	cmd.Flags().StringVar(&parameters.ago, "ago", "1d", "The images that were created before this time stamp will be deleted")
 	cmd.Flags().BoolVar(&parameters.dangling, "dangling", false, "Just remove dangling manifests")
 	cmd.Flags().StringVarP(&parameters.filter, "filter", "f", "", "Given as a regular expression, if a tag matches the pattern and is older than the time specified in ago it gets deleted.")
 	cmd.Flags().StringVar(&parameters.repoName, "repository", "", "The repository which will be purged.")
