@@ -19,7 +19,6 @@ type tagParameters struct {
 	registryName string
 	username     string
 	password     string
-	auth         string
 	configs      []string
 }
 
@@ -55,7 +54,6 @@ func newTagCmd(out io.Writer) *cobra.Command {
 	cmd.PersistentFlags().StringVarP(&tagParams.registryName, "registry", "r", "", "Registry name")
 	cmd.PersistentFlags().StringVarP(&tagParams.username, "username", "u", "", "Registry username")
 	cmd.PersistentFlags().StringVarP(&tagParams.password, "password", "p", "", "Registry password")
-	cmd.PersistentFlags().StringVarP(&tagParams.auth, "auth", "a", "", "Authentication")
 	cmd.MarkPersistentFlagRequired("registry")
 
 	return cmd
