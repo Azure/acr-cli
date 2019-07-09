@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Azure/acr-cli/acr"
 	"github.com/Azure/acr-cli/cmd/api"
 	"github.com/Azure/acr-cli/cmd/worker"
 	"github.com/spf13/cobra"
@@ -46,6 +47,7 @@ type purgeParameters struct {
 	filter       string
 	repoName     string
 	dangling     bool
+	dryRun       bool
 	numWorkers   int
 }
 
@@ -75,15 +77,22 @@ func newPurgeCmd(out io.Writer) *cobra.Command {
 					return errors.New("please specify authentication credentials")
 				}
 			}
-			if !parameters.dangling {
-				err := PurgeTags(ctx, loginURL, auth, parameters.repoName, parameters.ago, parameters.filter)
+			if !parameters.dryRun {
+				if !parameters.dangling {
+					err := PurgeTags(ctx, loginURL, auth, parameters.repoName, parameters.ago, parameters.filter)
+					if err != nil {
+						return err
+					}
+				}
+				err := PurgeDanglingManifests(ctx, loginURL, auth, parameters.repoName)
 				if err != nil {
 					return err
 				}
-			}
-			err := PurgeDanglingManifests(ctx, loginURL, auth, parameters.repoName)
-			if err != nil {
-				return err
+			} else {
+				err := DryRunPurge(ctx, loginURL, auth, parameters.repoName, parameters.ago, parameters.filter, parameters.dangling)
+				if err != nil {
+					return err
+				}
 			}
 
 			return nil
@@ -97,6 +106,7 @@ func newPurgeCmd(out io.Writer) *cobra.Command {
 	cmd.Flags().BoolVar(&parameters.dangling, "dangling", false, "Just remove dangling manifests")
 	cmd.Flags().IntVar(&parameters.numWorkers, "concurrency", defaultNumWorkers, "The number of concurrent requests sent to the registry")
 	cmd.Flags().StringVar(&parameters.ago, "ago", "1d", "The images that were created before this time stamp will be deleted")
+	cmd.Flags().BoolVar(&parameters.dryRun, "dry-run", false, "Don't actually remove any tag or manifest, instead, show if they would be deleted")
 	cmd.Flags().StringVar(&parameters.repoName, "repository", "", "The repository which will be purged.")
 	cmd.Flags().StringVarP(&parameters.filter, "filter", "f", "", "Given as a regular expression, if a tag matches the pattern and is older than the time specified in ago it gets deleted.")
 
@@ -117,32 +127,15 @@ func PurgeTags(ctx context.Context, loginURL string, auth string, repoName strin
 	if err != nil {
 		return err
 	}
-	var matches bool
-	var lastUpdateTime time.Time
 	lastTag := ""
-	resultTags, err := api.AcrListTags(ctx, loginURL, auth, repoName, "", lastTag)
+	tagsToDelete, lastTag, err := GetTagsToDelete(ctx, loginURL, auth, repoName, regex, timeToCompare, "")
 	if err != nil {
 		return err
 	}
-	for resultTags != nil && resultTags.Tags != nil {
-		tags := *resultTags.Tags
-		for _, tag := range tags {
-			tagName := *tag.Name
-			//A regex filter was specified
-			if len(filter) > 0 {
-				matches = regex.MatchString(tagName)
-				if !matches {
-					continue
-				}
-			}
-			lastUpdateTime, err = time.Parse(time.RFC3339Nano, *tag.LastUpdateTime)
-			if err != nil {
-				return err
-			}
-			if lastUpdateTime.Before(timeToCompare) {
-				wg.Add(1)
-				worker.QueuePurgeTag(loginURL, auth, repoName, tagName)
-			}
+	for len(lastTag) > 0 {
+		for _, tag := range *tagsToDelete {
+			wg.Add(1)
+			worker.QueuePurgeTag(loginURL, auth, repoName, *tag.Name)
 		}
 		wg.Wait()
 		for len(worker.ErrorChannel) > 0 {
@@ -151,8 +144,7 @@ func PurgeTags(ctx context.Context, loginURL string, auth string, repoName strin
 				return wErr.Error
 			}
 		}
-		lastTag = *tags[len(tags)-1].Name
-		resultTags, err = api.AcrListTags(ctx, loginURL, auth, repoName, "", lastTag)
+		tagsToDelete, lastTag, err = GetTagsToDelete(ctx, loginURL, auth, repoName, regex, timeToCompare, lastTag)
 		if err != nil {
 			return err
 		}
@@ -186,6 +178,49 @@ func ParseDuration(ago string) (time.Duration, error) {
 	return (-1 * duration), nil
 }
 
+// GetTagsToDelete gets all tags that should be deleted according to the ago flag and the filter flag, this will at most return 100 tags,
+// returns a pointer to a slice that contains the tags that will be deleted, the last tag obtained through the AcrListTags method
+// and an error in case it occurred
+func GetTagsToDelete(ctx context.Context,
+	loginURL string,
+	auth string,
+	repoName string,
+	filter *regexp.Regexp,
+	timeToCompare time.Time,
+	lastTag string) (*[]acr.TagAttributesBase, string, error) {
+	var matches bool
+	var lastUpdateTime time.Time
+	resultTags, err := api.AcrListTags(ctx, loginURL, auth, repoName, "", lastTag)
+	if err != nil {
+		return nil, "", err
+	}
+	newLastTag := ""
+	if resultTags != nil && resultTags.Tags != nil && len(*resultTags.Tags) > 0 {
+		tags := *resultTags.Tags
+		tagsToDelete := []acr.TagAttributesBase{}
+		for _, tag := range tags {
+			//A regex filter was specified
+			if len(filter.String()) > 0 {
+				matches = filter.MatchString(*tag.Name)
+				if !matches {
+					continue
+				}
+			}
+			lastUpdateTime, err = time.Parse(time.RFC3339Nano, *tag.LastUpdateTime)
+			if err != nil {
+				return nil, "", err
+			}
+			if lastUpdateTime.Before(timeToCompare) {
+				tagsToDelete = append(tagsToDelete, tag)
+			}
+		}
+		newLastTag = *tags[len(tags)-1].Name
+		return &tagsToDelete, newLastTag, nil
+	}
+	// In case there are no more tags return empty string as lastTag
+	return nil, "", nil
+}
+
 // PurgeDanglingManifests deletes all manifests that do not have any tags associated with them.
 func PurgeDanglingManifests(ctx context.Context, loginURL string, auth string, repoName string) error {
 	lastManifestDigest := ""
@@ -206,6 +241,62 @@ func PurgeDanglingManifests(ctx context.Context, loginURL string, auth string, r
 			wErr := <-worker.ErrorChannel
 			if wErr.Error != nil {
 				return wErr.Error
+			}
+		}
+		lastManifestDigest = *manifests[len(manifests)-1].Digest
+		resultManifests, err = api.AcrListManifests(ctx, loginURL, auth, repoName, "", lastManifestDigest)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// DryRunPurge outputs everything that would be deleted if the purge command was executed
+func DryRunPurge(ctx context.Context, loginURL string, auth string, repoName string, ago string, filter string, dangling bool) error {
+	deletedTags := map[string][]string{}
+	if !dangling {
+		agoDuration, err := ParseDuration(ago)
+		if err != nil {
+			return err
+		}
+		timeToCompare := time.Now().UTC()
+		timeToCompare = timeToCompare.Add(agoDuration)
+		regex, err := regexp.Compile(filter)
+		if err != nil {
+			return err
+		}
+		lastTag := ""
+		tagsToDelete, lastTag, err := GetTagsToDelete(ctx, loginURL, auth, repoName, regex, timeToCompare, "")
+
+		if err != nil {
+			return err
+		}
+		for len(lastTag) > 0 {
+			for _, tag := range *tagsToDelete {
+				if _, ok := deletedTags[*tag.Digest]; ok {
+					deletedTags[*tag.Digest] = append(deletedTags[*tag.Digest], *tag.Name)
+				} else {
+					deletedTags[*tag.Digest] = []string{*tag.Name}
+				}
+				fmt.Printf("%s/%s:%s\n", loginURL, repoName, *tag.Name)
+			}
+			tagsToDelete, lastTag, err = GetTagsToDelete(ctx, loginURL, auth, repoName, regex, timeToCompare, lastTag)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	lastManifestDigest := ""
+	resultManifests, err := api.AcrListManifests(ctx, loginURL, auth, repoName, "", lastManifestDigest)
+	if err != nil {
+		return err
+	}
+	for resultManifests != nil && resultManifests.Manifests != nil {
+		manifests := *resultManifests.Manifests
+		for _, manifest := range manifests {
+			if manifest.Tags == nil || len(*manifest.Tags) == len(deletedTags[*manifest.Digest]) {
+				fmt.Printf("%s/%s@%s\n", loginURL, repoName, *manifest.Digest)
 			}
 		}
 		lastManifestDigest = *manifests[len(manifests)-1].Digest
