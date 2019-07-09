@@ -34,7 +34,7 @@ Examples:
 	acr purge -r MyRegistry --repository MyRepository --dangling
 `
 
-	maxConcurrentWorkers = 6
+	defaultNumWorkers = 6
 )
 
 type purgeParameters struct {
@@ -43,9 +43,10 @@ type purgeParameters struct {
 	password     string
 	accessToken  string
 	ago          string
-	dangling     bool
 	filter       string
 	repoName     string
+	dangling     bool
+	numWorkers   int
 }
 
 var wg sync.WaitGroup
@@ -58,7 +59,7 @@ func newPurgeCmd(out io.Writer) *cobra.Command {
 		Long:    purgeLongMessage,
 		Example: exampleMessage,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			worker.StartDispatcher(&wg, maxConcurrentWorkers)
+			worker.StartDispatcher(&wg, parameters.numWorkers)
 			ctx := context.Background()
 			loginURL := api.LoginURL(parameters.registryName)
 			var auth string
@@ -93,10 +94,11 @@ func newPurgeCmd(out io.Writer) *cobra.Command {
 	cmd.PersistentFlags().StringVarP(&parameters.username, "username", "u", "", "Registry username")
 	cmd.PersistentFlags().StringVarP(&parameters.password, "password", "p", "", "Registry password")
 	cmd.PersistentFlags().StringVar(&parameters.accessToken, "access-token", "", "Access token")
-	cmd.Flags().StringVar(&parameters.ago, "ago", "1d", "The images that were created before this time stamp will be deleted")
 	cmd.Flags().BoolVar(&parameters.dangling, "dangling", false, "Just remove dangling manifests")
-	cmd.Flags().StringVarP(&parameters.filter, "filter", "f", "", "Given as a regular expression, if a tag matches the pattern and is older than the time specified in ago it gets deleted.")
+	cmd.Flags().IntVar(&parameters.numWorkers, "concurrency", defaultNumWorkers, "The number of concurrent requests sent to the registry")
+	cmd.Flags().StringVar(&parameters.ago, "ago", "1d", "The images that were created before this time stamp will be deleted")
 	cmd.Flags().StringVar(&parameters.repoName, "repository", "", "The repository which will be purged.")
+	cmd.Flags().StringVarP(&parameters.filter, "filter", "f", "", "Given as a regular expression, if a tag matches the pattern and is older than the time specified in ago it gets deleted.")
 
 	cmd.MarkPersistentFlagRequired("registry")
 	cmd.MarkFlagRequired("repository")
