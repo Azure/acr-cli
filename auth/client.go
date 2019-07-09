@@ -13,4 +13,7 @@ type Client interface {
 
 	// Logout logs out of a container registry.
 	Logout(ctx context.Context, hostname string) error
+
+	// GetCredential returns a credential for the hostname.
+	GetCredential(hostname string) (string, string, error)
 }

@@ -25,6 +25,7 @@ To start working with the CLI, run acr --help`,
 		newVersionCmd(out),
 		newLoginCmd(out),
 		newLogoutCmd(out),
+		newTagCmd(out),
 	)
 
 	_ = flags.Parse(args)
