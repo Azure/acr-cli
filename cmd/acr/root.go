@@ -23,6 +23,8 @@ To start working with the CLI, run acr --help`,
 	cmd.AddCommand(
 		newPurgeCmd(out),
 		newVersionCmd(out),
+		newLoginCmd(out),
+		newLogoutCmd(out),
 	)
 
 	_ = flags.Parse(args)
