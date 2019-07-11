@@ -115,8 +115,6 @@ github.com/inconshreveable/mousetrap
 github.com/konsorten/go-windows-terminal-sequences
 # github.com/matttproud/golang_protobuf_extensions v1.0.1
 github.com/matttproud/golang_protobuf_extensions/pbutil
-# github.com/mitchellh/mapstructure v1.1.2
-github.com/mitchellh/mapstructure
 # github.com/morikuni/aec v0.0.0-20170113033406-39771216ff4c
 github.com/morikuni/aec
 # github.com/opencontainers/go-digest v1.0.0-rc1
@@ -170,9 +168,9 @@ go.opencensus.io/internal
 go.opencensus.io/trace/internal
 # golang.org/x/net v0.0.0-20190311183353-d8887717615a
 golang.org/x/net/proxy
-golang.org/x/net/internal/socks
 golang.org/x/net/context
 golang.org/x/net/trace
+golang.org/x/net/internal/socks
 golang.org/x/net/internal/timeseries
 golang.org/x/net/http2
 golang.org/x/net/http2/hpack

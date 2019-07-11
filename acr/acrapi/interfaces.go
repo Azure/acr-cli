@@ -9,8 +9,8 @@ package acrapi
 import (
 	"context"
 
+	"github.com/Azure/acr-cli/acr"
 	"github.com/Azure/go-autorest/autorest"
-	"github.com/azure/acr-cli/acr"
 )
 
 // BaseClientAPI contains the set of methods on the BaseClient type.
@@ -43,7 +43,7 @@ type BaseClientAPI interface {
 	ListRepositoryMetadata(ctx context.Context, name string) (result acr.RepositoryMetadata, err error)
 	ListTagMetadata(ctx context.Context, name string, reference string) (result acr.TagMetadataList, err error)
 	PutManifest(ctx context.Context, name string, reference string, payload acr.Manifest) (result autorest.Response, err error)
-	StartBlobUpload(ctx context.Context, name string, digest string) (result autorest.Response, err error)
+	StartBlobUpload(ctx context.Context, name string, digest string, from string, mount string) (result autorest.Response, err error)
 	UpdateAcrManifestAttributes(ctx context.Context, name string, reference string, value *acr.ChangeableAttributes) (result autorest.Response, err error)
 	UpdateAcrManifestMetadata(ctx context.Context, name string, reference string, metadata string, value *interface{}) (result autorest.Response, err error)
 	UpdateAcrRepositoryAttributes(ctx context.Context, name string, value *acr.ChangeableAttributes) (result autorest.Response, err error)

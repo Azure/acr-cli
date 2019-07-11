@@ -11,7 +11,7 @@ import (
 )
 
 // The package's fully qualified name.
-const fqdn = "github.com/azure/acr-cli/acr"
+const fqdn = "github.com/Azure/acr-cli/acr"
 
 // ChangeableAttributes ...
 type ChangeableAttributes struct {

@@ -15,6 +15,7 @@ import (
 	dockerAuth "github.com/Azure/acr-cli/auth/docker"
 	"github.com/Azure/acr-cli/cmd/api"
 	"github.com/Azure/acr-cli/cmd/worker"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )
 
@@ -45,6 +46,7 @@ type purgeParameters struct {
 	ago          string
 	filter       string
 	repoName     string
+	archive      string
 	dangling     bool
 	numWorkers   int
 }
@@ -82,14 +84,14 @@ func newPurgeCmd(out io.Writer) *cobra.Command {
 			}
 			worker.StartDispatcher(&wg, acrClient, purgeParams.numWorkers)
 			if !purgeParams.dangling {
-				err := PurgeTags(ctx, acrClient, loginURL, purgeParams.repoName, purgeParams.ago, purgeParams.filter)
+				err := PurgeTags(ctx, acrClient, loginURL, purgeParams.repoName, purgeParams.ago, purgeParams.filter, purgeParams.archive)
 				if err != nil {
-					return err
+					return errors.Wrap(err, "failed to purge tags")
 				}
 			}
-			err := PurgeDanglingManifests(ctx, acrClient, loginURL, purgeParams.repoName)
+			err := PurgeDanglingManifests(ctx, acrClient, loginURL, purgeParams.repoName, purgeParams.archive)
 			if err != nil {
-				return err
+				return errors.Wrap(err, "failed to purge manifests")
 			}
 
 			return nil
@@ -105,6 +107,7 @@ func newPurgeCmd(out io.Writer) *cobra.Command {
 	cmd.Flags().StringVar(&purgeParams.ago, "ago", "1d", "The images that were created before this time stamp will be deleted")
 	cmd.Flags().StringVar(&purgeParams.repoName, "repository", "", "The repository which will be purged.")
 	cmd.Flags().StringVarP(&purgeParams.filter, "filter", "f", "", "Given as a regular expression, if a tag matches the pattern and is older than the time specified in ago it gets deleted.")
+	cmd.Flags().StringVar(&purgeParams.archive, "archive-repository", "", "Instead of deleting manifests they will be moved to the repo specified here")
 
 	cmd.MarkPersistentFlagRequired("registry")
 	cmd.MarkFlagRequired("repository")
@@ -112,7 +115,7 @@ func newPurgeCmd(out io.Writer) *cobra.Command {
 }
 
 // PurgeTags deletes all tags that are older than the ago value and that match the filter string (if present).
-func PurgeTags(ctx context.Context, acrClient api.AcrCLIClient, loginURL string, repoName string, ago string, filter string) error {
+func PurgeTags(ctx context.Context, acrClient api.AcrCLIClient, loginURL string, repoName string, ago string, filter string, archive string) error {
 	agoDuration, err := ParseDuration(ago)
 	if err != nil {
 		return err
@@ -147,7 +150,7 @@ func PurgeTags(ctx context.Context, acrClient api.AcrCLIClient, loginURL string,
 			}
 			if lastUpdateTime.Before(timeToCompare) {
 				wg.Add(1)
-				worker.QueuePurgeTag(loginURL, repoName, tagName)
+				worker.QueuePurgeTag(loginURL, repoName, archive, tagName, *tag.Digest)
 			}
 		}
 		wg.Wait()
@@ -193,7 +196,7 @@ func ParseDuration(ago string) (time.Duration, error) {
 }
 
 // PurgeDanglingManifests deletes all manifests that do not have any tags associated with them.
-func PurgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClient, loginURL string, repoName string) error {
+func PurgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClient, loginURL string, repoName string, archive string) error {
 	lastManifestDigest := ""
 	resultManifests, err := acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
 	if err != nil {
@@ -204,7 +207,7 @@ func PurgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClient, log
 		for _, manifest := range manifests {
 			if manifest.Tags == nil {
 				wg.Add(1)
-				worker.QueuePurgeManifest(loginURL, repoName, *manifest.Digest)
+				worker.QueuePurgeManifest(loginURL, repoName, archive, *manifest.Digest)
 			}
 		}
 		wg.Wait()
