@@ -17,14 +17,16 @@ type PurgeWorker struct {
 	WorkerQueue chan chan PurgeJob
 	StopChan    chan bool
 	wg          *sync.WaitGroup
+	acrClient   api.AcrCLIClient
 }
 
 // NewPurgeWorker creates a new worker.
-func NewPurgeWorker(wg *sync.WaitGroup, workerQueue chan chan PurgeJob) PurgeWorker {
+func NewPurgeWorker(wg *sync.WaitGroup, workerQueue chan chan PurgeJob, acrClient api.AcrCLIClient) PurgeWorker {
 	worker := PurgeWorker{
 		Job:         make(chan PurgeJob),
 		WorkerQueue: workerQueue,
 		wg:          wg,
+		acrClient:   acrClient,
 	}
 	return worker
 }
@@ -63,7 +65,7 @@ func (pw *PurgeWorker) ProcessJob(ctx context.Context, job PurgeJob) {
 		var wErr workerError
 		switch job.JobType {
 		case PurgeTag:
-			err := api.AcrDeleteTag(ctx, job.LoginURL, job.Auth, job.RepoName, job.Tag)
+			err := pw.acrClient.DeleteAcrTag(ctx, job.RepoName, job.Tag)
 			if err != nil {
 				wErr = workerError{
 					JobType: PurgeTag,
@@ -73,7 +75,7 @@ func (pw *PurgeWorker) ProcessJob(ctx context.Context, job PurgeJob) {
 				fmt.Printf("%s/%s:%s\n", job.LoginURL, job.RepoName, job.Tag)
 			}
 		case PurgeManifest:
-			err := api.DeleteManifest(ctx, job.LoginURL, job.Auth, job.RepoName, job.Digest)
+			err := pw.acrClient.DeleteManifest(ctx, job.RepoName, job.Digest)
 			if err != nil {
 				wErr = workerError{
 					JobType: PurgeTag,

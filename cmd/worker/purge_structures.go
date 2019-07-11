@@ -6,7 +6,6 @@ package worker
 // PurgeJob describes a purge job, contains all necessary parameters to execute job.
 type PurgeJob struct {
 	LoginURL string
-	Auth     string
 	RepoName string
 	Tag      string
 	Digest   string

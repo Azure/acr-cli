@@ -5,7 +5,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"regexp"
@@ -13,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	dockerAuth "github.com/Azure/acr-cli/auth/docker"
 	"github.com/Azure/acr-cli/cmd/api"
 	"github.com/Azure/acr-cli/cmd/worker"
 	"github.com/spf13/cobra"
@@ -52,36 +52,42 @@ type purgeParameters struct {
 var wg sync.WaitGroup
 
 func newPurgeCmd(out io.Writer) *cobra.Command {
-	var parameters purgeParameters
+	var purgeParams purgeParameters
 	cmd := &cobra.Command{
 		Use:     "purge",
 		Short:   "Delete images from a registry.",
 		Long:    purgeLongMessage,
 		Example: exampleMessage,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			worker.StartDispatcher(&wg, parameters.numWorkers)
 			ctx := context.Background()
-			loginURL := api.LoginURL(parameters.registryName)
-			var auth string
-			if len(parameters.accessToken) > 0 && (len(parameters.username) > 0 || len(parameters.password) > 0) {
-				return errors.New("bearer token and username, password are mutually exclusive")
-			}
-			if len(parameters.accessToken) > 0 {
-				auth = api.BearerAuth(parameters.accessToken)
-			} else {
-				if len(parameters.username) > 0 && len(parameters.password) > 0 {
-					auth = api.BasicAuth(parameters.username, parameters.password)
-				} else {
-					return errors.New("please specify authentication credentials")
+			loginURL := api.LoginURL(purgeParams.registryName)
+
+			if purgeParams.username == "" && purgeParams.password == "" {
+				client, err := dockerAuth.NewClient(tagParams.configs...)
+				if err != nil {
+					return err
 				}
-			}
-			if !parameters.dangling {
-				err := PurgeTags(ctx, loginURL, auth, parameters.repoName, parameters.ago, parameters.filter)
+				purgeParams.username, purgeParams.password, err = client.GetCredential(loginURL)
 				if err != nil {
 					return err
 				}
 			}
-			err := PurgeDanglingManifests(ctx, loginURL, auth, parameters.repoName)
+
+			var acrClient api.AcrCLIClient
+			if purgeParams.username == "" {
+				// TODO: fetch token via oauth
+				//auth = api.BearerAuth(password)
+			} else {
+				acrClient = api.NewAcrCLIClientWithBasicAuth(loginURL, purgeParams.username, purgeParams.password)
+			}
+			worker.StartDispatcher(&wg, acrClient, purgeParams.numWorkers)
+			if !purgeParams.dangling {
+				err := PurgeTags(ctx, acrClient, loginURL, purgeParams.repoName, purgeParams.ago, purgeParams.filter)
+				if err != nil {
+					return err
+				}
+			}
+			err := PurgeDanglingManifests(ctx, acrClient, loginURL, purgeParams.repoName)
 			if err != nil {
 				return err
 			}
@@ -90,15 +96,15 @@ func newPurgeCmd(out io.Writer) *cobra.Command {
 		},
 	}
 
-	cmd.PersistentFlags().StringVarP(&parameters.registryName, "registry", "r", "", "Registry name")
-	cmd.PersistentFlags().StringVarP(&parameters.username, "username", "u", "", "Registry username")
-	cmd.PersistentFlags().StringVarP(&parameters.password, "password", "p", "", "Registry password")
-	cmd.PersistentFlags().StringVar(&parameters.accessToken, "access-token", "", "Access token")
-	cmd.Flags().BoolVar(&parameters.dangling, "dangling", false, "Just remove dangling manifests")
-	cmd.Flags().IntVar(&parameters.numWorkers, "concurrency", defaultNumWorkers, "The number of concurrent requests sent to the registry")
-	cmd.Flags().StringVar(&parameters.ago, "ago", "1d", "The images that were created before this time stamp will be deleted")
-	cmd.Flags().StringVar(&parameters.repoName, "repository", "", "The repository which will be purged.")
-	cmd.Flags().StringVarP(&parameters.filter, "filter", "f", "", "Given as a regular expression, if a tag matches the pattern and is older than the time specified in ago it gets deleted.")
+	cmd.PersistentFlags().StringVarP(&purgeParams.registryName, "registry", "r", "", "Registry name")
+	cmd.PersistentFlags().StringVarP(&purgeParams.username, "username", "u", "", "Registry username")
+	cmd.PersistentFlags().StringVarP(&purgeParams.password, "password", "p", "", "Registry password")
+	cmd.PersistentFlags().StringVar(&purgeParams.accessToken, "access-token", "", "Access token")
+	cmd.Flags().BoolVar(&purgeParams.dangling, "dangling", false, "Just remove dangling manifests")
+	cmd.Flags().IntVar(&purgeParams.numWorkers, "concurrency", defaultNumWorkers, "The number of concurrent requests sent to the registry")
+	cmd.Flags().StringVar(&purgeParams.ago, "ago", "1d", "The images that were created before this time stamp will be deleted")
+	cmd.Flags().StringVar(&purgeParams.repoName, "repository", "", "The repository which will be purged.")
+	cmd.Flags().StringVarP(&purgeParams.filter, "filter", "f", "", "Given as a regular expression, if a tag matches the pattern and is older than the time specified in ago it gets deleted.")
 
 	cmd.MarkPersistentFlagRequired("registry")
 	cmd.MarkFlagRequired("repository")
@@ -106,7 +112,7 @@ func newPurgeCmd(out io.Writer) *cobra.Command {
 }
 
 // PurgeTags deletes all tags that are older than the ago value and that match the filter string (if present).
-func PurgeTags(ctx context.Context, loginURL string, auth string, repoName string, ago string, filter string) error {
+func PurgeTags(ctx context.Context, acrClient api.AcrCLIClient, loginURL string, repoName string, ago string, filter string) error {
 	agoDuration, err := ParseDuration(ago)
 	if err != nil {
 		return err
@@ -120,12 +126,12 @@ func PurgeTags(ctx context.Context, loginURL string, auth string, repoName strin
 	var matches bool
 	var lastUpdateTime time.Time
 	lastTag := ""
-	resultTags, err := api.AcrListTags(ctx, loginURL, auth, repoName, "", lastTag)
+	resultTags, err := acrClient.GetAcrTags(ctx, repoName, "", lastTag)
 	if err != nil {
 		return err
 	}
-	for resultTags != nil && resultTags.Tags != nil {
-		tags := *resultTags.Tags
+	for resultTags != nil && resultTags.TagsAttributes != nil {
+		tags := *resultTags.TagsAttributes
 		for _, tag := range tags {
 			tagName := *tag.Name
 			//A regex filter was specified
@@ -141,7 +147,7 @@ func PurgeTags(ctx context.Context, loginURL string, auth string, repoName strin
 			}
 			if lastUpdateTime.Before(timeToCompare) {
 				wg.Add(1)
-				worker.QueuePurgeTag(loginURL, auth, repoName, tagName)
+				worker.QueuePurgeTag(loginURL, repoName, tagName)
 			}
 		}
 		wg.Wait()
@@ -152,7 +158,7 @@ func PurgeTags(ctx context.Context, loginURL string, auth string, repoName strin
 			}
 		}
 		lastTag = *tags[len(tags)-1].Name
-		resultTags, err = api.AcrListTags(ctx, loginURL, auth, repoName, "", lastTag)
+		resultTags, err = acrClient.GetAcrTags(ctx, repoName, "", lastTag)
 		if err != nil {
 			return err
 		}
@@ -187,18 +193,18 @@ func ParseDuration(ago string) (time.Duration, error) {
 }
 
 // PurgeDanglingManifests deletes all manifests that do not have any tags associated with them.
-func PurgeDanglingManifests(ctx context.Context, loginURL string, auth string, repoName string) error {
+func PurgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClient, loginURL string, repoName string) error {
 	lastManifestDigest := ""
-	resultManifests, err := api.AcrListManifests(ctx, loginURL, auth, repoName, "", lastManifestDigest)
+	resultManifests, err := acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
 	if err != nil {
 		return err
 	}
-	for resultManifests != nil && resultManifests.Manifests != nil {
-		manifests := *resultManifests.Manifests
+	for resultManifests != nil && resultManifests.ManifestsAttributes != nil {
+		manifests := *resultManifests.ManifestsAttributes
 		for _, manifest := range manifests {
 			if manifest.Tags == nil {
 				wg.Add(1)
-				worker.QueuePurgeManifest(loginURL, auth, repoName, *manifest.Digest)
+				worker.QueuePurgeManifest(loginURL, repoName, *manifest.Digest)
 			}
 		}
 		wg.Wait()
@@ -209,7 +215,7 @@ func PurgeDanglingManifests(ctx context.Context, loginURL string, auth string, r
 			}
 		}
 		lastManifestDigest = *manifests[len(manifests)-1].Digest
-		resultManifests, err = api.AcrListManifests(ctx, loginURL, auth, repoName, "", lastManifestDigest)
+		resultManifests, err = acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
 		if err != nil {
 			return err
 		}

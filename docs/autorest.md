@@ -15,7 +15,7 @@ The following sections are autorest config.
 ### Global
 These are the global settings.
 ``` yaml
-openapi-type: metadata
+openapi-type: data-plane
 license-header: MICROSOFT_MIT_NO_VERSION
 namespace: acr
 clear-output-folder: true

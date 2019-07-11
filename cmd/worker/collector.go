@@ -11,13 +11,9 @@ var JobQueue = make(chan PurgeJob, 100)
 var ErrorChannel = make(chan workerError, 100)
 
 // QueuePurgeTag creates a PurgeTag job and queues it.
-func QueuePurgeTag(loginURL string,
-	auth string,
-	repoName string,
-	tag string) {
+func QueuePurgeTag(loginURL string, repoName string, tag string) {
 	newJob := PurgeJob{
 		LoginURL: loginURL,
-		Auth:     auth,
 		RepoName: repoName,
 		Tag:      tag,
 		JobType:  PurgeTag,
@@ -26,13 +22,9 @@ func QueuePurgeTag(loginURL string,
 }
 
 // QueuePurgeManifest creates a new PurgeManifest job and queues it.
-func QueuePurgeManifest(loginURL string,
-	auth string,
-	repoName string,
-	digest string) {
+func QueuePurgeManifest(loginURL string, repoName string, digest string) {
 	newJob := PurgeJob{
 		LoginURL: loginURL,
-		Auth:     auth,
 		RepoName: repoName,
 		Digest:   digest,
 		JobType:  PurgeManifest,

@@ -66,49 +66,47 @@ func newTagListCmd(out io.Writer) *cobra.Command {
 		Long:  `List tags`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 
-			var (
-				username     string
-				password     string
-				registryName = api.LoginURL(tagParams.registryName)
-			)
-			ctx := context.Background()
+			loginURL := api.LoginURL(tagParams.registryName)
 
-			if username == "" && password == "" {
+			ctx := context.Background()
+			var acrClient api.AcrCLIClient
+
+			if tagParams.username == "" && tagParams.password == "" {
 				client, err := dockerAuth.NewClient(tagParams.configs...)
 				if err != nil {
 					return err
 				}
-				username, password, err = client.GetCredential(registryName)
+				tagParams.username, tagParams.password, err = client.GetCredential(loginURL)
 				if err != nil {
 					return err
 				}
+				acrClient = api.NewAcrCLIClientWithBasicAuth(loginURL, tagParams.username, tagParams.password)
 			}
 
-			var auth string
-			if username == "" {
+			if tagParams.username == "" {
 				// TODO: fetch token via oauth
-				auth = api.BearerAuth(password)
+				//auth = api.BearerAuth(password)
 			} else {
-				auth = api.BasicAuth(username, password)
+				acrClient = api.NewAcrCLIClientWithBasicAuth(loginURL, tagParams.username, tagParams.password)
 			}
 
 			lastTag := ""
-			resultTags, err := api.AcrListTags(ctx, registryName, auth, tagListParams.repository, "", lastTag)
+			resultTags, err := acrClient.GetAcrTags(ctx, tagListParams.repository, "", lastTag)
 			if err != nil {
 				return errors.Wrap(err, "failed to list tags")
 			}
 
 			fmt.Printf("Listing tags for the %q repository:\n", tagListParams.repository)
 
-			for resultTags != nil && resultTags.Tags != nil {
-				tags := *resultTags.Tags
+			for resultTags != nil && resultTags.TagsAttributes != nil {
+				tags := *resultTags.TagsAttributes
 				for _, tag := range tags {
 					tagName := *tag.Name
 					fmt.Println(tagName)
 				}
 
 				lastTag = *tags[len(tags)-1].Name
-				resultTags, err = api.AcrListTags(ctx, registryName, auth, tagListParams.repository, "", lastTag)
+				resultTags, err = acrClient.GetAcrTags(ctx, tagListParams.repository, "", lastTag)
 				if err != nil {
 					return err
 				}
