@@ -515,6 +515,7 @@ func (client BaseClient) DeleteAcrTagPreparer(ctx context.Context, name string, 
 		"name":      autorest.Encode("path", name),
 		"reference": autorest.Encode("path", reference),
 	}
+
 	preparer := autorest.CreatePreparer(
 		autorest.AsDelete(),
 		autorest.WithCustomBaseURL("{url}", urlParameters),
@@ -2152,7 +2153,7 @@ func (client BaseClient) PutManifestResponder(resp *http.Response) (result autor
 // name - name of the image (including the namespace)
 // digest - digest of uploaded blob. If present, the upload will be completed, in a single request, with
 // contents of the request body as the resulting blob.
-func (client BaseClient) StartBlobUpload(ctx context.Context, name string, digest string) (result autorest.Response, err error) {
+func (client BaseClient) StartBlobUpload(ctx context.Context, name string, digest string, from string, mount string) (result autorest.Response, err error) {
 	if tracing.IsEnabled() {
 		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.StartBlobUpload")
 		defer func() {
@@ -2163,7 +2164,7 @@ func (client BaseClient) StartBlobUpload(ctx context.Context, name string, diges
 			tracing.EndSpan(ctx, sc, err)
 		}()
 	}
-	req, err := client.StartBlobUploadPreparer(ctx, name, digest)
+	req, err := client.StartBlobUploadPreparer(ctx, name, digest, from, mount)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "acr.BaseClient", "StartBlobUpload", nil, "Failure preparing request")
 		return
@@ -2185,7 +2186,7 @@ func (client BaseClient) StartBlobUpload(ctx context.Context, name string, diges
 }
 
 // StartBlobUploadPreparer prepares the StartBlobUpload request.
-func (client BaseClient) StartBlobUploadPreparer(ctx context.Context, name string, digest string) (*http.Request, error) {
+func (client BaseClient) StartBlobUploadPreparer(ctx context.Context, name string, digest string, from string, mount string) (*http.Request, error) {
 	urlParameters := map[string]interface{}{
 		"url": client.LoginURI,
 	}
@@ -2198,11 +2199,17 @@ func (client BaseClient) StartBlobUploadPreparer(ctx context.Context, name strin
 	if len(digest) > 0 {
 		queryParameters["digest"] = autorest.Encode("query", digest)
 	}
+	if len(from) > 0 {
+		queryParameters["from"] = autorest.Encode("query", from)
+	}
+	if len(mount) > 0 {
+		queryParameters["mount"] = autorest.Encode("query", mount)
+	}
 
 	preparer := autorest.CreatePreparer(
 		autorest.AsPost(),
 		autorest.WithCustomBaseURL("{url}", urlParameters),
-		autorest.WithPathParameters("/v2/{name}/blobs/uploads", pathParameters),
+		autorest.WithPathParameters("/v2/{name}/blobs/uploads/", pathParameters),
 		autorest.WithQueryParameters(queryParameters))
 	return preparer.Prepare((&http.Request{}).WithContext(ctx))
 }

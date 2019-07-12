@@ -4,8 +4,12 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
+	"io/ioutil"
+	"net/http"
 	"strings"
 
 	"github.com/Azure/go-autorest/autorest"
@@ -103,6 +107,124 @@ func (c *AcrCLIClient) DeleteManifest(ctx context.Context, repoName string, refe
 	return nil
 }
 
+func (c *AcrCLIClient) GetAcrManifestMetadata(ctx context.Context, repoName string, reference string) (string, error) {
+	metadataResponse, err := c.AutorestClient.GetAcrManifestMetadata(ctx, repoName, reference, "acrarchiveinfo")
+	if err != nil {
+		return "", err
+	}
+	metadataBytes, err := json.Marshal(metadataResponse.Value)
+	if err != nil {
+		return "", err
+	}
+	return string(metadataBytes), nil
+}
+
+func (c *AcrCLIClient) UpdateAcrManifestMetadata(ctx context.Context, repoName string, reference string, metadataValue interface{}) error {
+	_, err := c.AutorestClient.UpdateAcrManifestMetadata(ctx, repoName, reference, "acrarchiveinfo", &metadataValue)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *AcrCLIClient) GetManifest(ctx context.Context, repoName string, reference string) ([]byte, error) {
+	var result acrapi.SetObject
+	req, err := c.AutorestClient.GetManifestPreparer(ctx, repoName, reference, "application/vnd.docker.distribution.manifest.v2+json")
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetManifest", nil, "Failure preparing request")
+		return nil, err
+	}
+
+	resp, err := c.AutorestClient.GetManifestSender(req)
+	if err != nil {
+		result.Response = autorest.Response{Response: resp}
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetManifest", resp, "Failure sending request")
+		return nil, err
+	}
+
+	var manifestBytes []byte
+	if resp.Body != nil {
+		manifestBytes, err = ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	resp.Body = ioutil.NopCloser(bytes.NewBuffer(manifestBytes))
+
+	_, err = c.AutorestClient.GetManifestResponder(resp)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetManifest", resp, "Failure responding to request")
+		return nil, err
+	}
+
+	return manifestBytes, nil
+}
+
+func (c *AcrCLIClient) AcrCrossReferenceLayer(ctx context.Context, repoName string, reference string, repoFrom string) error {
+	_, err := c.AutorestClient.StartBlobUpload(ctx, repoName, "", repoFrom, reference)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *AcrCLIClient) PutManifest(ctx context.Context, repoName string, reference string, manifest string) error {
+	var result autorest.Response
+	urlParameters := map[string]interface{}{
+		"url": c.AutorestClient.LoginURI,
+	}
+
+	pathParameters := map[string]interface{}{
+		"name":      autorest.Encode("path", repoName),
+		"reference": autorest.Encode("path", reference),
+	}
+
+	preparer := autorest.CreatePreparer(
+		autorest.AsContentType("application/vnd.docker.distribution.manifest.v2+json"),
+		autorest.AsPut(),
+		autorest.WithCustomBaseURL("{url}", urlParameters),
+		autorest.WithPathParameters("/v2/{name}/manifests/{reference}", pathParameters),
+		autorest.WithString(manifest))
+
+	req, err := preparer.Prepare((&http.Request{}).WithContext(ctx))
+
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "PutManifest", nil, "Failure preparing request")
+		return err
+	}
+
+	resp, err := c.AutorestClient.PutManifestSender(req)
+	if err != nil {
+		result.Response = resp
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "PutManifest", resp, "Failure sending request")
+		return err
+	}
+
+	result, err = c.AutorestClient.PutManifestResponder(resp)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "PutManifest", resp, "Failure responding to request")
+		return err
+	}
+	return nil
+}
+
+func (c *AcrCLIClient) UpdateAcrTagMetadata(ctx context.Context, repoName string, reference string, metadataValue interface{}) error {
+	_, err := c.AutorestClient.UpdateAcrTagMetadata(ctx, repoName, reference, "acrarchiveinfo", &metadataValue)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 type AcrCLIClientInterface interface {
-	AcrListTags(ctx context.Context, loginURL string, auth string, repoName string, orderBy string, last string)
+	GetAcrTags(ctx context.Context, repoName string, orderBy string, last string) (*acrapi.RepositoryTagsType, error)
+	DeleteAcrTag(ctx context.Context, repoName string, reference string) error
+	GetAcrManifests(ctx context.Context, repoName string, orderBy string, last string) (*acrapi.Manifests, error)
+	DeleteManifest(ctx context.Context, repoName string, reference string)
+	GetAcrManifestMetadata(ctx context.Context, repoName string, reference string)
+	UpdateAcrManifestMetadata(ctx context.Context, repoName string, reference string, metadataValue string)
+	GetManifest(ctx context.Context, repoName string, reference string)
+	AcrCrossReferenceLayer(ctx context.Context, repoName string, reference string, repoFrom string)
+	PutManifest(ctx context.Context, repoName string, reference string, manifest acrapi.Manifest)
 }

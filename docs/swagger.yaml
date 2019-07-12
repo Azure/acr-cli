@@ -198,7 +198,7 @@ paths:
           description: 'ACR error response describing why the operation failed.'
           schema:
             $ref: '#/definitions/AcrErrors'
-  '/v2/{name}/blobs/uploads':
+  '/v2/{name}/blobs/uploads/':
     post:
       tags:
         - Layer
@@ -215,6 +215,14 @@ paths:
             resulting blob.
           type: string
           in: query
+        - name: from
+          type: string
+          in: query
+          required: false
+        - name: mount
+          type: string
+          in: query
+          required: false
       responses:
         '201':
           description: >-

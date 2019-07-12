@@ -15,8 +15,9 @@ var WorkerQueue chan chan PurgeJob
 // StartDispatcher creates the workers and a goroutine to continously fetch jobs for them.
 func StartDispatcher(wg *sync.WaitGroup, acrClient api.AcrCLIClient, nWorkers int) {
 	WorkerQueue = make(chan chan PurgeJob, nWorkers)
+	var m sync.Mutex
 	for i := 0; i < nWorkers; i++ {
-		worker := NewPurgeWorker(wg, WorkerQueue, acrClient)
+		worker := NewPurgeWorker(wg, WorkerQueue, acrClient, &m)
 		worker.Start()
 	}
 
