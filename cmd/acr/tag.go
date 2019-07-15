@@ -80,16 +80,16 @@ func newTagListCmd(out io.Writer) *cobra.Command {
 				if err != nil {
 					return err
 				}
-				acrClient = api.NewAcrCLIClientWithBasicAuth(loginURL, tagParams.username, tagParams.password)
 			}
-
 			if tagParams.username == "" {
-				// TODO: fetch token via oauth
-				//auth = api.BearerAuth(password)
+				var err error
+				acrClient, err = api.NewAcrCLIClientWithBearerAuth(loginURL, tagParams.password)
+				if err != nil {
+					return errors.Wrap(err, "failed to list tags")
+				}
 			} else {
 				acrClient = api.NewAcrCLIClientWithBasicAuth(loginURL, tagParams.username, tagParams.password)
 			}
-
 			lastTag := ""
 			resultTags, err := acrClient.GetAcrTags(ctx, tagListParams.repository, "", lastTag)
 			if err != nil {

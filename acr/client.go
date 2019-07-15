@@ -771,6 +771,161 @@ func (client BaseClient) EndBlobUploadResponder(resp *http.Response) (result aut
 	return
 }
 
+// GetAcrAccessToken exchange ACR Refresh token for an ACR Access Token
+// Parameters:
+// service - indicates the name of your Azure container registry.
+// scope - which is expected to be a valid scope, and can be specified more than once for multiple scope
+// requests. You obtained this from the Www-Authenticate response header from the challenge.
+// refreshToken - must be a valid ACR refresh token
+func (client BaseClient) GetAcrAccessToken(ctx context.Context, service string, scope string, refreshToken string) (result GetAcrAccessTokenOKResponse, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.GetAcrAccessToken")
+		defer func() {
+			sc := -1
+			if result.Response.Response != nil {
+				sc = result.Response.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	req, err := client.GetAcrAccessTokenPreparer(ctx, service, scope, refreshToken)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrAccessToken", nil, "Failure preparing request")
+		return
+	}
+
+	resp, err := client.GetAcrAccessTokenSender(req)
+	if err != nil {
+		result.Response = autorest.Response{Response: resp}
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrAccessToken", resp, "Failure sending request")
+		return
+	}
+
+	result, err = client.GetAcrAccessTokenResponder(resp)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrAccessToken", resp, "Failure responding to request")
+	}
+
+	return
+}
+
+// GetAcrAccessTokenPreparer prepares the GetAcrAccessToken request.
+func (client BaseClient) GetAcrAccessTokenPreparer(ctx context.Context, service string, scope string, refreshToken string) (*http.Request, error) {
+	urlParameters := map[string]interface{}{
+		"url": client.LoginURI,
+	}
+
+	formDataParameters := map[string]interface{}{
+		"grant_type":    "refresh_token",
+		"refresh_token": refreshToken,
+		"scope":         scope,
+		"service":       service,
+	}
+
+	preparer := autorest.CreatePreparer(
+		autorest.AsPost(),
+		autorest.WithCustomBaseURL("{url}", urlParameters),
+		autorest.WithPath("/oauth2/token"),
+		autorest.WithFormData(autorest.MapToValues(formDataParameters)))
+	return preparer.Prepare((&http.Request{}).WithContext(ctx))
+}
+
+// GetAcrAccessTokenSender sends the GetAcrAccessToken request. The method will close the
+// http.Response Body if it receives an error.
+func (client BaseClient) GetAcrAccessTokenSender(req *http.Request) (*http.Response, error) {
+	return autorest.SendWithSender(client, req,
+		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
+}
+
+// GetAcrAccessTokenResponder handles the response to the GetAcrAccessToken request. The method always
+// closes the http.Response Body.
+func (client BaseClient) GetAcrAccessTokenResponder(resp *http.Response) (result GetAcrAccessTokenOKResponse, err error) {
+	err = autorest.Respond(
+		resp,
+		client.ByInspecting(),
+		azure.WithErrorUnlessStatusCode(http.StatusOK),
+		autorest.ByUnmarshallingJSON(&result),
+		autorest.ByClosing())
+	result.Response = autorest.Response{Response: resp}
+	return
+}
+
+// GetAcrAccessTokenFromLogin exchange Username, Password and Scope an ACR Access Token
+// Parameters:
+// service - indicates the name of your Azure container registry.
+// scope - expected to be a valid scope, and can be specified more than once for multiple scope requests. You
+// can obtain this from the Www-Authenticate response header from the challenge.
+func (client BaseClient) GetAcrAccessTokenFromLogin(ctx context.Context, service string, scope string) (result GetAcrAccessTokenFromLoginOKResponse, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.GetAcrAccessTokenFromLogin")
+		defer func() {
+			sc := -1
+			if result.Response.Response != nil {
+				sc = result.Response.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	req, err := client.GetAcrAccessTokenFromLoginPreparer(ctx, service, scope)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrAccessTokenFromLogin", nil, "Failure preparing request")
+		return
+	}
+
+	resp, err := client.GetAcrAccessTokenFromLoginSender(req)
+	if err != nil {
+		result.Response = autorest.Response{Response: resp}
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrAccessTokenFromLogin", resp, "Failure sending request")
+		return
+	}
+
+	result, err = client.GetAcrAccessTokenFromLoginResponder(resp)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrAccessTokenFromLogin", resp, "Failure responding to request")
+	}
+
+	return
+}
+
+// GetAcrAccessTokenFromLoginPreparer prepares the GetAcrAccessTokenFromLogin request.
+func (client BaseClient) GetAcrAccessTokenFromLoginPreparer(ctx context.Context, service string, scope string) (*http.Request, error) {
+	urlParameters := map[string]interface{}{
+		"url": client.LoginURI,
+	}
+
+	queryParameters := map[string]interface{}{
+		"scope":   autorest.Encode("query", scope),
+		"service": autorest.Encode("query", service),
+	}
+
+	preparer := autorest.CreatePreparer(
+		autorest.AsGet(),
+		autorest.WithCustomBaseURL("{url}", urlParameters),
+		autorest.WithPath("/oauth2/token"),
+		autorest.WithQueryParameters(queryParameters))
+	return preparer.Prepare((&http.Request{}).WithContext(ctx))
+}
+
+// GetAcrAccessTokenFromLoginSender sends the GetAcrAccessTokenFromLogin request. The method will close the
+// http.Response Body if it receives an error.
+func (client BaseClient) GetAcrAccessTokenFromLoginSender(req *http.Request) (*http.Response, error) {
+	return autorest.SendWithSender(client, req,
+		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
+}
+
+// GetAcrAccessTokenFromLoginResponder handles the response to the GetAcrAccessTokenFromLogin request. The method always
+// closes the http.Response Body.
+func (client BaseClient) GetAcrAccessTokenFromLoginResponder(resp *http.Response) (result GetAcrAccessTokenFromLoginOKResponse, err error) {
+	err = autorest.Respond(
+		resp,
+		client.ByInspecting(),
+		azure.WithErrorUnlessStatusCode(http.StatusOK),
+		autorest.ByUnmarshallingJSON(&result),
+		autorest.ByClosing())
+	result.Response = autorest.Response{Response: resp}
+	return
+}
+
 // GetAcrManifestAttributes get manifest attributes
 // Parameters:
 // name - name of the image (including the namespace)
@@ -998,6 +1153,93 @@ func (client BaseClient) GetAcrManifestsSender(req *http.Request) (*http.Respons
 // GetAcrManifestsResponder handles the response to the GetAcrManifests request. The method always
 // closes the http.Response Body.
 func (client BaseClient) GetAcrManifestsResponder(resp *http.Response) (result Manifests, err error) {
+	err = autorest.Respond(
+		resp,
+		client.ByInspecting(),
+		azure.WithErrorUnlessStatusCode(http.StatusOK),
+		autorest.ByUnmarshallingJSON(&result),
+		autorest.ByClosing())
+	result.Response = autorest.Response{Response: resp}
+	return
+}
+
+// GetAcrRefreshToken exchange AAD tokens for an ACR refresh Token
+// Parameters:
+// grantType - can take a value of access_token_refresh_token, or access_token, or refresh_token
+// service - indicates the name of your Azure container registry.
+// tenant - AAD tenant associated to the AAD credentials.
+// refreshToken - AAD refresh token, mandatory when grant_type is access_token_refresh_token or refresh_token
+// accessToken - AAD access token, mandatory when grant_type is access_token_refresh_token or access_token.
+func (client BaseClient) GetAcrRefreshToken(ctx context.Context, grantType string, service string, tenant string, refreshToken string, accessToken string) (result GetAcrRefreshTokenOKResponse, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.GetAcrRefreshToken")
+		defer func() {
+			sc := -1
+			if result.Response.Response != nil {
+				sc = result.Response.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	req, err := client.GetAcrRefreshTokenPreparer(ctx, grantType, service, tenant, refreshToken, accessToken)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrRefreshToken", nil, "Failure preparing request")
+		return
+	}
+
+	resp, err := client.GetAcrRefreshTokenSender(req)
+	if err != nil {
+		result.Response = autorest.Response{Response: resp}
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrRefreshToken", resp, "Failure sending request")
+		return
+	}
+
+	result, err = client.GetAcrRefreshTokenResponder(resp)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrRefreshToken", resp, "Failure responding to request")
+	}
+
+	return
+}
+
+// GetAcrRefreshTokenPreparer prepares the GetAcrRefreshToken request.
+func (client BaseClient) GetAcrRefreshTokenPreparer(ctx context.Context, grantType string, service string, tenant string, refreshToken string, accessToken string) (*http.Request, error) {
+	urlParameters := map[string]interface{}{
+		"url": client.LoginURI,
+	}
+
+	formDataParameters := map[string]interface{}{
+		"grant_type": grantType,
+		"service":    service,
+	}
+	if len(tenant) > 0 {
+		formDataParameters["tenant"] = tenant
+	}
+	if len(refreshToken) > 0 {
+		formDataParameters["refresh_token"] = refreshToken
+	}
+	if len(accessToken) > 0 {
+		formDataParameters["access_token"] = accessToken
+	}
+
+	preparer := autorest.CreatePreparer(
+		autorest.AsPost(),
+		autorest.WithCustomBaseURL("{url}", urlParameters),
+		autorest.WithPath("/oauth2/exchange"),
+		autorest.WithFormData(autorest.MapToValues(formDataParameters)))
+	return preparer.Prepare((&http.Request{}).WithContext(ctx))
+}
+
+// GetAcrRefreshTokenSender sends the GetAcrRefreshToken request. The method will close the
+// http.Response Body if it receives an error.
+func (client BaseClient) GetAcrRefreshTokenSender(req *http.Request) (*http.Response, error) {
+	return autorest.SendWithSender(client, req,
+		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
+}
+
+// GetAcrRefreshTokenResponder handles the response to the GetAcrRefreshToken request. The method always
+// closes the http.Response Body.
+func (client BaseClient) GetAcrRefreshTokenResponder(resp *http.Response) (result GetAcrRefreshTokenOKResponse, err error) {
 	err = autorest.Respond(
 		resp,
 		client.ByInspecting(),

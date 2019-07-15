@@ -784,6 +784,114 @@ paths:
           description: 'ACR error response describing why the operation failed.'
           schema:
             $ref: '#/definitions/AcrErrors'
+  '/oauth2/exchange':
+    post:
+      tags:
+      - AcrToken
+      - RefreshToken
+      description: Exchange AAD tokens for an ACR refresh Token
+      operationId: GetAcrRefreshToken
+      consumes:
+      - application/x-www-form-urlencoded
+      parameters:
+      - "$ref": "#/parameters/Grant_type"
+      - "$ref": "#/parameters/Service"
+      - "$ref": "#/parameters/Tenant"
+      - "$ref": "#/parameters/Refresh_token"
+      - "$ref": "#/parameters/Access_token"
+      responses:
+        '200':
+          description: Refresh token acquired
+          schema:
+            type: object
+            properties:
+              refresh_token:
+                description: The refresh token to be used for generating access tokens
+                type: string
+        default:
+          description: ACR error response describing why the operation failed.
+          schema:
+            "$ref": "#/definitions/AcrErrors"
+      security: []
+  '/oauth2/token':
+    post:
+      tags:
+      - AcrToken
+      - AccessToken
+      description: Exchange ACR Refresh token for an ACR Access Token
+      operationId: GetAcrAccessToken
+      consumes:
+      - application/x-www-form-urlencoded
+      parameters:
+      - name: grant_type
+        in: formData
+        description: Grant type is expected to be refresh_token
+        required: true
+        type: string
+        enum:
+        - refresh_token
+      - "$ref": "#/parameters/Service"
+      - name: scope
+        in: formData
+        required: true
+        description: Which is expected to be a valid scope, and can be specified more
+          than once for multiple scope requests. You obtained this from the Www-Authenticate
+          response header from the challenge.
+        type: string
+      - name: refresh_token
+        in: formData
+        required: true
+        description: Must be a valid ACR refresh token
+        type: string
+      responses:
+        '200':
+          description: Access token acquired
+          schema:
+            type: object
+            properties:
+              access_token:
+                description: The access token for performing authenticated requests
+                type: string
+        default:
+          description: ACR error response describing why the operation failed.
+          schema:
+            "$ref": "#/definitions/AcrErrors"
+      security: []
+    get:
+      tags:
+      - AcrToken
+      - AccessToken
+      - userLogin
+      description: Exchange Username, Password and Scope an ACR Access Token
+      operationId: GetAcrAccessTokenFromLogin
+      parameters:
+      - name: service
+        in: query
+        required: true
+        description: Indicates the name of your Azure container registry.
+        type: string
+      - name: scope
+        in: query
+        required: true
+        description: Expected to be a valid scope, and can be specified more than once
+          for multiple scope requests. You can obtain this from the Www-Authenticate
+          response header from the challenge.
+        type: string
+      responses:
+        '200':
+          description: Access token acquired
+          schema:
+            type: object
+            properties:
+              access_token:
+                description: The access token for performing authenticated requests
+                type: string
+        default:
+          description: ACR error response describing why the operation failed.
+          schema:
+            "$ref": "#/definitions/AcrErrors"
+      security:
+      - registry_auth: []
 definitions:
   RepositoryAttributes:
     type: object
@@ -1274,6 +1382,57 @@ parameters:
     in: query
     description: filter by digest
     required: false
+    type: string
+    x-ms-parameter-location: method
+  Grant_type:
+    name: grant_type
+    description: Can take a value of access_token_refresh_token, or access_token, or
+      refresh_token
+    type: string
+    in: formData
+    required: true
+    enum:
+    - access_token_refresh_token
+    - access_token
+    - refresh_token
+    x-ms-parameter-location: method
+  Service:
+    name: service
+    in: formData
+    required: true
+    description: Indicates the name of your Azure container registry.
+    type: string
+    x-ms-parameter-location: method
+  Tenant:
+    name: tenant
+    in: formData
+    required: false
+    description: AAD tenant associated to the AAD credentials.
+    type: string
+    x-ms-parameter-location: method
+  Scope:
+    name: scope
+    in: formData
+    required: true
+    description: Which is expected to be a valid scope, and can be specified more than
+      once for multiple scope requests. You can obtain this from the Www-Authenticate
+      response header from the challenge.
+    type: string
+    x-ms-parameter-location: method
+  Refresh_token:
+    name: refresh_token
+    in: formData
+    required: false
+    description: AAD refresh token, mandatory when grant_type is access_token_refresh_token
+      or refresh_token
+    type: string
+    x-ms-parameter-location: method
+  Access_token:
+    name: access_token
+    in: formData
+    required: false
+    description: AAD access token, mandatory when grant_type is access_token_refresh_token
+      or access_token.
     type: string
     x-ms-parameter-location: method
   ImageName:
