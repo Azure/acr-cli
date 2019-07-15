@@ -47,6 +47,7 @@ type purgeParameters struct {
 	filter       string
 	repoName     string
 	archive      string
+	configs      []string
 	dangling     bool
 	numWorkers   int
 }
@@ -65,7 +66,7 @@ func newPurgeCmd(out io.Writer) *cobra.Command {
 			loginURL := api.LoginURL(purgeParams.registryName)
 
 			if purgeParams.username == "" && purgeParams.password == "" {
-				client, err := dockerAuth.NewClient(tagParams.configs...)
+				client, err := dockerAuth.NewClient(purgeParams.configs...)
 				if err != nil {
 					return err
 				}
@@ -77,8 +78,11 @@ func newPurgeCmd(out io.Writer) *cobra.Command {
 
 			var acrClient api.AcrCLIClient
 			if purgeParams.username == "" {
-				// TODO: fetch token via oauth
-				//auth = api.BearerAuth(password)
+				var err error
+				acrClient, err = api.NewAcrCLIClientWithBearerAuth(loginURL, purgeParams.password)
+				if err != nil {
+					return errors.Wrap(err, "failed to purge repository")
+				}
 			} else {
 				acrClient = api.NewAcrCLIClientWithBasicAuth(loginURL, purgeParams.username, purgeParams.password)
 			}
@@ -108,6 +112,7 @@ func newPurgeCmd(out io.Writer) *cobra.Command {
 	cmd.Flags().StringVar(&purgeParams.repoName, "repository", "", "The repository which will be purged.")
 	cmd.Flags().StringVarP(&purgeParams.filter, "filter", "f", "", "Given as a regular expression, if a tag matches the pattern and is older than the time specified in ago it gets deleted.")
 	cmd.Flags().StringVar(&purgeParams.archive, "archive-repository", "", "Instead of deleting manifests they will be moved to the repo specified here")
+	cmd.Flags().StringArrayVarP(&purgeParams.configs, "config", "c", nil, "auth config paths")
 
 	cmd.MarkPersistentFlagRequired("registry")
 	cmd.MarkFlagRequired("repository")

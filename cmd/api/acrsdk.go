@@ -6,13 +6,13 @@ package api
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
 	"strings"
 
 	"github.com/Azure/go-autorest/autorest"
+	"github.com/Azure/go-autorest/autorest/adal"
 
 	acrapi "github.com/Azure/acr-cli/acr"
 )
@@ -26,17 +26,6 @@ const (
 type AcrCLIClient struct {
 	AutorestClient        acrapi.BaseClient
 	manifestTagFetchCount int32
-}
-
-// BearerAuth returns the authentication header in case an access token was specified.
-func BearerAuth(accessToken string) string {
-	return "Bearer " + accessToken
-}
-
-// BasicAuth returns the username and the passwrod encoded in base 64.
-func BasicAuth(username string, password string) string {
-	auth := username + ":" + password
-	return "Basic " + base64.StdEncoding.EncodeToString([]byte(auth))
 }
 
 // LoginURL returns the FQDN for a registry.
@@ -69,6 +58,21 @@ func NewAcrCLIClientWithBasicAuth(loginURL string, username string, password str
 	newAcrCLIClient := NewAcrCLIClient(loginURL)
 	newAcrCLIClient.AutorestClient.Authorizer = autorest.NewBasicAuthorizer(username, password)
 	return newAcrCLIClient
+}
+
+func NewAcrCLIClientWithBearerAuth(loginURL string, refreshToken string) (AcrCLIClient, error) {
+	newAcrCLIClient := NewAcrCLIClient(loginURL)
+	ctx := context.Background()
+	accessTokenResponse, err := newAcrCLIClient.AutorestClient.GetAcrAccessToken(ctx, loginURL, "repository:*:*", refreshToken)
+	if err != nil {
+		return newAcrCLIClient, err
+	}
+	token := &adal.Token{
+		AccessToken:  *accessTokenResponse.AccessToken,
+		RefreshToken: refreshToken,
+	}
+	newAcrCLIClient.AutorestClient.Authorizer = autorest.NewBearerAuthorizer(token)
+	return newAcrCLIClient, nil
 }
 
 // AcrListTags list the tags of a repository with their attributes.

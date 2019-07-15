@@ -56,6 +56,27 @@ type FsLayer struct {
 	BlobSum *string `json:"blobSum,omitempty"`
 }
 
+// GetAcrAccessTokenFromLoginOKResponse ...
+type GetAcrAccessTokenFromLoginOKResponse struct {
+	autorest.Response `json:"-"`
+	// AccessToken - The access token for performing authenticated requests
+	AccessToken *string `json:"access_token,omitempty"`
+}
+
+// GetAcrAccessTokenOKResponse ...
+type GetAcrAccessTokenOKResponse struct {
+	autorest.Response `json:"-"`
+	// AccessToken - The access token for performing authenticated requests
+	AccessToken *string `json:"access_token,omitempty"`
+}
+
+// GetAcrRefreshTokenOKResponse ...
+type GetAcrRefreshTokenOKResponse struct {
+	autorest.Response `json:"-"`
+	// RefreshToken - The refresh token to be used for generating access tokens
+	RefreshToken *string `json:"refresh_token,omitempty"`
+}
+
 // History a list of unstructured historical data for v1 compatibility
 type History struct {
 	// V1Compatibility - The raw v1 compatibility information

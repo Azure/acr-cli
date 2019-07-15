@@ -5,17 +5,6 @@ package api
 
 import "testing"
 
-func TestBasicAuth(t *testing.T) {
-	expectedReturn := "Basic cmVnaXN0cnl1c2VyOnJlZ2lzdHJ5dXNlcnBhc3N3b3Jk"
-	username := "registryuser"
-	password := "registryuserpassword"
-	auth := BasicAuth(username, password)
-
-	if auth != expectedReturn {
-		t.Fatalf("Basic auth of %s:%s incorrect, got %s, expected %s", username, password, auth, expectedReturn)
-	}
-}
-
 func TestLoginURLWithPrefix(t *testing.T) {
 	expectedReturn := "https://registry.azurecr.io"
 	originalHostname := "registry.azurecr.io"
