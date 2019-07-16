@@ -8,8 +8,6 @@ import (
 	"fmt"
 	"io"
 
-	dockerAuth "github.com/Azure/acr-cli/auth/docker"
-
 	"github.com/Azure/acr-cli/cmd/api"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -39,7 +37,7 @@ func newManifestCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 		listManifestCmd,
 		deleteManifestCmd,
 	)
-	cmd.PersistentFlags().StringVar(&manifestParams.repoName, "repository", "", "The name of the repoName")
+	cmd.PersistentFlags().StringVar(&manifestParams.repoName, "repository", "", "The repository name")
 	cmd.MarkPersistentFlagRequired("repository")
 
 	return cmd
@@ -52,29 +50,11 @@ func newManifestListCmd(out io.Writer, manifestParams *manifestParameters) *cobr
 		Long:  `List manifests`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			loginURL := api.LoginURL(manifestParams.registryName)
-
+			acrClient, err := api.GetAcrCLIClientWithAuth(loginURL, manifestParams.username, manifestParams.password, manifestParams.configs)
+			if err != nil {
+				return err
+			}
 			ctx := context.Background()
-			var acrClient api.AcrCLIClient
-
-			if manifestParams.username == "" && manifestParams.password == "" {
-				client, err := dockerAuth.NewClient(manifestParams.configs...)
-				if err != nil {
-					return err
-				}
-				manifestParams.username, manifestParams.password, err = client.GetCredential(loginURL)
-				if err != nil {
-					return err
-				}
-			}
-			if manifestParams.username == "" {
-				var err error
-				acrClient, err = api.NewAcrCLIClientWithBearerAuth(loginURL, manifestParams.password)
-				if err != nil {
-					return errors.Wrap(err, "failed to list manifests")
-				}
-			} else {
-				acrClient = api.NewAcrCLIClientWithBasicAuth(loginURL, manifestParams.username, manifestParams.password)
-			}
 			lastManifestDigest := ""
 			resultManifests, err := acrClient.GetAcrManifests(ctx, manifestParams.repoName, "", lastManifestDigest)
 			if err != nil {
@@ -111,29 +91,11 @@ func newManifestDeleteCmd(out io.Writer, manifestParams *manifestParameters) *co
 		Long:  `Delete tags`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			loginURL := api.LoginURL(manifestParams.registryName)
-
+			acrClient, err := api.GetAcrCLIClientWithAuth(loginURL, manifestParams.username, manifestParams.password, manifestParams.configs)
+			if err != nil {
+				return err
+			}
 			ctx := context.Background()
-			var acrClient api.AcrCLIClient
-
-			if manifestParams.username == "" && manifestParams.password == "" {
-				client, err := dockerAuth.NewClient(manifestParams.configs...)
-				if err != nil {
-					return err
-				}
-				manifestParams.username, manifestParams.password, err = client.GetCredential(loginURL)
-				if err != nil {
-					return err
-				}
-			}
-			if manifestParams.username == "" {
-				var err error
-				acrClient, err = api.NewAcrCLIClientWithBearerAuth(loginURL, manifestParams.password)
-				if err != nil {
-					return errors.Wrap(err, "failed to delete manifests")
-				}
-			} else {
-				acrClient = api.NewAcrCLIClientWithBasicAuth(loginURL, manifestParams.username, manifestParams.password)
-			}
 
 			for i := 0; i < len(args); i++ {
 				err := acrClient.DeleteManifest(ctx, manifestParams.repoName, args[i])

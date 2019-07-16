@@ -40,8 +40,7 @@ To start working with the CLI, run acr --help`,
 	cmd.PersistentFlags().StringVarP(&rootParams.registryName, "registry", "r", "", "Registry name")
 	cmd.PersistentFlags().StringVarP(&rootParams.username, "username", "u", "", "Registry username")
 	cmd.PersistentFlags().StringVarP(&rootParams.password, "password", "p", "", "Registry password")
-	cmd.Flags().StringArrayVarP(&rootParams.configs, "config", "c", nil, "auth config paths")
-	cmd.MarkPersistentFlagRequired("registry")
+	cmd.Flags().StringArrayVarP(&rootParams.configs, "config", "c", nil, "Auth config paths")
 
 	_ = flags.Parse(args)
 	return cmd

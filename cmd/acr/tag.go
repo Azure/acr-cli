@@ -8,8 +8,6 @@ import (
 	"fmt"
 	"io"
 
-	dockerAuth "github.com/Azure/acr-cli/auth/docker"
-
 	"github.com/Azure/acr-cli/cmd/api"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -39,7 +37,7 @@ func newTagCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 		listTagCmd,
 		deleteTagCmd,
 	)
-	cmd.PersistentFlags().StringVar(&tagParams.repoName, "repository", "", "The name of the repoName")
+	cmd.PersistentFlags().StringVar(&tagParams.repoName, "repository", "", "The repository name")
 	cmd.MarkPersistentFlagRequired("repository")
 
 	return cmd
@@ -52,29 +50,11 @@ func newTagListCmd(out io.Writer, tagParams *tagParameters) *cobra.Command {
 		Long:  `List tags`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			loginURL := api.LoginURL(tagParams.registryName)
-
+			acrClient, err := api.GetAcrCLIClientWithAuth(loginURL, tagParams.username, tagParams.password, tagParams.configs)
+			if err != nil {
+				return err
+			}
 			ctx := context.Background()
-			var acrClient api.AcrCLIClient
-
-			if tagParams.username == "" && tagParams.password == "" {
-				client, err := dockerAuth.NewClient(tagParams.configs...)
-				if err != nil {
-					return err
-				}
-				tagParams.username, tagParams.password, err = client.GetCredential(loginURL)
-				if err != nil {
-					return err
-				}
-			}
-			if tagParams.username == "" {
-				var err error
-				acrClient, err = api.NewAcrCLIClientWithBearerAuth(loginURL, tagParams.password)
-				if err != nil {
-					return errors.Wrap(err, "failed to list tags")
-				}
-			} else {
-				acrClient = api.NewAcrCLIClientWithBasicAuth(loginURL, tagParams.username, tagParams.password)
-			}
 			lastTag := ""
 			resultTags, err := acrClient.GetAcrTags(ctx, tagParams.repoName, "", lastTag)
 			if err != nil {
@@ -82,7 +62,6 @@ func newTagListCmd(out io.Writer, tagParams *tagParameters) *cobra.Command {
 			}
 
 			fmt.Printf("Listing tags for the %q repository:\n", tagParams.repoName)
-
 			for resultTags != nil && resultTags.TagsAttributes != nil {
 				tags := *resultTags.TagsAttributes
 				for _, tag := range tags {
@@ -110,29 +89,11 @@ func newTagDeleteCmd(out io.Writer, tagParams *tagParameters) *cobra.Command {
 		Long:  `Delete tags`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			loginURL := api.LoginURL(tagParams.registryName)
-
+			acrClient, err := api.GetAcrCLIClientWithAuth(loginURL, tagParams.username, tagParams.password, tagParams.configs)
+			if err != nil {
+				return err
+			}
 			ctx := context.Background()
-			var acrClient api.AcrCLIClient
-
-			if tagParams.username == "" && tagParams.password == "" {
-				client, err := dockerAuth.NewClient(tagParams.configs...)
-				if err != nil {
-					return err
-				}
-				tagParams.username, tagParams.password, err = client.GetCredential(loginURL)
-				if err != nil {
-					return err
-				}
-			}
-			if tagParams.username == "" {
-				var err error
-				acrClient, err = api.NewAcrCLIClientWithBearerAuth(loginURL, tagParams.password)
-				if err != nil {
-					return errors.Wrap(err, "failed to delete tags")
-				}
-			} else {
-				acrClient = api.NewAcrCLIClientWithBasicAuth(loginURL, tagParams.username, tagParams.password)
-			}
 
 			for i := 0; i < len(args); i++ {
 				err := acrClient.DeleteAcrTag(ctx, tagParams.repoName, args[i])

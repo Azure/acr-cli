@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/Azure/acr-cli/acr"
-	dockerAuth "github.com/Azure/acr-cli/auth/docker"
 	"github.com/Azure/acr-cli/cmd/api"
 	"github.com/Azure/acr-cli/cmd/worker"
 	"github.com/pkg/errors"
@@ -62,44 +61,25 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
 			loginURL := api.LoginURL(purgeParams.registryName)
-
-			if purgeParams.username == "" && purgeParams.password == "" {
-				client, err := dockerAuth.NewClient(purgeParams.configs...)
-				if err != nil {
-					return err
-				}
-				purgeParams.username, purgeParams.password, err = client.GetCredential(loginURL)
-				if err != nil {
-					return err
-				}
+			acrClient, err := api.GetAcrCLIClientWithAuth(loginURL, purgeParams.username, purgeParams.password, purgeParams.configs)
+			if err != nil {
+				return err
 			}
-
-			var acrClient api.AcrCLIClient
-			if purgeParams.username == "" {
-				var err error
-				acrClient, err = api.NewAcrCLIClientWithBearerAuth(loginURL, purgeParams.password)
-				if err != nil {
-					return errors.Wrap(err, "failed to purge repository")
-				}
-			} else {
-				acrClient = api.NewAcrCLIClientWithBasicAuth(loginURL, purgeParams.username, purgeParams.password)
-			}
-
-			worker.StartDispatcher(&wg, acrClient, purgeParams.numWorkers)
+			worker.StartDispatcher(&wg, *acrClient, purgeParams.numWorkers)
 
 			if !purgeParams.dryRun {
 				if !purgeParams.dangling {
-					err := PurgeTags(ctx, acrClient, loginURL, purgeParams.repoName, purgeParams.ago, purgeParams.filter, purgeParams.archive)
+					err := PurgeTags(ctx, *acrClient, loginURL, purgeParams.repoName, purgeParams.ago, purgeParams.filter, purgeParams.archive)
 					if err != nil {
 						return errors.Wrap(err, "failed to purge tags")
 					}
 				}
-				err := PurgeDanglingManifests(ctx, acrClient, loginURL, purgeParams.repoName, purgeParams.archive)
+				err := PurgeDanglingManifests(ctx, *acrClient, loginURL, purgeParams.repoName, purgeParams.archive)
 				if err != nil {
 					return errors.Wrap(err, "failed to purge manifests")
 				}
 			} else {
-				err := DryRunPurge(ctx, acrClient, loginURL, purgeParams.repoName, purgeParams.ago, purgeParams.filter, purgeParams.dangling)
+				err := DryRunPurge(ctx, *acrClient, loginURL, purgeParams.repoName, purgeParams.ago, purgeParams.filter, purgeParams.dangling)
 				if err != nil {
 					return err
 				}
@@ -112,8 +92,8 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 	cmd.Flags().BoolVar(&purgeParams.dryRun, "dry-run", false, "Don't actually remove any tag or manifest, instead, show if they would be deleted")
 	cmd.Flags().IntVar(&purgeParams.numWorkers, "concurrency", defaultNumWorkers, "The number of concurrent requests sent to the registry")
 	cmd.Flags().StringVar(&purgeParams.ago, "ago", "1d", "The images that were created before this time stamp will be deleted")
-	cmd.Flags().StringVar(&purgeParams.repoName, "repository", "", "The repository which will be purged.")
-	cmd.Flags().StringVarP(&purgeParams.filter, "filter", "f", "", "Given as a regular expression, if a tag matches the pattern and is older than the time specified in ago it gets deleted.")
+	cmd.Flags().StringVar(&purgeParams.repoName, "repository", "", "The repository name")
+	cmd.Flags().StringVarP(&purgeParams.filter, "filter", "f", "", "Given as a regular expression, if a tag matches the pattern and is older than the time specified in ago it gets deleted")
 	cmd.Flags().StringVar(&purgeParams.archive, "archive-repository", "", "Instead of deleting manifests they will be moved to the repo specified here")
 	cmd.Flags().StringArrayVarP(&purgeParams.configs, "config", "c", nil, "auth config paths")
 

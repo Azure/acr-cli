@@ -11,10 +11,11 @@ import (
 	"net/http"
 	"strings"
 
+	acrapi "github.com/Azure/acr-cli/acr"
+	dockerAuth "github.com/Azure/acr-cli/auth/docker"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/adal"
-
-	acrapi "github.com/Azure/acr-cli/acr"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -73,6 +74,35 @@ func NewAcrCLIClientWithBearerAuth(loginURL string, refreshToken string) (AcrCLI
 	}
 	newAcrCLIClient.AutorestClient.Authorizer = autorest.NewBearerAuthorizer(token)
 	return newAcrCLIClient, nil
+}
+
+func GetAcrCLIClientWithAuth(loginURL string, username string, password string, configs []string) (*AcrCLIClient, error) {
+	if username == "" && password == "" {
+		client, err := dockerAuth.NewClient(configs...)
+		if err != nil {
+			return nil, errors.Wrap(err, "error resolving authentication")
+		}
+		username, password, err = client.GetCredential(loginURL)
+		if err != nil {
+			return nil, errors.Wrap(err, "error resolving authentication")
+		}
+	}
+
+	if password == "" {
+		return nil, errors.New("unable to resolve authentication, missing identity token or password")
+	}
+	var acrClient AcrCLIClient
+	if username == "" {
+		var err error
+		acrClient, err = NewAcrCLIClientWithBearerAuth(loginURL, password)
+		if err != nil {
+			return nil, errors.Wrap(err, "error resolving authentication")
+		}
+		return &acrClient, nil
+	}
+	acrClient = NewAcrCLIClientWithBasicAuth(loginURL, username, password)
+	return &acrClient, nil
+
 }
 
 // AcrListTags list the tags of a repository with their attributes.
