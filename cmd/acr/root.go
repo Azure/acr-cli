@@ -7,7 +7,16 @@ import (
 	"github.com/spf13/cobra"
 )
 
+type rootParameters struct {
+	registryName string
+	username     string
+	password     string
+	configs      []string
+}
+
 func newRootCmd(args []string) *cobra.Command {
+	var rootParams rootParameters
+
 	cmd := &cobra.Command{
 		Use:   "acr",
 		Short: "The Azure Container Registry CLI",
@@ -21,12 +30,18 @@ To start working with the CLI, run acr --help`,
 	out := cmd.OutOrStdout()
 
 	cmd.AddCommand(
-		newPurgeCmd(out),
+		newPurgeCmd(out, &rootParams),
 		newVersionCmd(out),
 		newLoginCmd(out),
 		newLogoutCmd(out),
-		newTagCmd(out),
+		newTagCmd(out, &rootParams),
+		newManifestCmd(out, &rootParams),
 	)
+	cmd.PersistentFlags().StringVarP(&rootParams.registryName, "registry", "r", "", "Registry name")
+	cmd.PersistentFlags().StringVarP(&rootParams.username, "username", "u", "", "Registry username")
+	cmd.PersistentFlags().StringVarP(&rootParams.password, "password", "p", "", "Registry password")
+	cmd.Flags().StringArrayVarP(&rootParams.configs, "config", "c", nil, "auth config paths")
+	cmd.MarkPersistentFlagRequired("registry")
 
 	_ = flags.Parse(args)
 	return cmd

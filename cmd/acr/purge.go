@@ -40,24 +40,20 @@ Examples:
 )
 
 type purgeParameters struct {
-	registryName string
-	username     string
-	password     string
-	accessToken  string
-	ago          string
-	filter       string
-	repoName     string
-	archive      string
-	configs      []string
-	dangling     bool
-	dryRun       bool
-	numWorkers   int
+	*rootParameters
+	ago        string
+	filter     string
+	repoName   string
+	archive    string
+	dangling   bool
+	dryRun     bool
+	numWorkers int
 }
 
 var wg sync.WaitGroup
 
-func newPurgeCmd(out io.Writer) *cobra.Command {
-	var purgeParams purgeParameters
+func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
+	purgeParams := purgeParameters{rootParameters: rootParams}
 	cmd := &cobra.Command{
 		Use:     "purge",
 		Short:   "Delete images from a registry.",
@@ -112,10 +108,6 @@ func newPurgeCmd(out io.Writer) *cobra.Command {
 		},
 	}
 
-	cmd.PersistentFlags().StringVarP(&purgeParams.registryName, "registry", "r", "", "Registry name")
-	cmd.PersistentFlags().StringVarP(&purgeParams.username, "username", "u", "", "Registry username")
-	cmd.PersistentFlags().StringVarP(&purgeParams.password, "password", "p", "", "Registry password")
-	cmd.PersistentFlags().StringVar(&purgeParams.accessToken, "access-token", "", "Access token")
 	cmd.Flags().BoolVar(&purgeParams.dangling, "dangling", false, "Just remove dangling manifests")
 	cmd.Flags().BoolVar(&purgeParams.dryRun, "dry-run", false, "Don't actually remove any tag or manifest, instead, show if they would be deleted")
 	cmd.Flags().IntVar(&purgeParams.numWorkers, "concurrency", defaultNumWorkers, "The number of concurrent requests sent to the registry")
@@ -125,7 +117,6 @@ func newPurgeCmd(out io.Writer) *cobra.Command {
 	cmd.Flags().StringVar(&purgeParams.archive, "archive-repository", "", "Instead of deleting manifests they will be moved to the repo specified here")
 	cmd.Flags().StringArrayVarP(&purgeParams.configs, "config", "c", nil, "auth config paths")
 
-	cmd.MarkPersistentFlagRequired("registry")
 	cmd.MarkFlagRequired("repository")
 	return cmd
 }
