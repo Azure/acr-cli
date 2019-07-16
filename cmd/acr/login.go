@@ -4,14 +4,29 @@
 package main
 
 import (
+	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
+	"os"
+	"strings"
 
 	dockerAuth "github.com/Azure/acr-cli/auth/docker"
+	"github.com/docker/docker/pkg/term"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
+
+type loginOpts struct {
+	hostname  string
+	username  string
+	password  string
+	configs   []string
+	debug     bool
+	fromStdin bool
+}
 
 func newLoginCmd(out io.Writer) *cobra.Command {
 	var opts loginOpts
@@ -35,6 +50,7 @@ Examples:
 	cmd.Flags().StringArrayVarP(&opts.configs, "config", "c", nil, "auth config paths")
 	cmd.Flags().StringVarP(&opts.username, "username", "u", "", "the registry username")
 	cmd.Flags().StringVarP(&opts.password, "password", "p", "", "the registry password or identity token")
+	cmd.Flags().BoolVarP(&opts.fromStdin, "password-stdin", "", false, "read password or identity token from stdin")
 	return cmd
 }
 
@@ -48,8 +64,34 @@ func runLogin(opts loginOpts) error {
 		return err
 	}
 
-	ctx := context.Background()
+	var username string
+	var passwordBytes []byte
+	if opts.fromStdin {
+		passwordBytes, err = ioutil.ReadAll(os.Stdin)
+		if err != nil {
+			return err
+		}
+		opts.password = strings.TrimSuffix(string(passwordBytes), "\n")
+		opts.password = strings.TrimSuffix(opts.password, "\r")
+	} else if opts.password == "" {
+		if opts.username == "" {
+			username, err = readLine("Username: ", false)
+			if err != nil {
+				return err
+			}
+			opts.username = strings.TrimSpace(username)
+		}
+		if opts.password, err = readLine("Password: ", true); err != nil {
+			return err
+		} else if opts.password == "" {
+			return errors.New("password required")
+		}
 
+	} else {
+		fmt.Fprintln(os.Stderr, "WARNING! Using --password via the CLI is insecure. Use --password-stdin.")
+	}
+
+	ctx := context.Background()
 	if err := client.Login(ctx, opts.hostname, opts.username, opts.password); err != nil {
 		return err
 	}
@@ -58,10 +100,26 @@ func runLogin(opts loginOpts) error {
 	return nil
 }
 
-type loginOpts struct {
-	debug    bool
-	configs  []string
-	username string
-	password string
-	hostname string
+func readLine(prompt string, silent bool) (string, error) {
+	fmt.Print(prompt)
+	if silent {
+		fd := os.Stdin.Fd()
+		state, err := term.SaveState(fd)
+		if err != nil {
+			return "", err
+		}
+		term.DisableEcho(fd, state)
+		defer term.RestoreTerminal(fd, state)
+	}
+
+	reader := bufio.NewReader(os.Stdin)
+	line, _, err := reader.ReadLine()
+	if err != nil {
+		return "", err
+	}
+	if silent {
+		fmt.Println()
+	}
+
+	return string(line), nil
 }

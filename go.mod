@@ -5,6 +5,7 @@ go 1.12
 require (
 	github.com/Azure/go-ansiterm v0.0.0-20170929234023-d6e3b3328b78 // indirect
 	github.com/Azure/go-autorest/autorest v0.2.0
+	github.com/Azure/go-autorest/autorest/adal v0.1.0
 	github.com/Azure/go-autorest/tracing v0.1.0
 	github.com/Microsoft/go-winio v0.4.12 // indirect
 	github.com/containerd/continuity v0.0.0-20190426062206-aaeac12a7ffc // indirect
