@@ -22,6 +22,7 @@ const (
 	prefixHTTPS           = "https://"
 	registryURL           = ".azurecr.io"
 	manifestTagFetchCount = 100
+	manifestV2ContentType = "application/vnd.docker.distribution.manifest.v2+json"
 )
 
 type AcrCLIClient struct {
@@ -163,7 +164,7 @@ func (c *AcrCLIClient) UpdateAcrManifestMetadata(ctx context.Context, repoName s
 
 func (c *AcrCLIClient) GetManifest(ctx context.Context, repoName string, reference string) ([]byte, error) {
 	var result acrapi.SetObject
-	req, err := c.AutorestClient.GetManifestPreparer(ctx, repoName, reference, "application/vnd.docker.distribution.manifest.v2+json")
+	req, err := c.AutorestClient.GetManifestPreparer(ctx, repoName, reference, manifestV2ContentType)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetManifest", nil, "Failure preparing request")
 		return nil, err
@@ -215,7 +216,7 @@ func (c *AcrCLIClient) PutManifest(ctx context.Context, repoName string, referen
 	}
 
 	preparer := autorest.CreatePreparer(
-		autorest.AsContentType("application/vnd.docker.distribution.manifest.v2+json"),
+		autorest.AsContentType(manifestV2ContentType),
 		autorest.AsPut(),
 		autorest.WithCustomBaseURL("{url}", urlParameters),
 		autorest.WithPathParameters("/v2/{name}/manifests/{reference}", pathParameters),

@@ -19,6 +19,18 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const (
+	newLoginCmdLongMessage = `Login to a container registry, obtaining credentials or writing them to the config file`
+	loginExampleMessage    = `  - Log in to an Azure Container Registry named "example"
+    acr login -u username -p password example.azurecr.io
+
+  - Log in to an Azure Container Registry named "example" getting the password from stdin
+    acr login example.azurecr.io -u username --password-stdin
+
+  - Log in to an Azure Container Registry named "example" from prompt
+    acr login example.azurecr.io`
+)
+
 type loginOpts struct {
 	hostname  string
 	username  string
@@ -31,15 +43,11 @@ type loginOpts struct {
 func newLoginCmd(out io.Writer) *cobra.Command {
 	var opts loginOpts
 	cmd := &cobra.Command{
-		Use:   "login",
-		Short: "Login to a container registry",
-		Long: `Login to a container registry
-
-Examples:
-  - Log in to an Azure Container Registry named "example"
-    acr login -u username -p password example.azurecr.io
-`,
-		Args: cobra.ExactArgs(1),
+		Use:     "login",
+		Short:   "Login to a container registry",
+		Long:    newLoginCmdLongMessage,
+		Example: loginExampleMessage,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.hostname = args[0]
 			return runLogin(opts)
