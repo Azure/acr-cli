@@ -1,0 +1,3 @@
+# Windows specific settings.
+
+BINARY_SUFFIX=".exe"
