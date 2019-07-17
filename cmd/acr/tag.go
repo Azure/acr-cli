@@ -13,6 +13,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const (
+	newTagCmdLongMessage       = `acr tag: list tags and untag them individually.`
+	newTagListCmdLongMessage   = `acr tag list: outputs all the tags that are inside a given repository`
+	newTagDeleteCmdLongMessage = `acr tag delete: delete a set of tags inside the specified repository`
+)
+
 type tagParameters struct {
 	*rootParameters
 	repoName string
@@ -22,8 +28,8 @@ func newTagCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 	tagParams := tagParameters{rootParameters: rootParams}
 	cmd := &cobra.Command{
 		Use:   "tag",
-		Short: "Manage tags",
-		Long:  `Manage tags`,
+		Short: "Manage tags inside a repository",
+		Long:  newTagCmdLongMessage,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.Help()
 			return nil
@@ -46,8 +52,8 @@ func newTagCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 func newTagListCmd(out io.Writer, tagParams *tagParameters) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
-		Short: "List tags",
-		Long:  `List tags`,
+		Short: "List tags from a repository",
+		Long:  newTagListCmdLongMessage,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			loginURL := api.LoginURL(tagParams.registryName)
 			acrClient, err := api.GetAcrCLIClientWithAuth(loginURL, tagParams.username, tagParams.password, tagParams.configs)
@@ -85,8 +91,8 @@ func newTagListCmd(out io.Writer, tagParams *tagParameters) *cobra.Command {
 func newTagDeleteCmd(out io.Writer, tagParams *tagParameters) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete",
-		Short: "Delete tags",
-		Long:  `Delete tags`,
+		Short: "Delete tags from a repository",
+		Long:  newTagDeleteCmdLongMessage,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			loginURL := api.LoginURL(tagParams.registryName)
 			acrClient, err := api.GetAcrCLIClientWithAuth(loginURL, tagParams.username, tagParams.password, tagParams.configs)

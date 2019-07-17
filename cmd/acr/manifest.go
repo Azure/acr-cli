@@ -13,6 +13,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const (
+	newManifestCmdLongMessage       = `acr manifest: list manifests and delete them individually.`
+	newManifestListCmdLongMessage   = `acr manifest list: outputs all the manifests that are inside a given repository`
+	newManifestDeleteCmdLongMessage = `acr manifest delete: delete a set of manifests inside the specified repository`
+)
+
 type manifestParameters struct {
 	*rootParameters
 	repoName string
@@ -22,8 +28,8 @@ func newManifestCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 	manifestParams := manifestParameters{rootParameters: rootParams}
 	cmd := &cobra.Command{
 		Use:   "manifest",
-		Short: "Manage manifests",
-		Long:  `Manage manifests`,
+		Short: "Manage manifests inside a repository",
+		Long:  newManifestCmdLongMessage,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.Help()
 			return nil
@@ -46,8 +52,8 @@ func newManifestCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 func newManifestListCmd(out io.Writer, manifestParams *manifestParameters) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
-		Short: "List manifests",
-		Long:  `List manifests`,
+		Short: "List manifests from a repository",
+		Long:  newManifestListCmdLongMessage,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			loginURL := api.LoginURL(manifestParams.registryName)
 			acrClient, err := api.GetAcrCLIClientWithAuth(loginURL, manifestParams.username, manifestParams.password, manifestParams.configs)
@@ -87,8 +93,8 @@ func newManifestListCmd(out io.Writer, manifestParams *manifestParameters) *cobr
 func newManifestDeleteCmd(out io.Writer, manifestParams *manifestParameters) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete",
-		Short: "Delete tags",
-		Long:  `Delete tags`,
+		Short: "Delete tags from a repository",
+		Long:  newManifestDeleteCmdLongMessage,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			loginURL := api.LoginURL(manifestParams.registryName)
 			acrClient, err := api.GetAcrCLIClientWithAuth(loginURL, manifestParams.username, manifestParams.password, manifestParams.configs)

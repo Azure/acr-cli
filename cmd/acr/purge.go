@@ -20,12 +20,8 @@ import (
 )
 
 const (
-	purgeLongMessage = `acr purge: untag old images and delete dangling manifests.`
-	exampleMessage   = `Untag old images and delete dangling manifests
-
-Examples:
-
-  - Delete all tags that are older than 1 day
+	newPurgeCmdLongMessage = `acr purge: untag old images and delete dangling manifests.`
+	purgeExampleMessage    = `  - Delete all tags that are older than 1 day
     acr purge -r MyRegistry --repository MyRepository --ago 1d
 
   - Delete all tags that are older than 1 day and begin with hello
@@ -56,8 +52,8 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "purge",
 		Short:   "Delete images from a registry.",
-		Long:    purgeLongMessage,
-		Example: exampleMessage,
+		Long:    newPurgeCmdLongMessage,
+		Example: purgeExampleMessage,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
 			loginURL := api.LoginURL(purgeParams.registryName)
