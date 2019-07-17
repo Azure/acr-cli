@@ -154,16 +154,10 @@ func (pw *PurgeWorker) ProcessJob(ctx context.Context, job PurgeJob) {
 						}
 						break
 					}
-					err = pw.acrClient.AcrCrossReferenceLayer(ctx, job.ArchiveRepository, *(*manifestV2.Config).Digest, job.RepoName)
-					if err != nil {
-						wErr = workerError{
-							JobType: PurgeTag,
-							Error:   err,
-						}
-						break
-					}
-					for _, layer := range *manifestV2.Layers {
-						err = pw.acrClient.AcrCrossReferenceLayer(ctx, job.ArchiveRepository, *layer.Digest, job.RepoName)
+					if *manifestV2.MediaType == "application/vnd.docker.distribution.manifest.list.v2+json" {
+						// TODO support importing v2 manifest list
+					} else {
+						err = pw.acrClient.AcrCrossReferenceLayer(ctx, job.ArchiveRepository, *(*manifestV2.Config).Digest, job.RepoName)
 						if err != nil {
 							wErr = workerError{
 								JobType: PurgeTag,
@@ -171,23 +165,33 @@ func (pw *PurgeWorker) ProcessJob(ctx context.Context, job PurgeJob) {
 							}
 							break
 						}
-					}
-					newTagName := job.RepoName + (job.Digest)[len("sha256:"):len("sha256:")+8]
-					err = pw.acrClient.PutManifest(ctx, job.ArchiveRepository, newTagName, string(manifestBytes))
-					if err != nil {
-						wErr = workerError{
-							JobType: PurgeTag,
-							Error:   err,
+						for _, layer := range *manifestV2.Layers {
+							err = pw.acrClient.AcrCrossReferenceLayer(ctx, job.ArchiveRepository, *layer.Digest, job.RepoName)
+							if err != nil {
+								wErr = workerError{
+									JobType: PurgeTag,
+									Error:   err,
+								}
+								break
+							}
 						}
-						break
-					}
-					err = pw.acrClient.UpdateAcrTagMetadata(ctx, job.ArchiveRepository, newTagName, metadataObject)
-					if err != nil {
-						wErr = workerError{
-							JobType: PurgeTag,
-							Error:   err,
+						newTagName := job.RepoName + (job.Digest)[len("sha256:"):len("sha256:")+8]
+						err = pw.acrClient.PutManifest(ctx, job.ArchiveRepository, newTagName, string(manifestBytes))
+						if err != nil {
+							wErr = workerError{
+								JobType: PurgeTag,
+								Error:   err,
+							}
+							break
 						}
-						break
+						err = pw.acrClient.UpdateAcrTagMetadata(ctx, job.ArchiveRepository, newTagName, metadataObject)
+						if err != nil {
+							wErr = workerError{
+								JobType: PurgeTag,
+								Error:   err,
+							}
+							break
+						}
 					}
 				}
 			}
