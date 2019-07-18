@@ -110,7 +110,7 @@ func newTagDeleteCmd(out io.Writer, tagParams *tagParameters) *cobra.Command {
 			ctx := context.Background()
 
 			for i := 0; i < len(args); i++ {
-				err := acrClient.DeleteAcrTag(ctx, tagParams.repoName, args[i])
+				_, err := acrClient.DeleteAcrTag(ctx, tagParams.repoName, args[i])
 				if err != nil {
 					return errors.Wrap(err, "failed to delete tags")
 				}

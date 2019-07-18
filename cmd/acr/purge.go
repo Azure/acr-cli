@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net/http"
 	"regexp"
 	"strings"
 	"sync"
@@ -217,6 +218,10 @@ func GetTagsToDelete(ctx context.Context,
 	var lastUpdateTime time.Time
 	resultTags, err := acrClient.GetAcrTags(ctx, repoName, "", lastTag)
 	if err != nil {
+		if resultTags.StatusCode == http.StatusNotFound {
+			fmt.Printf("%s repository not found\n", repoName)
+			return nil, "", nil
+		}
 		return nil, "", err
 	}
 	newLastTag := ""

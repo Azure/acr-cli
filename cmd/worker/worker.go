@@ -6,6 +6,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"sync"
 
 	"github.com/Azure/acr-cli/cmd/api"
@@ -67,21 +68,29 @@ func (pw *PurgeWorker) ProcessJob(ctx context.Context, job PurgeJob) {
 		var wErr workerError
 		switch job.JobType {
 		case PurgeTag:
-			err := pw.acrClient.DeleteAcrTag(ctx, job.RepoName, job.Tag)
+			resp, err := pw.acrClient.DeleteAcrTag(ctx, job.RepoName, job.Tag)
 			if err != nil {
-				wErr = workerError{
-					JobType: PurgeTag,
-					Error:   err,
+				if resp.StatusCode == http.StatusMethodNotAllowed || resp.StatusCode == http.StatusNotFound {
+					fmt.Printf("Skipped %s/%s:%s, HTTP status: %d\n", job.LoginURL, job.RepoName, job.Tag, resp.StatusCode)
+				} else {
+					wErr = workerError{
+						JobType: PurgeTag,
+						Error:   err,
+					}
 				}
 			} else {
 				fmt.Printf("%s/%s:%s\n", job.LoginURL, job.RepoName, job.Tag)
 			}
 		case PurgeManifest:
-			err := pw.acrClient.DeleteManifest(ctx, job.RepoName, job.Digest)
+			resp, err := pw.acrClient.DeleteManifest(ctx, job.RepoName, job.Digest)
 			if err != nil {
-				wErr = workerError{
-					JobType: PurgeTag,
-					Error:   err,
+				if resp.StatusCode == http.StatusMethodNotAllowed || resp.StatusCode == http.StatusNotFound {
+					fmt.Printf("Skipped %s/%s@%s, HTTP status: %d\n", job.LoginURL, job.RepoName, job.Digest, resp.StatusCode)
+				} else {
+					wErr = workerError{
+						JobType: PurgeTag,
+						Error:   err,
+					}
 				}
 			} else {
 				fmt.Printf("%s/%s@%s\n", job.LoginURL, job.RepoName, job.Digest)
