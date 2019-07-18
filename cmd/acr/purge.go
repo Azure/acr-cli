@@ -42,8 +42,7 @@ type purgeParameters struct {
 	ago        string
 	filter     string
 	repoName   string
-	archive    string
-	dangling   bool
+	untagged   bool
 	dryRun     bool
 	numWorkers int
 }
@@ -67,18 +66,19 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 			worker.StartDispatcher(&wg, *acrClient, purgeParams.numWorkers)
 
 			if !purgeParams.dryRun {
-				if !purgeParams.dangling {
-					err := PurgeTags(ctx, *acrClient, loginURL, purgeParams.repoName, purgeParams.ago, purgeParams.filter, purgeParams.archive)
+				err := PurgeTags(ctx, *acrClient, loginURL, purgeParams.repoName, purgeParams.ago, purgeParams.filter)
+				if err != nil {
+					return errors.Wrap(err, "failed to purge tags")
+				}
+
+				if purgeParams.untagged {
+					err := PurgeDanglingManifests(ctx, *acrClient, loginURL, purgeParams.repoName)
 					if err != nil {
-						return errors.Wrap(err, "failed to purge tags")
+						return errors.Wrap(err, "failed to purge manifests")
 					}
 				}
-				err := PurgeDanglingManifests(ctx, *acrClient, loginURL, purgeParams.repoName, purgeParams.archive)
-				if err != nil {
-					return errors.Wrap(err, "failed to purge manifests")
-				}
 			} else {
-				err := DryRunPurge(ctx, *acrClient, loginURL, purgeParams.repoName, purgeParams.ago, purgeParams.filter, purgeParams.dangling)
+				err := DryRunPurge(ctx, *acrClient, loginURL, purgeParams.repoName, purgeParams.ago, purgeParams.filter, purgeParams.untagged)
 				if err != nil {
 					return err
 				}
@@ -87,13 +87,12 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().BoolVar(&purgeParams.dangling, "dangling", false, "Just remove dangling manifests")
+	cmd.Flags().BoolVar(&purgeParams.untagged, "untagged", false, "If untagged is set all manifest that do not have any tags associated to them will be deleted")
 	cmd.Flags().BoolVar(&purgeParams.dryRun, "dry-run", false, "Don't actually remove any tag or manifest, instead, show if they would be deleted")
 	cmd.Flags().IntVar(&purgeParams.numWorkers, "concurrency", defaultNumWorkers, "The number of concurrent requests sent to the registry")
 	cmd.Flags().StringVar(&purgeParams.ago, "ago", "1d", "The images that were created before this time stamp will be deleted")
 	cmd.Flags().StringVar(&purgeParams.repoName, "repository", "", "The repository name")
 	cmd.Flags().StringVarP(&purgeParams.filter, "filter", "f", "", "Given as a regular expression, if a tag matches the pattern and is older than the time specified in ago it gets deleted")
-	cmd.Flags().StringVar(&purgeParams.archive, "archive-repository", "", "Instead of deleting manifests they will be moved to the repo specified here")
 	cmd.Flags().StringArrayVarP(&purgeParams.configs, "config", "c", nil, "auth config paths")
 
 	cmd.MarkFlagRequired("repository")
@@ -101,7 +100,7 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 }
 
 // PurgeTags deletes all tags that are older than the ago value and that match the filter string (if present).
-func PurgeTags(ctx context.Context, acrClient api.AcrCLIClient, loginURL string, repoName string, ago string, filter string, archive string) error {
+func PurgeTags(ctx context.Context, acrClient api.AcrCLIClient, loginURL string, repoName string, ago string, filter string) error {
 	agoDuration, err := ParseDuration(ago)
 	if err != nil {
 		return err
@@ -120,7 +119,7 @@ func PurgeTags(ctx context.Context, acrClient api.AcrCLIClient, loginURL string,
 	for len(lastTag) > 0 {
 		for _, tag := range *tagsToDelete {
 			wg.Add(1)
-			worker.QueuePurgeTag(loginURL, repoName, archive, *tag.Name, *tag.Digest)
+			worker.QueuePurgeTag(loginURL, repoName, *tag.Name, *tag.Digest)
 		}
 		wg.Wait()
 		for len(worker.ErrorChannel) > 0 {
@@ -206,7 +205,7 @@ func GetTagsToDelete(ctx context.Context,
 }
 
 // PurgeDanglingManifests deletes all manifests that do not have any tags associated with them.
-func PurgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClient, loginURL string, repoName string, archive string) error {
+func PurgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClient, loginURL string, repoName string) error {
 
 	manifestsToDelete, err := GetManifestsToDelete(ctx, acrClient, repoName)
 	if err != nil {
@@ -215,7 +214,7 @@ func PurgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClient, log
 	i := 0
 	for _, manifest := range *manifestsToDelete {
 		wg.Add(1)
-		worker.QueuePurgeManifest(loginURL, repoName, archive, *manifest.Digest)
+		worker.QueuePurgeManifest(loginURL, repoName, *manifest.Digest)
 		// Because the worker ErrorChannel has a capacity of 100 if has to periodically be checked
 		if math.Mod(float64(i), 100) == 0 {
 			wg.Wait()
@@ -290,88 +289,89 @@ func GetManifestsToDelete(ctx context.Context, acrClient api.AcrCLIClient, repoN
 }
 
 // DryRunPurge outputs everything that would be deleted if the purge command was executed
-func DryRunPurge(ctx context.Context, acrClient api.AcrCLIClient, loginURL string, repoName string, ago string, filter string, dangling bool) error {
+func DryRunPurge(ctx context.Context, acrClient api.AcrCLIClient, loginURL string, repoName string, ago string, filter string, untagged bool) error {
 	deletedTags := map[string]int{}
-	if !dangling {
-		agoDuration, err := ParseDuration(ago)
-		if err != nil {
-			return err
-		}
-		timeToCompare := time.Now().UTC()
-		timeToCompare = timeToCompare.Add(agoDuration)
-		regex, err := regexp.Compile(filter)
-		if err != nil {
-			return err
-		}
-		lastTag := ""
-		tagsToDelete, lastTag, err := GetTagsToDelete(ctx, acrClient, repoName, regex, timeToCompare, "")
+	agoDuration, err := ParseDuration(ago)
+	if err != nil {
+		return err
+	}
+	timeToCompare := time.Now().UTC()
+	timeToCompare = timeToCompare.Add(agoDuration)
+	regex, err := regexp.Compile(filter)
+	if err != nil {
+		return err
+	}
+	lastTag := ""
+	tagsToDelete, lastTag, err := GetTagsToDelete(ctx, acrClient, repoName, regex, timeToCompare, "")
 
+	if err != nil {
+		return err
+	}
+	for len(lastTag) > 0 {
+		for _, tag := range *tagsToDelete {
+			if _, exists := deletedTags[*tag.Digest]; exists {
+				deletedTags[*tag.Digest]++
+			} else {
+				deletedTags[*tag.Digest] = 1
+			}
+			fmt.Printf("%s/%s:%s\n", loginURL, repoName, *tag.Name)
+		}
+		tagsToDelete, lastTag, err = GetTagsToDelete(ctx, acrClient, repoName, regex, timeToCompare, lastTag)
 		if err != nil {
 			return err
 		}
-		for len(lastTag) > 0 {
-			for _, tag := range *tagsToDelete {
-				if _, exists := deletedTags[*tag.Digest]; exists {
-					deletedTags[*tag.Digest]++
-				} else {
-					deletedTags[*tag.Digest] = 1
+	}
+	if untagged {
+		countMap, err := CountTagsByManifest(ctx, acrClient, repoName)
+		if err != nil {
+			return err
+		}
+		lastManifestDigest := ""
+		resultManifests, err := acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
+		if err != nil {
+			return err
+		}
+		// This will act as a set if a key is present then it should not be deleted because it is referenced by a multiarch manifest
+		// that will not be deleted
+		doNotDelete := map[string]bool{}
+		candidatesToDelete := []acr.ManifestAttributesBase{}
+		// Iterate over all manifests to discover multiarchitecture manifests
+		for resultManifests != nil && resultManifests.ManifestsAttributes != nil {
+			manifests := *resultManifests.ManifestsAttributes
+			for _, manifest := range manifests {
+				if *manifest.MediaType == manifestListContentType && (*countMap)[*manifest.Digest] != deletedTags[*manifest.Digest] {
+					var manifestList []byte
+					manifestList, err = acrClient.GetManifest(ctx, repoName, *manifest.Digest)
+					if err != nil {
+						return err
+					}
+					var multiArchManifest MultiArchManifest
+					err = json.Unmarshal(manifestList, &multiArchManifest)
+					if err != nil {
+						return err
+					}
+					for _, dependentDigest := range multiArchManifest.Manifests {
+						doNotDelete[dependentDigest.Digest] = true
+					}
+				} else if (*countMap)[*manifest.Digest] == deletedTags[*manifest.Digest] {
+					// If the manifest has no tags left it is a candidate for deletion
+					candidatesToDelete = append(candidatesToDelete, manifest)
 				}
-				fmt.Printf("%s/%s:%s\n", loginURL, repoName, *tag.Name)
 			}
-			tagsToDelete, lastTag, err = GetTagsToDelete(ctx, acrClient, repoName, regex, timeToCompare, lastTag)
+			lastManifestDigest = *manifests[len(manifests)-1].Digest
+			resultManifests, err = acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
 			if err != nil {
 				return err
 			}
 		}
-	}
-	countMap, err := CountTagsByManifest(ctx, acrClient, repoName)
-	if err != nil {
-		return err
-	}
-	lastManifestDigest := ""
-	resultManifests, err := acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
-	if err != nil {
-		return err
-	}
-	// This will act as a set if a key is present then it should not be deleted because it is referenced by a multiarch manifest
-	// that will not be deleted
-	doNotDelete := map[string]bool{}
-	candidatesToDelete := []acr.ManifestAttributesBase{}
-	// Iterate over all manifests to discover multiarchitecture manifests
-	for resultManifests != nil && resultManifests.ManifestsAttributes != nil {
-		manifests := *resultManifests.ManifestsAttributes
-		for _, manifest := range manifests {
-			if *manifest.MediaType == manifestListContentType && (*countMap)[*manifest.Digest] != deletedTags[*manifest.Digest] {
-				var manifestList []byte
-				manifestList, err = acrClient.GetManifest(ctx, repoName, *manifest.Digest)
-				if err != nil {
-					return err
-				}
-				var multiArchManifest MultiArchManifest
-				err = json.Unmarshal(manifestList, &multiArchManifest)
-				if err != nil {
-					return err
-				}
-				for _, dependentDigest := range multiArchManifest.Manifests {
-					doNotDelete[dependentDigest.Digest] = true
-				}
-			} else if (*countMap)[*manifest.Digest] == deletedTags[*manifest.Digest] {
-				// If the manifest has no tags left it is a candidate for deletion
-				candidatesToDelete = append(candidatesToDelete, manifest)
+		// Just print manifests that should be deleted.
+		for i := 0; i < len(candidatesToDelete); i++ {
+			if _, ok := doNotDelete[*candidatesToDelete[i].Digest]; !ok {
+				fmt.Printf("%s/%s@%s\n", loginURL, repoName, *candidatesToDelete[i].Digest)
 			}
 		}
-		lastManifestDigest = *manifests[len(manifests)-1].Digest
-		resultManifests, err = acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
-		if err != nil {
-			return err
-		}
 	}
-	// Just print manifests that should be deleted.
-	for i := 0; i < len(candidatesToDelete); i++ {
-		if _, ok := doNotDelete[*candidatesToDelete[i].Digest]; !ok {
-			fmt.Printf("%s/%s@%s\n", loginURL, repoName, *candidatesToDelete[i].Digest)
-		}
-	}
+
 	return nil
 }
 
