@@ -57,7 +57,11 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 		Example: purgeExampleMessage,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
-			loginURL := api.LoginURL(purgeParams.registryName)
+			registryName, err := purgeParams.GetRegistryName()
+			if err != nil {
+				return err
+			}
+			loginURL := api.LoginURL(registryName)
 			acrClient, err := api.GetAcrCLIClientWithAuth(loginURL, purgeParams.username, purgeParams.password, purgeParams.configs)
 			if err != nil {
 				return err

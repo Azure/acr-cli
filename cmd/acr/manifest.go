@@ -55,7 +55,11 @@ func newManifestListCmd(out io.Writer, manifestParams *manifestParameters) *cobr
 		Short: "List manifests from a repository",
 		Long:  newManifestListCmdLongMessage,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			loginURL := api.LoginURL(manifestParams.registryName)
+			registryName, err := manifestParams.GetRegistryName()
+			if err != nil {
+				return err
+			}
+			loginURL := api.LoginURL(registryName)
 			acrClient, err := api.GetAcrCLIClientWithAuth(loginURL, manifestParams.username, manifestParams.password, manifestParams.configs)
 			if err != nil {
 				return err
@@ -96,7 +100,11 @@ func newManifestDeleteCmd(out io.Writer, manifestParams *manifestParameters) *co
 		Short: "Delete tags from a repository",
 		Long:  newManifestDeleteCmdLongMessage,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			loginURL := api.LoginURL(manifestParams.registryName)
+			registryName, err := manifestParams.GetRegistryName()
+			if err != nil {
+				return err
+			}
+			loginURL := api.LoginURL(registryName)
 			acrClient, err := api.GetAcrCLIClientWithAuth(loginURL, manifestParams.username, manifestParams.password, manifestParams.configs)
 			if err != nil {
 				return err
