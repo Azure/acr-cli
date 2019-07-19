@@ -4,6 +4,9 @@
 package main
 
 import (
+	"errors"
+	"os"
+
 	"github.com/spf13/cobra"
 )
 
@@ -44,4 +47,17 @@ To start working with the CLI, run acr --help`,
 
 	_ = flags.Parse(args)
 	return cmd
+}
+
+// GetRegistryName if the registry flag was not specified it tries to get the registry value from an environment
+// variable, if that fails then an error is returned.
+func (rootParams *rootParameters) GetRegistryName() (string, error) {
+	if len(rootParams.registryName) > 0 {
+		return rootParams.registryName, nil
+	} else {
+		if registryName, ok := os.LookupEnv("ACR_DEFAULT_REGISTRY"); ok {
+			return registryName, nil
+		}
+		return "", errors.New("unable to determine registry name, please use --registry flag")
+	}
 }

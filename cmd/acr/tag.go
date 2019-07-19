@@ -55,7 +55,11 @@ func newTagListCmd(out io.Writer, tagParams *tagParameters) *cobra.Command {
 		Short: "List tags from a repository",
 		Long:  newTagListCmdLongMessage,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			loginURL := api.LoginURL(tagParams.registryName)
+			registryName, err := tagParams.GetRegistryName()
+			if err != nil {
+				return err
+			}
+			loginURL := api.LoginURL(registryName)
 			acrClient, err := api.GetAcrCLIClientWithAuth(loginURL, tagParams.username, tagParams.password, tagParams.configs)
 			if err != nil {
 				return err
@@ -94,7 +98,11 @@ func newTagDeleteCmd(out io.Writer, tagParams *tagParameters) *cobra.Command {
 		Short: "Delete tags from a repository",
 		Long:  newTagDeleteCmdLongMessage,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			loginURL := api.LoginURL(tagParams.registryName)
+			registryName, err := tagParams.GetRegistryName()
+			if err != nil {
+				return err
+			}
+			loginURL := api.LoginURL(registryName)
 			acrClient, err := api.GetAcrCLIClientWithAuth(loginURL, tagParams.username, tagParams.password, tagParams.configs)
 			if err != nil {
 				return err
