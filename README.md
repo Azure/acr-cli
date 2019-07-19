@@ -100,18 +100,28 @@ To delete all the tags that are older than the default duration (1 day) and afte
 ```sh
 acr purge \ 
     --registry <Registry Name> \ 
-    --repository <Repository Name>
+    --filter <Repository Name>:<Regex filter>
 ```
+The filter flag is used to specify the repository and a regex filter, if a tag is older than the duration specified by the ago flag and matches the regex filter then it is untagged, for example:
+
+Examples of filters
+
+| Intention                                                                      | Flag                                |
+|--------------------------------------------------------------------------------|-------------------------------------|
+| Untag all tags that begin with hello                                           | --filter `"<repository>:^hello.*"`  |
+| Untag tags that end with world                                                 | --filter `"<repository>:\w*world\b"`  |
+| Untag tags that are exactly called hello-world                                 | --filter `"<repository>:hello-world"` |
+| Untag all tags that are older than the duration                                | --filter `"<repository>:.*"`          |
 
 #### Optional purge flags
-##### Dangling flag
+##### Untagged flag
 
-To delete just the manifests that do not have any tags linked to them, the ```--dangling``` flag should be set.
+To delete all the manifests that do not have any tags linked to them, the ```--untagged``` flag should be set.
 ```sh
 acr purge \ 
     --registry <Registry Name> \ 
-    --repository <Repository Name>
-    --dangling
+    --filter <Repository Name>:<Regex filter>
+    --untagged
 ```
 
 ##### Ago flag
@@ -120,7 +130,7 @@ The ago flag can be used to change the default expiration time of a tag, for exa
 ```sh
 acr purge \ 
     --registry <Registry Name> \ 
-    --repository <Repository Name>
+    --filter <Repository Name>:<Regex filter>
     --ago 30d
 ```
 
@@ -132,37 +142,6 @@ The following table further explains the functionality of this flag.
 | To delete all images that were last modified before 10 minutes ago            | --ago 10m   |
 | To delete all images that were last modified before 1 hour and 15 minutes ago | --ago 1h15m |
 
-##### Filter flag
-
-The filter flag is used to specify a regex filter, if a tag is older than the duration specified by the ago flag and matches the regex filter then it is untagged, for example:
-```sh
-acr purge \ 
-    --registry <Registry Name> \ 
-    --repository <Repository Name> \ 
-    --ago <Ago duration>  \
-    --filter <Regex>"
-```
-
-Examples of filters
-
-| Intention                                                                     | Flag        |
-|-------------------------------------------------------------------------------|-------------|
-| Untag all tags that begin with hello                                          | --filter "^hello.*"    |
-| Untag tags that end with world                                                | --filter "\w*world\b"  |
-| Untag tags that are exactly called hello-world                                | --filter "hello-world" |
-
-##### Archive flag
-
-If the ```--archive-repository``` flag is set all deleted manifests are moved to the repository specified by the flag, for example in:
-```sh
-acr purge \ 
-    --registry <Registry Name> \ 
-    --repository <Repository Name> \ 
-    --archive-repository archive 
-```
-
-All deleted manifests would be moved to a repository called archive.
-
 ##### Dry run flag
 
 To know which tags and manifests would be deleted the ```dry-run``` flag can be set, nothing will be deleted and the output would be the same as if the purge command was executed normally.
@@ -170,7 +149,7 @@ An example of this would be:
 ```sh
 acr purge \ 
     --registry <Registry Name> \ 
-    --repository <Repository Name>
+    --filter <Repository Name>:<Regex filter> \
     --dry-run
 ```
 
@@ -196,7 +175,7 @@ For example to run the tag list command
 ```sh
 az acr run \
     --cmd "{{ .Run.Registry }}/acr:latest tag list -r {{ .Run.Registry }} 
-            --repository <Repository Name>" \ 
+            --filter <Repository Name>:<Regex filter>" \ 
     /dev/null
 ```
 
@@ -212,7 +191,7 @@ For example to have a task that executes every day and purges tags older than 7 
 ```sh
 az acr task create --name purgeTask \
     --cmd "{{ .Run.Registry }}/acr:latest purge -r {{ .Run.Registry }} 
-            --repository <Repository Name> --ago 7d" \
+            --filter <Repository Name>:<Regex filter> --ago 7d" \
     --context /dev/null \
     --schedule "0 0 * * *"
 ```

@@ -5,11 +5,9 @@ package worker
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 
-	acrapi "github.com/Azure/acr-cli/acr"
 	"github.com/Azure/acr-cli/cmd/api"
 )
 
@@ -78,123 +76,7 @@ func (pw *PurgeWorker) ProcessJob(ctx context.Context, job PurgeJob) {
 			} else {
 				fmt.Printf("%s/%s:%s\n", job.LoginURL, job.RepoName, job.Tag)
 			}
-			// If this is an archive job, then update the metadata
-			if len(job.ArchiveRepository) > 0 {
-				pw.m.Lock()
-				manifestMetadata, err := pw.acrClient.GetAcrManifestMetadata(ctx, job.RepoName, job.Digest)
-				if err != nil {
-					//Metadata might be empty try initializing it
-					tagMetadata := AcrTags{Name: job.Tag, ArchiveTime: job.TimeCreated.String()}
-					tagsMetadataArray := make([]AcrTags, 0)
-					metadataObject := &AcrManifestMetadata{Digest: job.Digest, OriginalRepo: job.RepoName, Tags: append(tagsMetadataArray, tagMetadata)}
-					err = pw.acrClient.UpdateAcrManifestMetadata(ctx, job.RepoName, job.Digest, metadataObject)
-					if err != nil {
-						wErr = workerError{
-							JobType: PurgeTag,
-							Error:   err,
-						}
-						pw.m.Unlock()
-						break
-					}
-
-				} else {
-					var metadataObject AcrManifestMetadata
-					err = json.Unmarshal([]byte(manifestMetadata), &metadataObject)
-					if err != nil {
-						wErr = workerError{
-							JobType: PurgeTag,
-							Error:   err,
-						}
-						pw.m.Unlock()
-						break
-					}
-					tagMetadata := AcrTags{Name: job.Tag, ArchiveTime: job.TimeCreated.String()}
-					metadataObject.Tags = append(metadataObject.Tags, tagMetadata)
-					err = pw.acrClient.UpdateAcrManifestMetadata(ctx, job.RepoName, job.Digest, metadataObject)
-					if err != nil {
-						wErr = workerError{
-							JobType: PurgeTag,
-							Error:   err,
-						}
-						pw.m.Unlock()
-						break
-					}
-				}
-				pw.m.Unlock()
-			}
 		case PurgeManifest:
-			if len(job.ArchiveRepository) > 0 {
-				manifestMetadata, err := pw.acrClient.GetAcrManifestMetadata(ctx, job.RepoName, job.Digest)
-				// If there was an error reading the metadata then just delete the manifest normally
-				if err == nil {
-					var metadataObject AcrManifestMetadata
-					err = json.Unmarshal([]byte(manifestMetadata), &metadataObject)
-					if err != nil {
-						wErr = workerError{
-							JobType: PurgeTag,
-							Error:   err,
-						}
-						break
-					}
-					//Tags empty len 0
-					manifestBytes, err := pw.acrClient.GetManifest(ctx, job.RepoName, job.Digest)
-					if err != nil {
-						wErr = workerError{
-							JobType: PurgeTag,
-							Error:   err,
-						}
-						break
-					}
-					var manifestV2 acrapi.Manifest
-					err = json.Unmarshal(manifestBytes, &manifestV2)
-					if err != nil {
-						wErr = workerError{
-							JobType: PurgeTag,
-							Error:   err,
-						}
-						break
-					}
-					if *manifestV2.MediaType == "application/vnd.docker.distribution.manifest.list.v2+json" {
-						// TODO support importing v2 manifest list
-					} else {
-						err = pw.acrClient.AcrCrossReferenceLayer(ctx, job.ArchiveRepository, *(*manifestV2.Config).Digest, job.RepoName)
-						if err != nil {
-							wErr = workerError{
-								JobType: PurgeTag,
-								Error:   err,
-							}
-							break
-						}
-						for _, layer := range *manifestV2.Layers {
-							err = pw.acrClient.AcrCrossReferenceLayer(ctx, job.ArchiveRepository, *layer.Digest, job.RepoName)
-							if err != nil {
-								wErr = workerError{
-									JobType: PurgeTag,
-									Error:   err,
-								}
-								break
-							}
-						}
-						newTagName := job.RepoName + (job.Digest)[len("sha256:"):len("sha256:")+8]
-						err = pw.acrClient.PutManifest(ctx, job.ArchiveRepository, newTagName, string(manifestBytes))
-						if err != nil {
-							wErr = workerError{
-								JobType: PurgeTag,
-								Error:   err,
-							}
-							break
-						}
-						err = pw.acrClient.UpdateAcrTagMetadata(ctx, job.ArchiveRepository, newTagName, metadataObject)
-						if err != nil {
-							wErr = workerError{
-								JobType: PurgeTag,
-								Error:   err,
-							}
-							break
-						}
-					}
-				}
-			}
 			err := pw.acrClient.DeleteManifest(ctx, job.RepoName, job.Digest)
 			if err != nil {
 				wErr = workerError{
