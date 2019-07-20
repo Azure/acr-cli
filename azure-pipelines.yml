@@ -22,6 +22,6 @@ steps:
     set -e
     go version
     go env
-    COOS=linux make lint build test
+    GOOS=linux make
   workingDirectory: '$(ModulePath)'
   displayName: 'Build'
