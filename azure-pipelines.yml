@@ -14,6 +14,7 @@ steps:
     GOOS=linux scripts/setup/dev_setup
     echo '##vso[task.prependpath]$(GOPATH)/bin'
     mkdir -p '$(ModulePath)'
+    shopt -s dotglob extglob
     mv !(work) '$(ModulePath)'
   displayName: 'Setup'
 
