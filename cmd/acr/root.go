@@ -54,10 +54,10 @@ To start working with the CLI, run acr --help`,
 func (rootParams *rootParameters) GetRegistryName() (string, error) {
 	if len(rootParams.registryName) > 0 {
 		return rootParams.registryName, nil
-	} else {
-		if registryName, ok := os.LookupEnv("ACR_DEFAULT_REGISTRY"); ok {
-			return registryName, nil
-		}
-		return "", errors.New("unable to determine registry name, please use --registry flag")
 	}
+	if registryName, ok := os.LookupEnv("ACR_DEFAULT_REGISTRY"); ok {
+		return registryName, nil
+	}
+	return "", errors.New("unable to determine registry name, please use --registry flag")
+
 }

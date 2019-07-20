@@ -16,5 +16,5 @@ steps:
 
 - script: |
     set -e
-    COOS=linux make lint build binaries test
+    COOS=linux make lint build test
   displayName: 'Build'
