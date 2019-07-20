@@ -8,6 +8,7 @@ steps:
 - script: |
     set -e
     GOOS=linux scripts/setup/dev_setup
+    echo '##vso[task.prependpath]$(go env GOPATH)/bin'
     make lint
     make build
     make binaries
