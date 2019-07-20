@@ -1,0 +1,21 @@
+trigger:
+- master
+
+pool:
+  vmImage: 'Ubuntu 16.04'
+
+steps:
+- script: GOOS=linux scripts/setup/dev_setup
+  displayName: 'setup'
+
+- script: make lint
+  displayName: 'make lint'
+
+- script: make build
+  displayName: 'make build'
+
+- script: make binaries
+  displayName: 'make binaries'
+
+- script: make test
+  displayName: 'make test'
