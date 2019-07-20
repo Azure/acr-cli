@@ -5,16 +5,20 @@ pool:
   vmImage: 'Ubuntu 16.04'
 
 variables:
+  GOROOT: '/usr/local/go1.12'
   GOPATH: '$(system.defaultWorkingDirectory)/work'
 
 steps:
 - script: |
     set -e
     GOOS=linux scripts/setup/dev_setup
+    echo '##vso[task.prependpath]$(GOROOT)/bin'
     echo '##vso[task.prependpath]$(GOPATH)/bin'
   displayName: 'Setup'
 
 - script: |
     set -e
+    go version
+    go env
     COOS=linux make lint build test
   displayName: 'Build'
