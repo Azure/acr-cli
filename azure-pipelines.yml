@@ -5,20 +5,22 @@ pool:
   vmImage: 'Ubuntu 16.04'
 
 variables:
-  GOROOT: '/usr/local/go1.12'
   GOPATH: '$(system.defaultWorkingDirectory)/work'
+  ModulePath: '$(GOPATH)/src/github.com/$(build.repository.name)'
 
 steps:
 - script: |
     set -e
     GOOS=linux scripts/setup/dev_setup
-    echo '##vso[task.prependpath]$(GOROOT)/bin'
     echo '##vso[task.prependpath]$(GOPATH)/bin'
+    mkdir -p '$(ModulePath)'
+    mv !(work) '$(ModulePath)'
   displayName: 'Setup'
 
 - script: |
     set -e
     go version
     go env
-    COOS=linux make lint build test
+    COOS=linux make build test
+  workingDirectory: '$(ModulePath)'
   displayName: 'Build'
