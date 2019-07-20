@@ -1,7 +1,7 @@
 
 # Azure Container Registry CLI
 
-[![Build Status](https://travis-ci.org/Azure/acr-cli.svg?branch=master)](https://travis-ci.org/Azure/acr-cli)
+[![Build Status](https://dev.azure.com/azurecontainerregistry/acr-cli/_apis/build/status/acr-cli?branchName=master)](https://dev.azure.com/azurecontainerregistry/acr-cli/_build/latest?definitionId=1&branchName=master)
 
 This repository contains the source code for CLI components for Azure Container Registry.
 The CLI consists of a new way to interact with Container Registries, the currently supported commands include
@@ -64,7 +64,7 @@ The following are examples of commands that the CLI currently supports.
 
 If you are currently logged into an Azure Container Registry the program should be able to read your stored credentials, if not you can do:
 ```sh
-acr login <registry name> 
+acr login <registry name>
 ```
 This login will also work with the [Docker CLI](https://github.com/docker/cli).
 
@@ -98,8 +98,8 @@ acr manifest delete -r <Registry Name> --repository <Repository Name> <Manifest 
 
 To delete all the tags that are older than the default duration (1 day) and after that delete all manifests that were left without a tag that references them:
 ```sh
-acr purge \ 
-    --registry <Registry Name> \ 
+acr purge \
+    --registry <Registry Name> \
     --filter <Repository Name>:<Regex filter>
 ```
 The filter flag is used to specify the repository and a regex filter, if a tag is older than the duration specified by the ago flag and matches the regex filter then it is untagged, for example:
@@ -118,18 +118,18 @@ Examples of filters
 
 To delete all the manifests that do not have any tags linked to them, the ```--untagged``` flag should be set.
 ```sh
-acr purge \ 
-    --registry <Registry Name> \ 
+acr purge \
+    --registry <Registry Name> \
     --filter <Repository Name>:<Regex filter>
     --untagged
 ```
 
 ##### Ago flag
 
-The ago flag can be used to change the default expiration time of a tag, for example, the following command would purge all tags that are older than 30 days instead of the default 1 day. 
+The ago flag can be used to change the default expiration time of a tag, for example, the following command would purge all tags that are older than 30 days instead of the default 1 day.
 ```sh
-acr purge \ 
-    --registry <Registry Name> \ 
+acr purge \
+    --registry <Registry Name> \
     --filter <Repository Name>:<Regex filter>
     --ago 30d
 ```
@@ -147,8 +147,8 @@ The following table further explains the functionality of this flag.
 To know which tags and manifests would be deleted the ```dry-run``` flag can be set, nothing will be deleted and the output would be the same as if the purge command was executed normally.
 An example of this would be:
 ```sh
-acr purge \ 
-    --registry <Registry Name> \ 
+acr purge \
+    --registry <Registry Name> \
     --filter <Repository Name>:<Regex filter> \
     --dry-run
 ```
@@ -174,8 +174,8 @@ az acr run --cmd "{{ .Run.Registry }}/acr:latest <ACR-CLI command>" /dev/null
 For example to run the tag list command
 ```sh
 az acr run \
-    --cmd "{{ .Run.Registry }}/acr:latest tag list -r {{ .Run.Registry }} 
-            --filter <Repository Name>:<Regex filter>" \ 
+    --cmd "{{ .Run.Registry }}/acr:latest tag list -r {{ .Run.Registry }}
+            --filter <Repository Name>:<Regex filter>" \
     /dev/null
 ```
 
@@ -183,14 +183,14 @@ OR.
 Schedule a periodically repeating task using [ACR Scheduled Tasks](https://docs.microsoft.com/en-us/azure/container-registry/container-registry-tasks-scheduled)
 ```sh
 az acr task create --name purgeTask \
-    --cmd "{{ .Run.Registry }}/acr:latest <ACR-CLI command>" \ 
+    --cmd "{{ .Run.Registry }}/acr:latest <ACR-CLI command>" \
     --context /dev/null \
-    --schedule <CRON expression> 
+    --schedule <CRON expression>
 ```
 For example to have a task that executes every day and purges tags older than 7 days one can execute:
 ```sh
 az acr task create --name purgeTask \
-    --cmd "{{ .Run.Registry }}/acr:latest purge -r {{ .Run.Registry }} 
+    --cmd "{{ .Run.Registry }}/acr:latest purge -r {{ .Run.Registry }}
             --filter <Repository Name>:<Regex filter> --ago 7d" \
     --context /dev/null \
     --schedule "0 0 * * *"

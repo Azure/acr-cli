@@ -1,0 +1,27 @@
+trigger:
+- master
+
+pool:
+  vmImage: 'Ubuntu 16.04'
+
+variables:
+  GOPATH: '$(system.defaultWorkingDirectory)/work'
+  ModulePath: '$(GOPATH)/src/github.com/$(build.repository.name)'
+
+steps:
+- script: |
+    set -e
+    GOOS=linux scripts/setup/dev_setup
+    echo '##vso[task.prependpath]$(GOPATH)/bin'
+    mkdir -p '$(ModulePath)'
+    shopt -s dotglob extglob
+    mv !(work) '$(ModulePath)'
+  displayName: 'Setup'
+
+- script: |
+    set -e
+    go version
+    go env
+    COOS=linux make lint build test
+  workingDirectory: '$(ModulePath)'
+  displayName: 'Build'
