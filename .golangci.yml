@@ -1,6 +1,6 @@
 run:
   concurrency: 2
-  deadline: 1m
+  deadline: 10m
   skip-dirs:
     - vendor
     - docs
