@@ -4,12 +4,16 @@ trigger:
 pool:
   vmImage: 'Ubuntu 16.04'
 
+variables:
+  GOPATH: '$(system.defaultWorkingDirectory)/work'
+
 steps:
 - script: |
     set -e
     GOOS=linux scripts/setup/dev_setup
-    echo '##vso[task.prependpath]$(go env GOPATH)/bin'
+    echo '##vso[task.prependpath]$(GOPATH)/bin'
   displayName: 'Setup'
+
 - script: |
     set -e
     COOS=linux make lint build binaries test
