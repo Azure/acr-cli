@@ -1,0 +1,22 @@
+trigger:
+- master
+
+pr:
+- master
+
+pool:
+  vmImage: 'vs2017-win2016'
+
+steps:
+
+- script: |
+    set -e
+    go version
+    go env
+    go build ./cmd/acr/... 
+  displayName: 'Build'
+
+- script: |
+    set -e
+    go test ./... 
+  displayName: 'Test'
