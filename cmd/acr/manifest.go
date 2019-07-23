@@ -112,7 +112,7 @@ func newManifestDeleteCmd(out io.Writer, manifestParams *manifestParameters) *co
 			ctx := context.Background()
 
 			for i := 0; i < len(args); i++ {
-				err := acrClient.DeleteManifest(ctx, manifestParams.repoName, args[i])
+				_, err := acrClient.DeleteManifest(ctx, manifestParams.repoName, args[i])
 				if err != nil {
 					return errors.Wrap(err, "failed to delete manifests")
 				}
