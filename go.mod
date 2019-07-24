@@ -9,6 +9,7 @@ require (
 	github.com/Azure/go-autorest/tracing v0.1.0
 	github.com/Microsoft/go-winio v0.4.12 // indirect
 	github.com/containerd/continuity v0.0.0-20190426062206-aaeac12a7ffc // indirect
+	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/docker/cli v0.0.0-20190506213505-d88565df0c2d
 	github.com/docker/distribution v2.7.1+incompatible // indirect
 	github.com/docker/docker v1.14.0-0.20190131205458-8a43b7bb99cd
