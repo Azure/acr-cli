@@ -7,14 +7,24 @@ pr:
 pool:
   vmImage: 'vs2017-win2016'
 
+variables:
+  GOPATH: '$(system.defaultWorkingDirectory)\work'
+  ModulePath: $(GOPATH)\src\github.com\Azure\acr-cli
+
 steps:
+
+- script: |
+    (robocopy $(system.defaultWorkingDirectory) $(ModulePath) /E /XD  $(system.defaultWorkingDirectory)\work)^& IF %ERRORLEVEL% LSS 8 SET ERRORLEVEL = 0
+  displayName: 'Setup'
 
 - script: |
     go version
     go env
-    go build ./cmd/acr/... 
+    go build .\cmd\acr
+  workingDirectory: '$(ModulePath)'
   displayName: 'Build'
 
 - script: |
     go test ./... 
+  workingDirectory: '$(ModulePath)'
   displayName: 'Test'
