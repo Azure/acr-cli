@@ -218,7 +218,7 @@ func GetTagsToDelete(ctx context.Context,
 	var lastUpdateTime time.Time
 	resultTags, err := acrClient.GetAcrTags(ctx, repoName, "", lastTag)
 	if err != nil {
-		if resultTags.StatusCode == http.StatusNotFound {
+		if resultTags != nil && resultTags.StatusCode == http.StatusNotFound {
 			fmt.Printf("%s repository not found\n", repoName)
 			return nil, "", nil
 		}
@@ -237,7 +237,7 @@ func GetTagsToDelete(ctx context.Context,
 			if err != nil {
 				return nil, "", err
 			}
-			if lastUpdateTime.Before(timeToCompare) {
+			if lastUpdateTime.Before(timeToCompare) && *(*tag.ChangeableAttributes).DeleteEnabled {
 				tagsToDelete = append(tagsToDelete, tag)
 			}
 		}
@@ -328,7 +328,9 @@ func GetManifestsToDelete(ctx context.Context, acrClient api.AcrCLIClient, repoN
 	// Remove all manifests that should not be deleted
 	for i := 0; i < len(candidatesToDelete); i++ {
 		if _, ok := doNotDelete[*candidatesToDelete[i].Digest]; !ok {
-			manifestsToDelete = append(manifestsToDelete, candidatesToDelete[i])
+			if *(*candidatesToDelete[i].ChangeableAttributes).DeleteEnabled {
+				manifestsToDelete = append(manifestsToDelete, candidatesToDelete[i])
+			}
 		}
 	}
 	return &manifestsToDelete, nil

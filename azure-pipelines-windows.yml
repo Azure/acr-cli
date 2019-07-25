@@ -10,13 +10,11 @@ pool:
 steps:
 
 - script: |
-    set -e
     go version
     go env
     go build ./cmd/acr/... 
   displayName: 'Build'
 
 - script: |
-    set -e
     go test ./... 
   displayName: 'Test'
