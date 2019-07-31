@@ -59,27 +59,6 @@ func (_m *AcrCLIClientInterface) DeleteManifest(ctx context.Context, repoName st
 	return r0, r1
 }
 
-// GetAcrManifestMetadata provides a mock function with given fields: ctx, repoName, reference
-func (_m *AcrCLIClientInterface) GetAcrManifestMetadata(ctx context.Context, repoName string, reference string) (string, error) {
-	ret := _m.Called(ctx, repoName, reference)
-
-	var r0 string
-	if rf, ok := ret.Get(0).(func(context.Context, string, string) string); ok {
-		r0 = rf(ctx, repoName, reference)
-	} else {
-		r0 = ret.Get(0).(string)
-	}
-
-	var r1 error
-	if rf, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
-		r1 = rf(ctx, repoName, reference)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
 // GetAcrManifests provides a mock function with given fields: ctx, repoName, orderBy, last
 func (_m *AcrCLIClientInterface) GetAcrManifests(ctx context.Context, repoName string, orderBy string, last string) (*acr.Manifests, error) {
 	ret := _m.Called(ctx, repoName, orderBy, last)
@@ -147,32 +126,4 @@ func (_m *AcrCLIClientInterface) GetManifest(ctx context.Context, repoName strin
 	}
 
 	return r0, r1
-}
-
-// PutManifest provides a mock function with given fields: ctx, repoName, reference, manifest
-func (_m *AcrCLIClientInterface) PutManifest(ctx context.Context, repoName string, reference string, manifest string) error {
-	ret := _m.Called(ctx, repoName, reference, manifest)
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, string, string) error); ok {
-		r0 = rf(ctx, repoName, reference, manifest)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
-// UpdateAcrTagMetadata provides a mock function with given fields: ctx, repoName, reference, metadataValue
-func (_m *AcrCLIClientInterface) UpdateAcrTagMetadata(ctx context.Context, repoName string, reference string, metadataValue interface{}) error {
-	ret := _m.Called(ctx, repoName, reference, metadataValue)
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, string, interface{}) error); ok {
-		r0 = rf(ctx, repoName, reference, metadataValue)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
 }
