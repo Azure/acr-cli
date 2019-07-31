@@ -159,7 +159,7 @@ func (c *AcrCLIClient) isExpired() bool {
 	return (time.Now().Add(5 * time.Minute)).Unix() > c.accessTokenExp
 }
 
-// AcrListTags list the tags of a repository with their attributes.
+// GetAcrTags list the tags of a repository with their attributes.
 func (c *AcrCLIClient) GetAcrTags(ctx context.Context, repoName string, orderBy string, last string) (*acrapi.RepositoryTagsType, error) {
 	if c.isExpired() {
 		if err := refreshAcrCLIClientToken(ctx, c); err != nil {
@@ -173,7 +173,7 @@ func (c *AcrCLIClient) GetAcrTags(ctx context.Context, repoName string, orderBy 
 	return &tags, nil
 }
 
-// DeleteTag deletes the tag by reference.
+// DeleteAcrTag deletes the tag by reference.
 func (c *AcrCLIClient) DeleteAcrTag(ctx context.Context, repoName string, reference string) (*autorest.Response, error) {
 	if c.isExpired() {
 		if err := refreshAcrCLIClientToken(ctx, c); err != nil {
@@ -187,7 +187,7 @@ func (c *AcrCLIClient) DeleteAcrTag(ctx context.Context, repoName string, refere
 	return &resp, nil
 }
 
-// ListManifestsAttributes list all the manifest in a repository with their attributes.
+// GetAcrManifests list all the manifest in a repository with their attributes.
 func (c *AcrCLIClient) GetAcrManifests(ctx context.Context, repoName string, orderBy string, last string) (*acrapi.Manifests, error) {
 	if c.isExpired() {
 		if err := refreshAcrCLIClientToken(ctx, c); err != nil {
@@ -357,12 +357,11 @@ func (c *AcrCLIClient) UpdateAcrTagMetadata(ctx context.Context, repoName string
 
 type AcrCLIClientInterface interface {
 	GetAcrTags(ctx context.Context, repoName string, orderBy string, last string) (*acrapi.RepositoryTagsType, error)
-	DeleteAcrTag(ctx context.Context, repoName string, reference string) error
+	DeleteAcrTag(ctx context.Context, repoName string, reference string) (*autorest.Response, error)
 	GetAcrManifests(ctx context.Context, repoName string, orderBy string, last string) (*acrapi.Manifests, error)
-	DeleteManifest(ctx context.Context, repoName string, reference string)
-	GetAcrManifestMetadata(ctx context.Context, repoName string, reference string)
-	UpdateAcrManifestMetadata(ctx context.Context, repoName string, reference string, metadataValue string)
-	GetManifest(ctx context.Context, repoName string, reference string)
-	AcrCrossReferenceLayer(ctx context.Context, repoName string, reference string, repoFrom string)
-	PutManifest(ctx context.Context, repoName string, reference string, manifest acrapi.Manifest)
+	DeleteManifest(ctx context.Context, repoName string, reference string) (*autorest.Response, error)
+	GetAcrManifestMetadata(ctx context.Context, repoName string, reference string) (string, error)
+	GetManifest(ctx context.Context, repoName string, reference string) ([]byte, error)
+	PutManifest(ctx context.Context, repoName string, reference string, manifest string) error
+	UpdateAcrTagMetadata(ctx context.Context, repoName string, reference string, metadataValue interface{}) error
 }
