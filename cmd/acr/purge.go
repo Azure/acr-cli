@@ -47,8 +47,6 @@ type purgeParameters struct {
 	numWorkers int
 }
 
-var wg sync.WaitGroup
-
 func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 	purgeParams := purgeParameters{rootParameters: rootParams}
 	cmd := &cobra.Command{
@@ -67,6 +65,7 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			var wg sync.WaitGroup
 			worker.StartDispatcher(&wg, acrClient, purgeParams.numWorkers)
 			tagFilters := map[string][]string{}
 			for _, filter := range purgeParams.filters {
@@ -89,14 +88,14 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 					tagRegex = tagRegex + "|" + listOfTagRegex[i]
 				}
 				if !purgeParams.dryRun {
-					singleDeletedTagsCount, err := PurgeTags(ctx, acrClient, loginURL, repoName, purgeParams.ago, tagRegex)
+					singleDeletedTagsCount, err := PurgeTags(ctx, &wg, acrClient, loginURL, repoName, purgeParams.ago, tagRegex)
 					if err != nil {
 						return errors.Wrap(err, "failed to purge tags")
 					}
 
 					singleDeletedManifestsCount := 0
 					if purgeParams.untagged {
-						deletedManifestsCount, err = PurgeDanglingManifests(ctx, acrClient, loginURL, repoName)
+						deletedManifestsCount, err = PurgeDanglingManifests(ctx, &wg, acrClient, loginURL, repoName)
 						if err != nil {
 							return errors.Wrap(err, "failed to purge manifests")
 						}
@@ -132,7 +131,7 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 }
 
 // PurgeTags deletes all tags that are older than the ago value and that match the filter string (if present).
-func PurgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string, ago string, tagFilter string) (int, error) {
+func PurgeTags(ctx context.Context, wg *sync.WaitGroup, acrClient api.AcrCLIClientInterface, loginURL string, repoName string, ago string, tagFilter string) (int, error) {
 	fmt.Printf("Deleting tags for repository: %s\n", repoName)
 	agoDuration, err := ParseDuration(ago)
 	deletedTagsCount := 0
@@ -249,7 +248,7 @@ func GetTagsToDelete(ctx context.Context,
 }
 
 // PurgeDanglingManifests deletes all manifests that do not have any tags associated with them.
-func PurgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string) (int, error) {
+func PurgeDanglingManifests(ctx context.Context, wg *sync.WaitGroup, acrClient api.AcrCLIClientInterface, loginURL string, repoName string) (int, error) {
 	fmt.Printf("Deleting manifests for repository: %s\n", repoName)
 	deletedManifestsCount := 0
 	manifestsToDelete, err := GetManifestsToDelete(ctx, acrClient, repoName)
