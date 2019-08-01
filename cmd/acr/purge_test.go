@@ -525,7 +525,7 @@ func TestGetRepositoryAndTagRegex(t *testing.T) {
 	t.Run("NormalFunctionalityTest", func(t *testing.T) {
 		assert := assert.New(t)
 		testString := "foo:bar"
-		repository, filter, err := GetRepositoryAndTagRegex(testString)
+		repository, filter, err := getRepositoryAndTagRegex(testString)
 		assert.Equal("foo", repository)
 		assert.Equal("bar", filter)
 		assert.Equal(nil, err, "Error should be nil")
@@ -534,7 +534,7 @@ func TestGetRepositoryAndTagRegex(t *testing.T) {
 	t.Run("NoColonTest", func(t *testing.T) {
 		assert := assert.New(t)
 		testString := "foo"
-		repository, filter, err := GetRepositoryAndTagRegex(testString)
+		repository, filter, err := getRepositoryAndTagRegex(testString)
 		assert.Equal("", repository)
 		assert.Equal("", filter)
 		assert.NotEqual(nil, err, "Error should not be nil")
@@ -543,7 +543,7 @@ func TestGetRepositoryAndTagRegex(t *testing.T) {
 	t.Run("TwoColonsTest", func(t *testing.T) {
 		assert := assert.New(t)
 		testString := "foo:bar:zzz"
-		repository, filter, err := GetRepositoryAndTagRegex(testString)
+		repository, filter, err := getRepositoryAndTagRegex(testString)
 		assert.Equal("", repository)
 		assert.Equal("", filter)
 		assert.NotEqual(nil, err, "Error should not be nil")

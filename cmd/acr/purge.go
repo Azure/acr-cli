@@ -25,13 +25,13 @@ import (
 const (
 	newPurgeCmdLongMessage = `acr purge: untag old images and delete dangling manifests.`
 	purgeExampleMessage    = `  - Delete all tags that are older than 1 day
-    acr purge -r MyRegistry --repository MyRepository --ago 1d
+    acr purge -r MyRegistry --filter "MyRepository:^.*" --ago 1d
 
   - Delete all tags that are older than 1 day and begin with hello
-    acr purge -r MyRegistry --repository MyRepository --ago 1d --filter "^hello.*"
+    acr purge -r MyRegistry --filter "MyRepository:^hello.*" --ago 1d 
 
-  - Delete all dangling manifests
-	acr purge -r MyRegistry --repository MyRepository --dangling
+  - Delete all tags that match a regex filter and remove the dangling manifests
+	acr purge -r MyRegistry --filter "MyRepository:RegexFilter" --ago 1d --untagged 
 `
 
 	defaultNumWorkers       = 6
@@ -70,7 +70,7 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 			worker.StartDispatcher(ctx, &wg, acrClient, purgeParams.numWorkers)
 			tagFilters := map[string][]string{}
 			for _, filter := range purgeParams.filters {
-				repoName, tagRegex, err := GetRepositoryAndTagRegex(filter)
+				repoName, tagRegex, err := getRepositoryAndTagRegex(filter)
 				if err != nil {
 					return err
 				}
@@ -123,7 +123,7 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 	cmd.Flags().BoolVar(&purgeParams.untagged, "untagged", false, "If untagged is set all manifest that do not have any tags associated to them will be deleted")
 	cmd.Flags().BoolVar(&purgeParams.dryRun, "dry-run", false, "Don't actually remove any tag or manifest, instead, show if they would be deleted")
 	cmd.Flags().IntVar(&purgeParams.numWorkers, "concurrency", defaultNumWorkers, "The number of concurrent requests sent to the registry")
-	cmd.Flags().StringVar(&purgeParams.ago, "ago", "", "The images that were created before this time stamp will be deleted")
+	cmd.Flags().StringVar(&purgeParams.ago, "ago", "", "The images that were created before this duration will be deleted")
 	cmd.Flags().StringArrayVarP(&purgeParams.filters, "filter", "f", nil, "Given as a regular expression, if a tag matches the pattern and is older than the time specified in ago it gets deleted")
 	cmd.Flags().StringArrayVarP(&purgeParams.configs, "config", "c", nil, "auth config paths")
 
@@ -132,7 +132,7 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 	return cmd
 }
 
-// PurgeTags deletes all tags that are older than the ago value and that match the filter string (if present).
+// PurgeTags deletes all tags that are older than the ago value and that match the tagFilter string.
 func PurgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string, ago string, tagFilter string) (int, error) {
 	fmt.Printf("Deleting tags for repository: %s\n", repoName)
 	agoDuration, err := ParseDuration(ago)
@@ -172,7 +172,7 @@ func PurgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, loginUR
 	return deletedTagsCount, nil
 }
 
-func GetRepositoryAndTagRegex(filter string) (string, string, error) {
+func getRepositoryAndTagRegex(filter string) (string, string, error) {
 	repoAndRegex := strings.Split(filter, ":")
 	if len(repoAndRegex) != 2 {
 		return "", "", errors.New("unable to correctly parse filter flag")
