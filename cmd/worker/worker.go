@@ -18,18 +18,16 @@ type PurgeWorker struct {
 	WorkerQueue chan chan PurgeJob
 	StopChan    chan bool
 	wg          *sync.WaitGroup
-	acrClient   api.AcrCLIClient
-	m           *sync.Mutex
+	acrClient   api.AcrCLIClientInterface
 }
 
 // NewPurgeWorker creates a new worker.
-func NewPurgeWorker(wg *sync.WaitGroup, workerQueue chan chan PurgeJob, acrClient api.AcrCLIClient, m *sync.Mutex) PurgeWorker {
+func NewPurgeWorker(wg *sync.WaitGroup, workerQueue chan chan PurgeJob, acrClient api.AcrCLIClientInterface) PurgeWorker {
 	worker := PurgeWorker{
 		Job:         make(chan PurgeJob),
 		WorkerQueue: workerQueue,
 		wg:          wg,
 		acrClient:   acrClient,
-		m:           m,
 	}
 	return worker
 }
