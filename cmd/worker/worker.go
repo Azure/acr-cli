@@ -68,7 +68,7 @@ func (pw *PurgeWorker) ProcessJob(ctx context.Context, job PurgeJob) {
 		case PurgeTag:
 			resp, err := pw.acrClient.DeleteAcrTag(ctx, job.RepoName, job.Tag)
 			if err != nil {
-				if resp.StatusCode == http.StatusNotFound {
+				if resp != nil && resp.StatusCode == http.StatusNotFound {
 					fmt.Printf("Skipped %s/%s:%s, HTTP status: %d\n", job.LoginURL, job.RepoName, job.Tag, resp.StatusCode)
 				} else {
 					wErr = workerError{
@@ -82,7 +82,7 @@ func (pw *PurgeWorker) ProcessJob(ctx context.Context, job PurgeJob) {
 		case PurgeManifest:
 			resp, err := pw.acrClient.DeleteManifest(ctx, job.RepoName, job.Digest)
 			if err != nil {
-				if resp.StatusCode == http.StatusNotFound {
+				if resp != nil && resp.StatusCode == http.StatusNotFound {
 					fmt.Printf("Skipped %s/%s@%s, HTTP status: %d\n", job.LoginURL, job.RepoName, job.Digest, resp.StatusCode)
 				} else {
 					wErr = workerError{
