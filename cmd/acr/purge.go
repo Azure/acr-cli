@@ -67,7 +67,7 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			worker.StartDispatcher(&wg, acrClient, purgeParams.numWorkers)
+			worker.StartDispatcher(ctx, &wg, acrClient, purgeParams.numWorkers)
 			tagFilters := map[string][]string{}
 			for _, filter := range purgeParams.filters {
 				repoName, tagRegex, err := GetRepositoryAndTagRegex(filter)

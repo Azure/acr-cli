@@ -33,7 +33,7 @@ func NewPurgeWorker(wg *sync.WaitGroup, workerQueue chan chan PurgeJob, acrClien
 }
 
 // Start starts a new purgeWork with an infinite loop inside a goroutine.
-func (pw *PurgeWorker) Start() {
+func (pw *PurgeWorker) Start(ctx context.Context) {
 	go func() {
 		for {
 			// Free worker, insert worker into worker queue.
@@ -42,7 +42,6 @@ func (pw *PurgeWorker) Start() {
 			select {
 			// If the worker has a job assigned begin processing it.
 			case job := <-pw.Job:
-				ctx := context.Background()
 				pw.ProcessJob(ctx, job)
 			// If the worker needs to be stopped then return.
 			case <-pw.StopChan:
