@@ -287,8 +287,13 @@ func PurgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInter
 // of a manifest list that has tags refrerencing it.
 func GetManifestsToDelete(ctx context.Context, acrClient api.AcrCLIClientInterface, repoName string) (*[]acr.ManifestAttributesBase, error) {
 	lastManifestDigest := ""
+	manifestsToDelete := []acr.ManifestAttributesBase{}
 	resultManifests, err := acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
 	if err != nil {
+		if resultManifests != nil && resultManifests.StatusCode == http.StatusNotFound {
+			fmt.Printf("%s repository not found\n", repoName)
+			return &manifestsToDelete, nil
+		}
 		return nil, err
 	}
 	// This will act as a set if a key is present then it should not be deleted because it is referenced by a multiarch manifest
@@ -324,7 +329,6 @@ func GetManifestsToDelete(ctx context.Context, acrClient api.AcrCLIClientInterfa
 			return nil, err
 		}
 	}
-	manifestsToDelete := []acr.ManifestAttributesBase{}
 	// Remove all manifests that should not be deleted
 	for i := 0; i < len(candidatesToDelete); i++ {
 		if _, ok := doNotDelete[*candidatesToDelete[i].Digest]; !ok {
@@ -382,6 +386,10 @@ func DryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 		lastManifestDigest := ""
 		resultManifests, err := acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
 		if err != nil {
+			if resultManifests != nil && resultManifests.StatusCode == http.StatusNotFound {
+				fmt.Printf("%s repository not found\n", repoName)
+				return 0, 0, nil
+			}
 			return -1, -1, err
 		}
 		// This will act as a set if a key is present then it should not be deleted because it is referenced by a multiarch manifest
@@ -435,6 +443,10 @@ func CountTagsByManifest(ctx context.Context, acrClient api.AcrCLIClientInterfac
 	lastTag := ""
 	resultTags, err := acrClient.GetAcrTags(ctx, repoName, "", lastTag)
 	if err != nil {
+		if resultTags != nil && resultTags.StatusCode == http.StatusNotFound {
+			//Repository not found, will be handled in the GetAcrManifests call
+			return nil, nil
+		}
 		return nil, err
 	}
 	for resultTags != nil && resultTags.TagsAttributes != nil {
