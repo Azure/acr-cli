@@ -18,6 +18,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// TestPurgeTags contains all the tests regarding the PurgeTags method which is called when the --dry-run flag is
+// not set.
 func TestPurgeTags(t *testing.T) {
 	// First test if repository is not known PurgeTags should only call GetAcrTags and return no error.
 	t.Run("RepositoryNotFoundTest", func(t *testing.T) {
@@ -186,6 +188,162 @@ func TestPurgeTags(t *testing.T) {
 		worker.StopDispatcher()
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
 		assert.NotEqual(nil, err, "Error should not be nil")
+		mockClient.AssertExpectations(t)
+	})
+}
+
+// TestPurgeManifests contains the tests for the PurgeDanglingManifests method, it is invoked when the --untagged flag is set
+// and the --dry-run flag is not set
+func TestPurgeManifests(t *testing.T) {
+	// First test if repository is not known PurgeDanglingManifests should only call GetAcrManifests once and return no error
+	t.Run("RepositoryNotFoundTest", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		mockClient.On("GetAcrManifests", ctx, repo, "", "").Return(notFoundManifestResponse, errors.New("repo not found")).Once()
+		deletedTags, err := PurgeDanglingManifests(ctx, mockClient, loginURL, repo)
+		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
+		assert.Equal(nil, err, "Error should be nil")
+		mockClient.AssertExpectations(t)
+	})
+	// Second test if there is an error (different to a 404 error) getting the first set of manifests an error should be returned.
+	t.Run("GetAcrManifestsErrorTest", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		mockClient.On("GetAcrManifests", ctx, repo, "", "").Return(nil, errors.New("unauthorized")).Once()
+		deletedTags, err := PurgeDanglingManifests(ctx, mockClient, loginURL, repo)
+		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
+		assert.NotEqual(nil, err, "Error should not be nil")
+		mockClient.AssertExpectations(t)
+	})
+	// Third test, no manifest shoud be deleted, if all the manifests have at least one tag they should not be deleted,
+	// so no DeleteManifest calls should be made.
+	t.Run("NoDeletionManifestTest", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		mockClient.On("GetAcrManifests", ctx, repo, "", "").Return(singleManifestV2WithTagsResult, nil).Once()
+		mockClient.On("GetAcrManifests", ctx, repo, "", "sha:abc").Return(EmptyListManifestsResult, nil).Once()
+		deletedTags, err := PurgeDanglingManifests(ctx, mockClient, loginURL, repo)
+		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
+		assert.Equal(nil, err, "Error should be nil")
+		mockClient.AssertExpectations(t)
+	})
+	// Fourth test if there is an error (different to a 404 error) getting the second set of manifests an error should be returned.
+	t.Run("GetAcrManifestsErrorTest", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		mockClient.On("GetAcrManifests", ctx, repo, "", "").Return(singleManifestV2WithTagsResult, nil).Once()
+		mockClient.On("GetAcrManifests", ctx, repo, "", "sha:abc").Return(nil, errors.New("error getting manifests")).Once()
+		deletedTags, err := PurgeDanglingManifests(ctx, mockClient, loginURL, repo)
+		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
+		assert.NotEqual(nil, err, "Error should not be nil")
+		mockClient.AssertExpectations(t)
+	})
+	// The following tests involve multiarch manifests
+	// Fifth test, if there is an error while getting the multiarch manifest an error should be returned.
+	t.Run("MultiArchErrorGettingManifestTest", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		mockClient.On("GetAcrManifests", ctx, repo, "", "").Return(singleMultiArchWithTagsResult, nil).Once()
+		mockClient.On("GetManifest", ctx, repo, "sha:356").Return(nil, errors.New("error getting manifest")).Once()
+		deletedTags, err := PurgeDanglingManifests(ctx, mockClient, loginURL, repo)
+		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
+		assert.NotEqual(nil, err, "Error not should be nil")
+		mockClient.AssertExpectations(t)
+	})
+	// Sixth test, if a MultiArch manifest returns an invalid JSON an error should be returned.
+	t.Run("MultiArchInvalidJsonTest", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		mockClient.On("GetAcrManifests", ctx, repo, "", "").Return(singleMultiArchWithTagsResult, nil).Once()
+		mockClient.On("GetManifest", ctx, repo, "sha:356").Return([]byte("invalid manifest"), nil).Once()
+		deletedTags, err := PurgeDanglingManifests(ctx, mockClient, loginURL, repo)
+		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
+		assert.NotEqual(nil, err, "Error not should be nil")
+		mockClient.AssertExpectations(t)
+	})
+	// Seventh test, there are three manifests split into two GetAcrManifests calls, and one is linked to a tag so there should
+	// only be 2 deletions, hence the 2 DeleteManifest calls
+	t.Run("DeleteTwoManifestsTest", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		worker.StartDispatcher(ctx, &wg, mockClient, 6)
+		mockClient.On("GetAcrManifests", ctx, repo, "", "").Return(singleManifestV2WithTagsResult, nil).Once()
+		mockClient.On("GetAcrManifests", ctx, repo, "", "sha:abc").Return(doubleManifestV2WithoutTagsResult, nil).Once()
+		mockClient.On("GetAcrManifests", ctx, repo, "", "sha:234").Return(EmptyListManifestsResult, nil).Once()
+		mockClient.On("DeleteManifest", ctx, repo, "sha:123").Return(nil, nil).Once()
+		mockClient.On("DeleteManifest", ctx, repo, "sha:234").Return(nil, nil).Once()
+		deletedTags, err := PurgeDanglingManifests(ctx, mockClient, loginURL, repo)
+		worker.StopDispatcher()
+		assert.Equal(2, deletedTags, "Number of deleted elements should be 2")
+		assert.Equal(nil, err, "Error should be nil")
+		mockClient.AssertExpectations(t)
+	})
+
+	// Eighth test, if there is an error while deleting the manifest but it is a 404 the manifest can be assumed deleted and there should
+	// be no error.
+	t.Run("ErrorManifestDeleteNotFoundTest", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		worker.StartDispatcher(ctx, &wg, mockClient, 6)
+		mockClient.On("GetAcrManifests", ctx, repo, "", "").Return(singleManifestV2WithTagsResult, nil).Once()
+		mockClient.On("GetAcrManifests", ctx, repo, "", "sha:abc").Return(doubleManifestV2WithoutTagsResult, nil).Once()
+		mockClient.On("GetAcrManifests", ctx, repo, "", "sha:234").Return(EmptyListManifestsResult, nil).Once()
+		mockClient.On("DeleteManifest", ctx, repo, "sha:123").Return(nil, nil).Once()
+		mockClient.On("DeleteManifest", ctx, repo, "sha:234").Return(&notFoundResponse, errors.New("manifest not found")).Once()
+		deletedTags, err := PurgeDanglingManifests(ctx, mockClient, loginURL, repo)
+		worker.StopDispatcher()
+		assert.Equal(2, deletedTags, "Number of deleted elements should be 2")
+		assert.Equal(nil, err, "Error should be nil")
+		mockClient.AssertExpectations(t)
+	})
+	// Ninth, if there is an error while deleting a manifest and it is different that a 404 error an error should be returned.
+	t.Run("ErrorManifestDeleteTest", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		worker.StartDispatcher(ctx, &wg, mockClient, 6)
+		mockClient.On("GetAcrManifests", ctx, repo, "", "").Return(singleManifestV2WithTagsResult, nil).Once()
+		mockClient.On("GetAcrManifests", ctx, repo, "", "sha:abc").Return(doubleManifestV2WithoutTagsResult, nil).Once()
+		mockClient.On("GetAcrManifests", ctx, repo, "", "sha:234").Return(EmptyListManifestsResult, nil).Once()
+		mockClient.On("DeleteManifest", ctx, repo, "sha:123").Return(nil, nil).Once()
+		mockClient.On("DeleteManifest", ctx, repo, "sha:234").Return(nil, errors.New("error deleting manifest")).Once()
+		deletedTags, err := PurgeDanglingManifests(ctx, mockClient, loginURL, repo)
+		worker.StopDispatcher()
+		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
+		assert.NotEqual(nil, err, "Error should not be nil")
+		mockClient.AssertExpectations(t)
+	})
+	// Tenth test, if there is an error while deleting a manifest and it is different that a 404 error an error should be returned.
+	// similar to the previous test but the error occurs in the second manifest that should be deleted.
+	t.Run("ErrorManifestDelete2Test", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		worker.StartDispatcher(ctx, &wg, mockClient, 6)
+		mockClient.On("GetAcrManifests", ctx, repo, "", "").Return(singleManifestV2WithTagsResult, nil).Once()
+		mockClient.On("GetAcrManifests", ctx, repo, "", "sha:abc").Return(doubleManifestV2WithoutTagsResult, nil).Once()
+		mockClient.On("GetAcrManifests", ctx, repo, "", "sha:234").Return(EmptyListManifestsResult, nil).Once()
+		mockClient.On("DeleteManifest", ctx, repo, "sha:123").Return(nil, errors.New("error deleting manifest")).Once()
+		deletedTags, err := PurgeDanglingManifests(ctx, mockClient, loginURL, repo)
+		worker.StopDispatcher()
+		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
+		assert.NotEqual(nil, err, "Error should not be nil")
+		mockClient.AssertExpectations(t)
+	})
+	// Eleventh, there are three manifests, two of them have no tags, but one belongs to a multiarch image that has tags so it
+	// should not be deleted, only one call to DeleteManifest should be made because the manifest that does not belong to the
+	// multiarch manifest and has no tags should be deleted.
+	t.Run("MultiArchDeleteTest", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		worker.StartDispatcher(ctx, &wg, mockClient, 6)
+		mockClient.On("GetAcrManifests", ctx, repo, "", "").Return(singleMultiArchWithTagsResult, nil).Once()
+		mockClient.On("GetManifest", ctx, repo, "sha:356").Return(multiArchBytes, nil).Once()
+		mockClient.On("GetAcrManifests", ctx, repo, "", "sha:356").Return(doubleManifestV2WithoutTagsResult, nil).Once()
+		mockClient.On("GetAcrManifests", ctx, repo, "", "sha:234").Return(EmptyListManifestsResult, nil).Once()
+		mockClient.On("DeleteManifest", ctx, repo, "sha:234").Return(nil, nil).Once()
+		deletedTags, err := PurgeDanglingManifests(ctx, mockClient, loginURL, repo)
+		worker.StopDispatcher()
+		assert.Equal(1, deletedTags, "Number of deleted elements should be 1")
+		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
 	})
 }
@@ -522,17 +680,17 @@ var (
 	dockerV2MediaType     = "application/vnd.docker.distribution.manifest.v2+json"
 	manifestListMediaType = "application/vnd.docker.distribution.manifest.list.v2+json"
 
-	// singleManifestV2WithTagsResult = &acr.Manifests{
-	// 	Registry:  &loginURL,
-	// 	ImageName: &repo,
-	// 	ManifestsAttributes: &[]acr.ManifestAttributesBase{{
-	// 		LastUpdateTime:       &lastUpdateTime,
-	// 		ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
-	// 		Digest:               &digest,
-	// 		MediaType:            &dockerV2MediaType,
-	// 		Tags:                 &[]string{"latest"},
-	// 	}},
-	// }
+	singleManifestV2WithTagsResult = &acr.Manifests{
+		Registry:  &loginURL,
+		ImageName: &repo,
+		ManifestsAttributes: &[]acr.ManifestAttributesBase{{
+			LastUpdateTime:       &lastUpdateTime,
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+			Digest:               &digest,
+			MediaType:            &dockerV2MediaType,
+			Tags:                 &[]string{"latest"},
+		}},
+	}
 	digest1 = "sha:123"
 	digest2 = "sha:234"
 
