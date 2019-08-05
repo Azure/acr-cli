@@ -37,6 +37,7 @@ func StartDispatcher(ctx context.Context, wg *sync.WaitGroup, acrClient api.AcrC
 	}()
 }
 
+// StopDispatcher stops all the workers.
 func StopDispatcher() {
 	for _, worker := range workers {
 		worker.Stop()

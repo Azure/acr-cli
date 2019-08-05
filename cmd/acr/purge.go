@@ -123,11 +123,12 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 	cmd.Flags().BoolVar(&purgeParams.untagged, "untagged", false, "If untagged is set all manifest that do not have any tags associated to them will be deleted")
 	cmd.Flags().BoolVar(&purgeParams.dryRun, "dry-run", false, "Don't actually remove any tag or manifest, instead, show if they would be deleted")
 	cmd.Flags().IntVar(&purgeParams.numWorkers, "concurrency", defaultNumWorkers, "The number of concurrent requests sent to the registry")
-	cmd.Flags().StringVar(&purgeParams.ago, "ago", "1d", "The images that were created before this time stamp will be deleted")
+	cmd.Flags().StringVar(&purgeParams.ago, "ago", "", "The images that were created before this time stamp will be deleted")
 	cmd.Flags().StringArrayVarP(&purgeParams.filters, "filter", "f", nil, "Given as a regular expression, if a tag matches the pattern and is older than the time specified in ago it gets deleted")
 	cmd.Flags().StringArrayVarP(&purgeParams.configs, "config", "c", nil, "auth config paths")
 
 	cmd.MarkFlagRequired("filter")
+	cmd.MarkFlagRequired("ago")
 	return cmd
 }
 

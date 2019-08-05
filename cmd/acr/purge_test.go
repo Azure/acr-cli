@@ -65,7 +65,7 @@ func TestPurgeTags(t *testing.T) {
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
 	})
-	// Sixth test, invalid regex filter, an error should be returned.
+	// Fifth test, invalid regex filter, an error should be returned.
 	t.Run("InvalidRegexTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
@@ -74,7 +74,7 @@ func TestPurgeTags(t *testing.T) {
 		assert.NotEqual(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
 	})
-	// Seventh test, if a passed duration is invalid an error should be returned.
+	// Sixth test, if a passed duration is invalid an error should be returned.
 	t.Run("InvalidDurationTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
@@ -83,7 +83,7 @@ func TestPurgeTags(t *testing.T) {
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
 	})
-	// Eighth test, if there is an error during a call to GetAcrTags (other than a 404) an error should be returned.
+	// Seventh test, if there is an error during a call to GetAcrTags (other than a 404) an error should be returned.
 	t.Run("GetAcrTagsErrorSinglePageTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
@@ -93,7 +93,7 @@ func TestPurgeTags(t *testing.T) {
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
 	})
-	// Ninth test, if there is an error during a call to GetAcrTags (other than a 404) an error should be returned.
+	// Eighth test, if there is an error during a call to GetAcrTags (other than a 404) an error should be returned.
 	// similar to the previous test but the error occurs not on the first GetAcrTags call.
 	t.Run("GetAcrTagsErrorMultiplePageTest", func(t *testing.T) {
 		assert := assert.New(t)
@@ -105,7 +105,7 @@ func TestPurgeTags(t *testing.T) {
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
 	})
-	// Tenth test, if a tag should be deleted but the delete enabled attribute is set to true it should not be deleted
+	// Ninth test, if a tag should be deleted but the delete enabled attribute is set to true it should not be deleted
 	// and no error should show on the CLI output.
 	t.Run("OperationNotAllowedTest", func(t *testing.T) {
 		assert := assert.New(t)
@@ -117,7 +117,7 @@ func TestPurgeTags(t *testing.T) {
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
 	})
-	// Eleventh test, if a tag has an invalid last update time attribute an error should be returned.
+	// Tenth test, if a tag has an invalid last update time attribute an error should be returned.
 	t.Run("InvalidDurationTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
@@ -128,7 +128,7 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.AssertExpectations(t)
 	})
 	// The following tests involve deleting tags.
-	// Twelfth test, there is only one tag and it should be deleted, the DeleteAcrTag method should be called once.
+	// Eleventh test, there is only one tag and it should be deleted, the DeleteAcrTag method should be called once.
 	t.Run("OneTagDeletionTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := mocks.AcrCLIClientInterface{}
@@ -142,7 +142,7 @@ func TestPurgeTags(t *testing.T) {
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
 	})
-	// Thirteenth test, all tags should be deleted, 5 tags in total, separated into two GetAcrTags calls, there should be
+	// Twelfth test, all tags should be deleted, 5 tags in total, separated into two GetAcrTags calls, there should be
 	// 5 DeleteAcrTag calls.
 	t.Run("FiveTagDeletionTest", func(t *testing.T) {
 		assert := assert.New(t)
@@ -162,7 +162,7 @@ func TestPurgeTags(t *testing.T) {
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
 	})
-	// Fourteenth, if an there is a 404 error while deleting a tag an error should not be returned.
+	// Thirteenth test, if an there is a 404 error while deleting a tag an error should not be returned.
 	t.Run("DeleteNotFoundErrorTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := mocks.AcrCLIClientInterface{}
@@ -177,7 +177,7 @@ func TestPurgeTags(t *testing.T) {
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
 	})
-	// Fifteenth, if an error (other than a 404 error) occurs during delete, an error should be returned.
+	// Fourteenth test, if an error (other than a 404 error) occurs during delete, an error should be returned.
 	t.Run("DeleteErrorTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := mocks.AcrCLIClientInterface{}
@@ -261,6 +261,7 @@ func TestPurgeManifests(t *testing.T) {
 		assert.NotEqual(nil, err, "Error not should be nil")
 		mockClient.AssertExpectations(t)
 	})
+	// The following tests involve deleting manifests.
 	// Seventh test, there are three manifests split into two GetAcrManifests calls, and one is linked to a tag so there should
 	// only be 2 deletions, hence the 2 DeleteManifest calls
 	t.Run("DeleteTwoManifestsTest", func(t *testing.T) {
@@ -278,7 +279,6 @@ func TestPurgeManifests(t *testing.T) {
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
 	})
-
 	// Eighth test, if there is an error while deleting the manifest but it is a 404 the manifest can be assumed deleted and there should
 	// be no error.
 	t.Run("ErrorManifestDeleteNotFoundTest", func(t *testing.T) {
@@ -519,6 +519,7 @@ func TestDryRun(t *testing.T) {
 	})
 }
 
+// TestGetRepositoryAndTagRegex returns the repository and the regex from a string in the form <repository>:<regex filter>
 func TestGetRepositoryAndTagRegex(t *testing.T) {
 	// First test normal functionality
 	t.Run("NormalFunctionalityTest", func(t *testing.T) {
@@ -549,6 +550,7 @@ func TestGetRepositoryAndTagRegex(t *testing.T) {
 	})
 }
 
+// TestParseDuration returns an extended duration from a string.
 func TestParseDuration(t *testing.T) {
 	tables := []struct {
 		durationString string
@@ -570,6 +572,7 @@ func TestParseDuration(t *testing.T) {
 	}
 }
 
+// All the variables used in the tests are defined here.
 var (
 	ctx              = context.Background()
 	loginURL         = "foo.azurecr.io"
@@ -584,9 +587,11 @@ var (
 			StatusCode: 200,
 		},
 	}
+	// Response for the GetAcrTags when the repository is not found.
 	notFoundTagResponse = &acr.RepositoryTagsType{
 		Response: notFoundResponse,
 	}
+	// Response for the GetAcrTags when there are no tags on the repo.
 	EmptyListTagsResult = &acr.RepositoryTagsType{
 		Registry:       &loginURL,
 		ImageName:      &repo,
@@ -669,9 +674,11 @@ var (
 		}},
 	}
 
+	// Response for the GetAcrManifests when the repository is not found.
 	notFoundManifestResponse = &acr.Manifests{
 		Response: notFoundResponse,
 	}
+	// Response for the GetAcrManifests when there are no manifests on the repo.
 	EmptyListManifestsResult = &acr.Manifests{
 		Registry:            &loginURL,
 		ImageName:           &repo,
