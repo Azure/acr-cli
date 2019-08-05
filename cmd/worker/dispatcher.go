@@ -12,13 +12,16 @@ import (
 
 // WorkerQueue represents the queue of the workers
 var WorkerQueue chan chan PurgeJob
+var workers []PurgeWorker
 
 // StartDispatcher creates the workers and a goroutine to continously fetch jobs for them.
 func StartDispatcher(ctx context.Context, wg *sync.WaitGroup, acrClient api.AcrCLIClientInterface, nWorkers int) {
 	WorkerQueue = make(chan chan PurgeJob, nWorkers)
+	workers = []PurgeWorker{}
 	for i := 0; i < nWorkers; i++ {
 		worker := NewPurgeWorker(wg, WorkerQueue, acrClient)
 		worker.Start(ctx)
+		workers = append(workers, worker)
 	}
 
 	go func() {
@@ -32,4 +35,10 @@ func StartDispatcher(ctx context.Context, wg *sync.WaitGroup, acrClient api.AcrC
 			}(job)
 		}
 	}()
+}
+
+func StopDispatcher() {
+	for _, worker := range workers {
+		worker.Stop()
+	}
 }

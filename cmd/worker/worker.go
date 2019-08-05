@@ -25,6 +25,7 @@ type PurgeWorker struct {
 func NewPurgeWorker(wg *sync.WaitGroup, workerQueue chan chan PurgeJob, acrClient api.AcrCLIClientInterface) PurgeWorker {
 	worker := PurgeWorker{
 		Job:         make(chan PurgeJob),
+		StopChan:    make(chan bool),
 		WorkerQueue: workerQueue,
 		wg:          wg,
 		acrClient:   acrClient,
@@ -53,9 +54,7 @@ func (pw *PurgeWorker) Start(ctx context.Context) {
 
 // Stop notifies the worker to stop handling purge jobs
 func (pw *PurgeWorker) Stop() {
-	go func() {
-		pw.StopChan <- true
-	}()
+	pw.StopChan <- true
 }
 
 // ProcessJob processes any job (currently PurgeTag and PurgeManifest)
