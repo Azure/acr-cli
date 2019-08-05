@@ -65,33 +65,40 @@ func newManifestListCmd(out io.Writer, manifestParams *manifestParameters) *cobr
 				return err
 			}
 			ctx := context.Background()
-			lastManifestDigest := ""
-			resultManifests, err := acrClient.GetAcrManifests(ctx, manifestParams.repoName, "", lastManifestDigest)
+			err = listManifests(ctx, acrClient, loginURL, manifestParams.repoName)
 			if err != nil {
-				return errors.Wrap(err, "failed to list manifests")
+				return err
 			}
-
-			fmt.Printf("Listing manifests for the %q repository:\n", manifestParams.repoName)
-
-			for resultManifests != nil && resultManifests.ManifestsAttributes != nil {
-				manifests := *resultManifests.ManifestsAttributes
-				for _, manifest := range manifests {
-					manifestDigest := *manifest.Digest
-					fmt.Printf("%s/%s@%s\n", loginURL, manifestParams.repoName, manifestDigest)
-				}
-
-				lastManifestDigest = *manifests[len(manifests)-1].Digest
-				resultManifests, err = acrClient.GetAcrManifests(ctx, manifestParams.repoName, "", lastManifestDigest)
-				if err != nil {
-					return errors.Wrap(err, "failed to list manifests")
-				}
-			}
-
 			return nil
 		},
 	}
 
 	return cmd
+}
+
+func listManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string) error {
+	lastManifestDigest := ""
+	resultManifests, err := acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
+	if err != nil {
+		return errors.Wrap(err, "failed to list manifests")
+	}
+
+	fmt.Printf("Listing manifests for the %q repository:\n", repoName)
+
+	for resultManifests != nil && resultManifests.ManifestsAttributes != nil {
+		manifests := *resultManifests.ManifestsAttributes
+		for _, manifest := range manifests {
+			manifestDigest := *manifest.Digest
+			fmt.Printf("%s/%s@%s\n", loginURL, repoName, manifestDigest)
+		}
+
+		lastManifestDigest = *manifests[len(manifests)-1].Digest
+		resultManifests, err = acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
+		if err != nil {
+			return errors.Wrap(err, "failed to list manifests")
+		}
+	}
+	return nil
 }
 
 func newManifestDeleteCmd(out io.Writer, manifestParams *manifestParameters) *cobra.Command {
@@ -110,18 +117,24 @@ func newManifestDeleteCmd(out io.Writer, manifestParams *manifestParameters) *co
 				return err
 			}
 			ctx := context.Background()
-
-			for i := 0; i < len(args); i++ {
-				_, err := acrClient.DeleteManifest(ctx, manifestParams.repoName, args[i])
-				if err != nil {
-					return errors.Wrap(err, "failed to delete manifests")
-				}
-				fmt.Printf("%s/%s@%s\n", loginURL, manifestParams.repoName, args[i])
+			err = deleteManifests(ctx, acrClient, loginURL, manifestParams.repoName, args)
+			if err != nil {
+				return err
 			}
-
 			return nil
 		},
 	}
 
 	return cmd
+}
+
+func deleteManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string, args []string) error {
+	for i := 0; i < len(args); i++ {
+		_, err := acrClient.DeleteManifest(ctx, repoName, args[i])
+		if err != nil {
+			return errors.Wrap(err, "failed to delete manifests")
+		}
+		fmt.Printf("%s/%s@%s\n", loginURL, repoName, args[i])
+	}
+	return nil
 }

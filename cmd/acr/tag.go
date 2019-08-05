@@ -65,31 +65,38 @@ func newTagListCmd(out io.Writer, tagParams *tagParameters) *cobra.Command {
 				return err
 			}
 			ctx := context.Background()
-			lastTag := ""
-			resultTags, err := acrClient.GetAcrTags(ctx, tagParams.repoName, "", lastTag)
+			err = listTags(ctx, acrClient, loginURL, tagParams.repoName)
 			if err != nil {
-				return errors.Wrap(err, "failed to list tags")
+				return err
 			}
-
-			fmt.Printf("Listing tags for the %q repository:\n", tagParams.repoName)
-			for resultTags != nil && resultTags.TagsAttributes != nil {
-				tags := *resultTags.TagsAttributes
-				for _, tag := range tags {
-					tagName := *tag.Name
-					fmt.Printf("%s/%s:%s\n", loginURL, tagParams.repoName, tagName)
-				}
-
-				lastTag = *tags[len(tags)-1].Name
-				resultTags, err = acrClient.GetAcrTags(ctx, tagParams.repoName, "", lastTag)
-				if err != nil {
-					return err
-				}
-			}
-
 			return nil
 		},
 	}
 	return cmd
+}
+
+func listTags(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string) error {
+	lastTag := ""
+	resultTags, err := acrClient.GetAcrTags(ctx, repoName, "", lastTag)
+	if err != nil {
+		return errors.Wrap(err, "failed to list tags")
+	}
+
+	fmt.Printf("Listing tags for the %q repository:\n", repoName)
+	for resultTags != nil && resultTags.TagsAttributes != nil {
+		tags := *resultTags.TagsAttributes
+		for _, tag := range tags {
+			tagName := *tag.Name
+			fmt.Printf("%s/%s:%s\n", loginURL, repoName, tagName)
+		}
+
+		lastTag = *tags[len(tags)-1].Name
+		resultTags, err = acrClient.GetAcrTags(ctx, repoName, "", lastTag)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func newTagDeleteCmd(out io.Writer, tagParams *tagParameters) *cobra.Command {
@@ -108,18 +115,24 @@ func newTagDeleteCmd(out io.Writer, tagParams *tagParameters) *cobra.Command {
 				return err
 			}
 			ctx := context.Background()
-
-			for i := 0; i < len(args); i++ {
-				_, err := acrClient.DeleteAcrTag(ctx, tagParams.repoName, args[i])
-				if err != nil {
-					return errors.Wrap(err, "failed to delete tags")
-				}
-				fmt.Printf("%s/%s:%s\n", loginURL, tagParams.repoName, args[i])
+			err = deleteTags(ctx, acrClient, loginURL, tagParams.repoName, args)
+			if err != nil {
+				return err
 			}
-
 			return nil
 		},
 	}
 
 	return cmd
+}
+
+func deleteTags(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string, args []string) error {
+	for i := 0; i < len(args); i++ {
+		_, err := acrClient.DeleteAcrTag(ctx, repoName, args[i])
+		if err != nil {
+			return errors.Wrap(err, "failed to delete tags")
+		}
+		fmt.Printf("%s/%s:%s\n", loginURL, repoName, args[i])
+	}
+	return nil
 }
