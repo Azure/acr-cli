@@ -96,7 +96,7 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 
 					singleDeletedManifestsCount := 0
 					if purgeParams.untagged {
-						deletedManifestsCount, err = purgeDanglingManifests(ctx, acrClient, loginURL, repoName)
+						singleDeletedManifestsCount, err = purgeDanglingManifests(ctx, acrClient, loginURL, repoName)
 						if err != nil {
 							return errors.Wrap(err, "failed to purge manifests")
 						}
