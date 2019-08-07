@@ -1017,6 +1017,7 @@ definitions:
         description: Manifest digest
       imageSize:
         type: integer
+        format: int64
         description: Image size
       createdTime:
         type: string
@@ -1200,6 +1201,7 @@ definitions:
         description: Layer media type
       size:
         type: integer
+        format: int64
         description: Layer size
       digest:
         type: string

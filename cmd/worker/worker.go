@@ -39,7 +39,6 @@ func (pw *PurgeWorker) Start(ctx context.Context) {
 		for {
 			// Free worker, insert worker into worker queue.
 			WorkerQueue <- pw.Job
-
 			select {
 			// If the worker has a job assigned begin processing it.
 			case job := <-pw.Job:
@@ -64,9 +63,11 @@ func (pw *PurgeWorker) ProcessJob(ctx context.Context, job PurgeJob) {
 		var wErr workerError
 		switch job.JobType {
 		case PurgeTag:
+			// In case a tag is going to be purged DeleteAcrTag method is used.
 			resp, err := pw.acrClient.DeleteAcrTag(ctx, job.RepoName, job.Tag)
 			if err != nil {
 				if resp != nil && resp.StatusCode == http.StatusNotFound {
+					// If the tag is not found it can be assumed to have been deleted.
 					fmt.Printf("Skipped %s/%s:%s, HTTP status: %d\n", job.LoginURL, job.RepoName, job.Tag, resp.StatusCode)
 				} else {
 					wErr = workerError{
@@ -78,9 +79,11 @@ func (pw *PurgeWorker) ProcessJob(ctx context.Context, job PurgeJob) {
 				fmt.Printf("%s/%s:%s\n", job.LoginURL, job.RepoName, job.Tag)
 			}
 		case PurgeManifest:
+			// In case a manifest is going to be purged DeleteManifest method is used.
 			resp, err := pw.acrClient.DeleteManifest(ctx, job.RepoName, job.Digest)
 			if err != nil {
 				if resp != nil && resp.StatusCode == http.StatusNotFound {
+					// If the manifest is not found it can be assumed to have been deleted.
 					fmt.Printf("Skipped %s/%s@%s, HTTP status: %d\n", job.LoginURL, job.RepoName, job.Digest, resp.StatusCode)
 				} else {
 					wErr = workerError{

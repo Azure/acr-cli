@@ -12,6 +12,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// Similar to the login.go file but this will logout out of an ACR. This will delete
+// registry credentials that are contained in a config.json file.
 func newLogoutCmd(out io.Writer) *cobra.Command {
 	var opts logoutOpts
 	cmd := &cobra.Command{

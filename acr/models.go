@@ -155,7 +155,7 @@ type ManifestAttributesBase struct {
 	// Digest - Manifest digest
 	Digest *string `json:"digest,omitempty"`
 	// ImageSize - Image size
-	ImageSize *int32 `json:"imageSize,omitempty"`
+	ImageSize *int64 `json:"imageSize,omitempty"`
 	// CreatedTime - Created time
 	CreatedTime *string `json:"createdTime,omitempty"`
 	// LastUpdateTime - Last update time
@@ -351,7 +351,7 @@ type V2Descriptor struct {
 	// MediaType - Layer media type
 	MediaType *string `json:"mediaType,omitempty"`
 	// Size - Layer size
-	Size *int32 `json:"size,omitempty"`
+	Size *int64 `json:"size,omitempty"`
 	// Digest - Layer digest
 	Digest *string `json:"digest,omitempty"`
 }
