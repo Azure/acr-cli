@@ -89,14 +89,14 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 					tagRegex = tagRegex + "|" + listOfTagRegex[i]
 				}
 				if !purgeParams.dryRun {
-					singleDeletedTagsCount, err := PurgeTags(ctx, acrClient, loginURL, repoName, purgeParams.ago, tagRegex)
+					singleDeletedTagsCount, err := purgeTags(ctx, acrClient, loginURL, repoName, purgeParams.ago, tagRegex)
 					if err != nil {
 						return errors.Wrap(err, "failed to purge tags")
 					}
 
 					singleDeletedManifestsCount := 0
 					if purgeParams.untagged {
-						deletedManifestsCount, err = PurgeDanglingManifests(ctx, acrClient, loginURL, repoName)
+						deletedManifestsCount, err = purgeDanglingManifests(ctx, acrClient, loginURL, repoName)
 						if err != nil {
 							return errors.Wrap(err, "failed to purge manifests")
 						}
@@ -104,7 +104,7 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 					deletedTagsCount += singleDeletedTagsCount
 					deletedManifestsCount += singleDeletedManifestsCount
 				} else {
-					singleDeletedTagsCount, singleDeletedManifestsCount, err := DryRunPurge(ctx, acrClient, loginURL, repoName, purgeParams.ago, tagRegex, purgeParams.untagged)
+					singleDeletedTagsCount, singleDeletedManifestsCount, err := dryRunPurge(ctx, acrClient, loginURL, repoName, purgeParams.ago, tagRegex, purgeParams.untagged)
 					if err != nil {
 						return err
 					}
@@ -132,10 +132,10 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 	return cmd
 }
 
-// PurgeTags deletes all tags that are older than the ago value and that match the tagFilter string.
-func PurgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string, ago string, tagFilter string) (int, error) {
+// purgeTags deletes all tags that are older than the ago value and that match the tagFilter string.
+func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string, ago string, tagFilter string) (int, error) {
 	fmt.Printf("Deleting tags for repository: %s\n", repoName)
-	agoDuration, err := ParseDuration(ago)
+	agoDuration, err := parseDuration(ago)
 	deletedTagsCount := 0
 	if err != nil {
 		return -1, err
@@ -147,7 +147,7 @@ func PurgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, loginUR
 		return -1, err
 	}
 	lastTag := ""
-	tagsToDelete, lastTag, err := GetTagsToDelete(ctx, acrClient, repoName, tagRegex, timeToCompare, "")
+	tagsToDelete, lastTag, err := getTagsToDelete(ctx, acrClient, repoName, tagRegex, timeToCompare, "")
 	if err != nil {
 		return -1, err
 	}
@@ -164,7 +164,7 @@ func PurgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, loginUR
 				return -1, wErr.Error
 			}
 		}
-		tagsToDelete, lastTag, err = GetTagsToDelete(ctx, acrClient, repoName, tagRegex, timeToCompare, lastTag)
+		tagsToDelete, lastTag, err = getTagsToDelete(ctx, acrClient, repoName, tagRegex, timeToCompare, lastTag)
 		if err != nil {
 			return -1, err
 		}
@@ -180,8 +180,8 @@ func getRepositoryAndTagRegex(filter string) (string, string, error) {
 	return repoAndRegex[0], repoAndRegex[1], nil
 }
 
-// ParseDuration analog to time.ParseDuration() but with days added.
-func ParseDuration(ago string) (time.Duration, error) {
+// parseDuration analog to time.ParseDuration() but with days added.
+func parseDuration(ago string) (time.Duration, error) {
 	var days int
 	var durationString string
 	if strings.Contains(ago, "d") {
@@ -206,10 +206,10 @@ func ParseDuration(ago string) (time.Duration, error) {
 	return (-1 * duration), nil
 }
 
-// GetTagsToDelete gets all tags that should be deleted according to the ago flag and the filter flag, this will at most return 100 tags,
+// getTagsToDelete gets all tags that should be deleted according to the ago flag and the filter flag, this will at most return 100 tags,
 // returns a pointer to a slice that contains the tags that will be deleted, the last tag obtained through the AcrListTags method
 // and an error in case it occurred, the fourth return value contains a map that is used to determine how many tags a manifest has
-func GetTagsToDelete(ctx context.Context,
+func getTagsToDelete(ctx context.Context,
 	acrClient api.AcrCLIClientInterface,
 	repoName string,
 	filter *regexp.Regexp,
@@ -249,11 +249,11 @@ func GetTagsToDelete(ctx context.Context,
 	return nil, "", nil
 }
 
-// PurgeDanglingManifests deletes all manifests that do not have any tags associated with them.
-func PurgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string) (int, error) {
+// purgeDanglingManifests deletes all manifests that do not have any tags associated with them.
+func purgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string) (int, error) {
 	fmt.Printf("Deleting manifests for repository: %s\n", repoName)
 	deletedManifestsCount := 0
-	manifestsToDelete, err := GetManifestsToDelete(ctx, acrClient, repoName)
+	manifestsToDelete, err := getManifestsToDelete(ctx, acrClient, repoName)
 	if err != nil {
 		return -1, err
 	}
@@ -284,9 +284,9 @@ func PurgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInter
 	return deletedManifestsCount, nil
 }
 
-// GetManifestsToDelete gets all the manifests that should be deleted, this means that do not have any tag and that do not form part
+// getManifestsToDelete gets all the manifests that should be deleted, this means that do not have any tag and that do not form part
 // of a manifest list that has tags refrerencing it.
-func GetManifestsToDelete(ctx context.Context, acrClient api.AcrCLIClientInterface, repoName string) (*[]acr.ManifestAttributesBase, error) {
+func getManifestsToDelete(ctx context.Context, acrClient api.AcrCLIClientInterface, repoName string) (*[]acr.ManifestAttributesBase, error) {
 	lastManifestDigest := ""
 	manifestsToDelete := []acr.ManifestAttributesBase{}
 	resultManifests, err := acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
@@ -341,13 +341,13 @@ func GetManifestsToDelete(ctx context.Context, acrClient api.AcrCLIClientInterfa
 	return &manifestsToDelete, nil
 }
 
-// DryRunPurge outputs everything that would be deleted if the purge command was executed
-func DryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string, ago string, filter string, untagged bool) (int, int, error) {
+// dryRunPurge outputs everything that would be deleted if the purge command was executed
+func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string, ago string, filter string, untagged bool) (int, int, error) {
 	deletedTagsCount := 0
 	deletedManifestsCount := 0
 	deletedTags := map[string]int{}
 	fmt.Printf("Deleting tags for repository: %s\n", repoName)
-	agoDuration, err := ParseDuration(ago)
+	agoDuration, err := parseDuration(ago)
 	if err != nil {
 		return -1, -1, err
 	}
@@ -358,7 +358,7 @@ func DryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 		return -1, -1, err
 	}
 	lastTag := ""
-	tagsToDelete, lastTag, err := GetTagsToDelete(ctx, acrClient, repoName, regex, timeToCompare, "")
+	tagsToDelete, lastTag, err := getTagsToDelete(ctx, acrClient, repoName, regex, timeToCompare, "")
 
 	if err != nil {
 		return -1, -1, err
@@ -373,14 +373,14 @@ func DryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 			fmt.Printf("%s/%s:%s\n", loginURL, repoName, *tag.Name)
 			deletedTagsCount++
 		}
-		tagsToDelete, lastTag, err = GetTagsToDelete(ctx, acrClient, repoName, regex, timeToCompare, lastTag)
+		tagsToDelete, lastTag, err = getTagsToDelete(ctx, acrClient, repoName, regex, timeToCompare, lastTag)
 		if err != nil {
 			return -1, -1, err
 		}
 	}
 	if untagged {
 		fmt.Printf("Deleting manifests for repository: %s\n", repoName)
-		countMap, err := CountTagsByManifest(ctx, acrClient, repoName)
+		countMap, err := countTagsByManifest(ctx, acrClient, repoName)
 		if err != nil {
 			return -1, -1, err
 		}
@@ -438,8 +438,8 @@ func DryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 	return deletedTagsCount, deletedManifestsCount, nil
 }
 
-// CountTagsByManifest returns a map that for a given manifest digest contains the number of tags associated to it.
-func CountTagsByManifest(ctx context.Context, acrClient api.AcrCLIClientInterface, repoName string) (*map[string]int, error) {
+// countTagsByManifest returns a map that for a given manifest digest contains the number of tags associated to it.
+func countTagsByManifest(ctx context.Context, acrClient api.AcrCLIClientInterface, repoName string) (*map[string]int, error) {
 	countMap := map[string]int{}
 	lastTag := ""
 	resultTags, err := acrClient.GetAcrTags(ctx, repoName, "", lastTag)

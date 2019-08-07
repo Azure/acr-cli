@@ -18,15 +18,15 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// TestPurgeTags contains all the tests regarding the PurgeTags method which is called when the --dry-run flag is
+// TestPurgeTags contains all the tests regarding the purgeTags method which is called when the --dry-run flag is
 // not set.
 func TestPurgeTags(t *testing.T) {
-	// First test if repository is not known PurgeTags should only call GetAcrTags and return no error.
+	// First test if repository is not known purgeTags should only call GetAcrTags and return no error.
 	t.Run("RepositoryNotFoundTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(notFoundTagResponse, errors.New("testRepo not found")).Once()
-		deletedTags, err := PurgeTags(testCtx, mockClient, testLoginURL, testRepo, "1d", "[\\s\\S]*")
+		deletedTags, err := purgeTags(testCtx, mockClient, testLoginURL, testRepo, "1d", "[\\s\\S]*")
 		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -36,7 +36,7 @@ func TestPurgeTags(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(EmptyListTagsResult, nil).Once()
-		deletedTags, err := PurgeTags(testCtx, mockClient, testLoginURL, testRepo, "1d", "[\\s\\S]*")
+		deletedTags, err := purgeTags(testCtx, mockClient, testLoginURL, testRepo, "1d", "[\\s\\S]*")
 		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -48,7 +48,7 @@ func TestPurgeTags(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(OneTagResult, nil).Once()
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "latest").Return(EmptyListTagsResult, nil).Once()
-		deletedTags, err := PurgeTags(testCtx, mockClient, testLoginURL, testRepo, "1d", "[\\s\\S]*")
+		deletedTags, err := purgeTags(testCtx, mockClient, testLoginURL, testRepo, "1d", "[\\s\\S]*")
 		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -60,7 +60,7 @@ func TestPurgeTags(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(OneTagResult, nil).Once()
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "latest").Return(EmptyListTagsResult, nil).Once()
-		deletedTags, err := PurgeTags(testCtx, mockClient, testLoginURL, testRepo, "0m", "^hello.*")
+		deletedTags, err := purgeTags(testCtx, mockClient, testLoginURL, testRepo, "0m", "^hello.*")
 		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -69,7 +69,7 @@ func TestPurgeTags(t *testing.T) {
 	t.Run("InvalidRegexTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
-		deletedTags, err := PurgeTags(testCtx, mockClient, testLoginURL, testRepo, "0m", "[")
+		deletedTags, err := purgeTags(testCtx, mockClient, testLoginURL, testRepo, "0m", "[")
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
 		assert.NotEqual(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -78,7 +78,7 @@ func TestPurgeTags(t *testing.T) {
 	t.Run("InvalidDurationTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
-		deletedTags, err := PurgeTags(testCtx, mockClient, testLoginURL, testRepo, "0e", "^la.*")
+		deletedTags, err := purgeTags(testCtx, mockClient, testLoginURL, testRepo, "0e", "^la.*")
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
@@ -88,7 +88,7 @@ func TestPurgeTags(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(nil, errors.New("unauthorized")).Once()
-		deletedTags, err := PurgeTags(testCtx, mockClient, testLoginURL, testRepo, "1d", "[\\s\\S]*")
+		deletedTags, err := purgeTags(testCtx, mockClient, testLoginURL, testRepo, "1d", "[\\s\\S]*")
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
@@ -100,7 +100,7 @@ func TestPurgeTags(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(OneTagResult, nil).Once()
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "latest").Return(nil, errors.New("unauthorized")).Once()
-		deletedTags, err := PurgeTags(testCtx, mockClient, testLoginURL, testRepo, "1d", "[\\s\\S]*")
+		deletedTags, err := purgeTags(testCtx, mockClient, testLoginURL, testRepo, "1d", "[\\s\\S]*")
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
@@ -112,7 +112,7 @@ func TestPurgeTags(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(DeleteDisabledOneTagResult, nil).Once()
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "latest").Return(EmptyListTagsResult, nil).Once()
-		deletedTags, err := PurgeTags(testCtx, mockClient, testLoginURL, testRepo, "0m", "^la.*")
+		deletedTags, err := purgeTags(testCtx, mockClient, testLoginURL, testRepo, "0m", "^la.*")
 		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -122,7 +122,7 @@ func TestPurgeTags(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(InvalidDateOneTagResult, nil).Once()
-		deletedTags, err := PurgeTags(testCtx, mockClient, testLoginURL, testRepo, "0m", "^la.*")
+		deletedTags, err := purgeTags(testCtx, mockClient, testLoginURL, testRepo, "0m", "^la.*")
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
@@ -136,7 +136,7 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(OneTagResult, nil).Once()
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "latest").Return(EmptyListTagsResult, nil).Once()
 		mockClient.On("DeleteAcrTag", testCtx, testRepo, "latest").Return(&deletedResponse, nil).Once()
-		deletedTags, err := PurgeTags(testCtx, &mockClient, testLoginURL, testRepo, "0m", "^la.*")
+		deletedTags, err := purgeTags(testCtx, &mockClient, testLoginURL, testRepo, "0m", "^la.*")
 		worker.StopDispatcher()
 		assert.Equal(1, deletedTags, "Number of deleted elements should be 1")
 		assert.Equal(nil, err, "Error should be nil")
@@ -156,7 +156,7 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.On("DeleteAcrTag", testCtx, testRepo, "v2").Return(&deletedResponse, nil).Once()
 		mockClient.On("DeleteAcrTag", testCtx, testRepo, "v3").Return(&deletedResponse, nil).Once()
 		mockClient.On("DeleteAcrTag", testCtx, testRepo, "v4").Return(&deletedResponse, nil).Once()
-		deletedTags, err := PurgeTags(testCtx, &mockClient, testLoginURL, testRepo, "0m", "[\\s\\S]*")
+		deletedTags, err := purgeTags(testCtx, &mockClient, testLoginURL, testRepo, "0m", "[\\s\\S]*")
 		worker.StopDispatcher()
 		assert.Equal(5, deletedTags, "Number of deleted elements should be 5")
 		assert.Equal(nil, err, "Error should be nil")
@@ -170,7 +170,7 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(OneTagResult, nil).Once()
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "latest").Return(nil, nil).Once()
 		mockClient.On("DeleteAcrTag", testCtx, testRepo, "latest").Return(&notFoundResponse, errors.New("not found")).Once()
-		deletedTags, err := PurgeTags(testCtx, &mockClient, testLoginURL, testRepo, "0m", "^la.*")
+		deletedTags, err := purgeTags(testCtx, &mockClient, testLoginURL, testRepo, "0m", "^la.*")
 		worker.StopDispatcher()
 		// If it is not found it can be assumed deleted.
 		assert.Equal(1, deletedTags, "Number of deleted elements should be 1")
@@ -184,7 +184,7 @@ func TestPurgeTags(t *testing.T) {
 		worker.StartDispatcher(testCtx, &wg, &mockClient, 6)
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(OneTagResult, nil).Once()
 		mockClient.On("DeleteAcrTag", testCtx, testRepo, "latest").Return(nil, errors.New("error during delete")).Once()
-		deletedTags, err := PurgeTags(testCtx, &mockClient, testLoginURL, testRepo, "0m", "^la.*")
+		deletedTags, err := purgeTags(testCtx, &mockClient, testLoginURL, testRepo, "0m", "^la.*")
 		worker.StopDispatcher()
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
 		assert.NotEqual(nil, err, "Error should not be nil")
@@ -192,15 +192,15 @@ func TestPurgeTags(t *testing.T) {
 	})
 }
 
-// TestPurgeManifests contains the tests for the PurgeDanglingManifests method, it is invoked when the --untagged flag is set
+// TestPurgeManifests contains the tests for the purgeDanglingManifests method, it is invoked when the --untagged flag is set
 // and the --dry-run flag is not set
 func TestPurgeManifests(t *testing.T) {
-	// First test if repository is not known PurgeDanglingManifests should only call GetAcrManifests once and return no error
+	// First test if repository is not known purgeDanglingManifests should only call GetAcrManifests once and return no error
 	t.Run("RepositoryNotFoundTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrManifests", testCtx, testRepo, "", "").Return(notFoundManifestResponse, errors.New("testRepo not found")).Once()
-		deletedTags, err := PurgeDanglingManifests(testCtx, mockClient, testLoginURL, testRepo)
+		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, testLoginURL, testRepo)
 		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -210,7 +210,7 @@ func TestPurgeManifests(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrManifests", testCtx, testRepo, "", "").Return(nil, errors.New("unauthorized")).Once()
-		deletedTags, err := PurgeDanglingManifests(testCtx, mockClient, testLoginURL, testRepo)
+		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, testLoginURL, testRepo)
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
@@ -222,7 +222,7 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrManifests", testCtx, testRepo, "", "").Return(singleManifestV2WithTagsResult, nil).Once()
 		mockClient.On("GetAcrManifests", testCtx, testRepo, "", "sha:abc").Return(EmptyListManifestsResult, nil).Once()
-		deletedTags, err := PurgeDanglingManifests(testCtx, mockClient, testLoginURL, testRepo)
+		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, testLoginURL, testRepo)
 		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -233,7 +233,7 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrManifests", testCtx, testRepo, "", "").Return(singleManifestV2WithTagsResult, nil).Once()
 		mockClient.On("GetAcrManifests", testCtx, testRepo, "", "sha:abc").Return(nil, errors.New("error getting manifests")).Once()
-		deletedTags, err := PurgeDanglingManifests(testCtx, mockClient, testLoginURL, testRepo)
+		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, testLoginURL, testRepo)
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
@@ -245,7 +245,7 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrManifests", testCtx, testRepo, "", "").Return(singleMultiArchWithTagsResult, nil).Once()
 		mockClient.On("GetManifest", testCtx, testRepo, "sha:356").Return(nil, errors.New("error getting manifest")).Once()
-		deletedTags, err := PurgeDanglingManifests(testCtx, mockClient, testLoginURL, testRepo)
+		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, testLoginURL, testRepo)
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
 		assert.NotEqual(nil, err, "Error not should be nil")
 		mockClient.AssertExpectations(t)
@@ -256,7 +256,7 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrManifests", testCtx, testRepo, "", "").Return(singleMultiArchWithTagsResult, nil).Once()
 		mockClient.On("GetManifest", testCtx, testRepo, "sha:356").Return([]byte("invalid manifest"), nil).Once()
-		deletedTags, err := PurgeDanglingManifests(testCtx, mockClient, testLoginURL, testRepo)
+		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, testLoginURL, testRepo)
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
 		assert.NotEqual(nil, err, "Error not should be nil")
 		mockClient.AssertExpectations(t)
@@ -273,7 +273,7 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient.On("GetAcrManifests", testCtx, testRepo, "", "sha:234").Return(EmptyListManifestsResult, nil).Once()
 		mockClient.On("DeleteManifest", testCtx, testRepo, "sha:123").Return(nil, nil).Once()
 		mockClient.On("DeleteManifest", testCtx, testRepo, "sha:234").Return(nil, nil).Once()
-		deletedTags, err := PurgeDanglingManifests(testCtx, mockClient, testLoginURL, testRepo)
+		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, testLoginURL, testRepo)
 		worker.StopDispatcher()
 		assert.Equal(2, deletedTags, "Number of deleted elements should be 2")
 		assert.Equal(nil, err, "Error should be nil")
@@ -290,7 +290,7 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient.On("GetAcrManifests", testCtx, testRepo, "", "sha:234").Return(EmptyListManifestsResult, nil).Once()
 		mockClient.On("DeleteManifest", testCtx, testRepo, "sha:123").Return(nil, nil).Once()
 		mockClient.On("DeleteManifest", testCtx, testRepo, "sha:234").Return(&notFoundResponse, errors.New("manifest not found")).Once()
-		deletedTags, err := PurgeDanglingManifests(testCtx, mockClient, testLoginURL, testRepo)
+		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, testLoginURL, testRepo)
 		worker.StopDispatcher()
 		assert.Equal(2, deletedTags, "Number of deleted elements should be 2")
 		assert.Equal(nil, err, "Error should be nil")
@@ -306,7 +306,7 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient.On("GetAcrManifests", testCtx, testRepo, "", "sha:234").Return(EmptyListManifestsResult, nil).Once()
 		mockClient.On("DeleteManifest", testCtx, testRepo, "sha:123").Return(nil, nil).Once()
 		mockClient.On("DeleteManifest", testCtx, testRepo, "sha:234").Return(nil, errors.New("error deleting manifest")).Once()
-		deletedTags, err := PurgeDanglingManifests(testCtx, mockClient, testLoginURL, testRepo)
+		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, testLoginURL, testRepo)
 		worker.StopDispatcher()
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
 		assert.NotEqual(nil, err, "Error should not be nil")
@@ -322,7 +322,7 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient.On("GetAcrManifests", testCtx, testRepo, "", "sha:abc").Return(doubleManifestV2WithoutTagsResult, nil).Once()
 		mockClient.On("GetAcrManifests", testCtx, testRepo, "", "sha:234").Return(EmptyListManifestsResult, nil).Once()
 		mockClient.On("DeleteManifest", testCtx, testRepo, "sha:123").Return(nil, errors.New("error deleting manifest")).Once()
-		deletedTags, err := PurgeDanglingManifests(testCtx, mockClient, testLoginURL, testRepo)
+		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, testLoginURL, testRepo)
 		worker.StopDispatcher()
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
 		assert.NotEqual(nil, err, "Error should not be nil")
@@ -340,7 +340,7 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient.On("GetAcrManifests", testCtx, testRepo, "", "sha:356").Return(doubleManifestV2WithoutTagsResult, nil).Once()
 		mockClient.On("GetAcrManifests", testCtx, testRepo, "", "sha:234").Return(EmptyListManifestsResult, nil).Once()
 		mockClient.On("DeleteManifest", testCtx, testRepo, "sha:234").Return(nil, nil).Once()
-		deletedTags, err := PurgeDanglingManifests(testCtx, mockClient, testLoginURL, testRepo)
+		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, testLoginURL, testRepo)
 		worker.StopDispatcher()
 		assert.Equal(1, deletedTags, "Number of deleted elements should be 1")
 		assert.Equal(nil, err, "Error should be nil")
@@ -348,7 +348,7 @@ func TestPurgeManifests(t *testing.T) {
 	})
 }
 
-// TestDryRun contains the tests for the DryRunPurge method, it is called when the --dry-run flag is set.
+// TestDryRun contains the tests for the dryRunPurge method, it is called when the --dry-run flag is set.
 func TestDryRun(t *testing.T) {
 	// First test if repository is not know DryRun should not return an error, and there should not be any tags or manifest deleted.
 	t.Run("RepositoryNotFoundTest", func(t *testing.T) {
@@ -356,7 +356,7 @@ func TestDryRun(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrManifests", testCtx, testRepo, "", "").Return(notFoundManifestResponse, errors.New("testRepo not found")).Once()
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(notFoundTagResponse, errors.New("testRepo not found")).Twice()
-		deletedTags, deletedManifests, err := DryRunPurge(testCtx, mockClient, testLoginURL, testRepo, "1d", "[\\s\\S]*", true)
+		deletedTags, deletedManifests, err := dryRunPurge(testCtx, mockClient, testLoginURL, testRepo, "1d", "[\\s\\S]*", true)
 		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
 		assert.Equal(0, deletedManifests, "Number of deleted elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
@@ -366,7 +366,7 @@ func TestDryRun(t *testing.T) {
 	t.Run("InvalidDurationTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
-		deletedTags, deletedManifests, err := DryRunPurge(testCtx, mockClient, testLoginURL, testRepo, "0e", "[\\s\\S]*", true)
+		deletedTags, deletedManifests, err := dryRunPurge(testCtx, mockClient, testLoginURL, testRepo, "0e", "[\\s\\S]*", true)
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
 		assert.Equal(-1, deletedManifests, "Number of deleted elements should be 0")
 		assert.NotEqual(nil, err, "Error should not be nil")
@@ -376,7 +376,7 @@ func TestDryRun(t *testing.T) {
 	t.Run("InvalidRegexTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
-		deletedTags, deletedManifests, err := DryRunPurge(testCtx, mockClient, testLoginURL, testRepo, "0m", "[", true)
+		deletedTags, deletedManifests, err := dryRunPurge(testCtx, mockClient, testLoginURL, testRepo, "0m", "[", true)
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
 		assert.Equal(-1, deletedManifests, "Number of deleted elements should be 0")
 		assert.NotEqual(nil, err, "Error should be nil")
@@ -388,7 +388,7 @@ func TestDryRun(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(FourTagsResult, nil).Once()
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "v4").Return(EmptyListTagsResult, nil).Once()
-		deletedTags, deletedManifests, err := DryRunPurge(testCtx, mockClient, testLoginURL, testRepo, "0m", "[\\s\\S]*", false)
+		deletedTags, deletedManifests, err := dryRunPurge(testCtx, mockClient, testLoginURL, testRepo, "0m", "[\\s\\S]*", false)
 		assert.Equal(4, deletedTags, "Number of deleted elements should be 4")
 		assert.Equal(0, deletedManifests, "Number of deleted elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
@@ -399,7 +399,7 @@ func TestDryRun(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(nil, errors.New("error fetching tags")).Once()
-		deletedTags, deletedManifests, err := DryRunPurge(testCtx, mockClient, testLoginURL, testRepo, "0m", "[\\s\\S]*", false)
+		deletedTags, deletedManifests, err := dryRunPurge(testCtx, mockClient, testLoginURL, testRepo, "0m", "[\\s\\S]*", false)
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
 		assert.Equal(-1, deletedManifests, "Number of deleted elements should be -1")
 		assert.NotEqual(nil, err, "Error should not be nil")
@@ -411,7 +411,7 @@ func TestDryRun(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(FourTagsResult, nil).Once()
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "v4").Return(nil, errors.New("error fetching tags")).Once()
-		deletedTags, deletedManifests, err := DryRunPurge(testCtx, mockClient, testLoginURL, testRepo, "0m", "[\\s\\S]*", false)
+		deletedTags, deletedManifests, err := dryRunPurge(testCtx, mockClient, testLoginURL, testRepo, "0m", "[\\s\\S]*", false)
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
 		assert.Equal(-1, deletedManifests, "Number of deleted elements should be -1")
 		assert.NotEqual(nil, err, "Error should not be nil")
@@ -423,7 +423,7 @@ func TestDryRun(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(EmptyListTagsResult, nil).Twice()
 		mockClient.On("GetAcrManifests", testCtx, testRepo, "", "").Return(nil, errors.New("testRepo not found")).Once()
-		deletedTags, deletedManifests, err := DryRunPurge(testCtx, mockClient, testLoginURL, testRepo, "0m", "[\\s\\S]*", true)
+		deletedTags, deletedManifests, err := dryRunPurge(testCtx, mockClient, testLoginURL, testRepo, "0m", "[\\s\\S]*", true)
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
 		assert.Equal(-1, deletedManifests, "Number of deleted elements should be -1")
 		assert.NotEqual(nil, err, "Error should not be nil")
@@ -435,7 +435,7 @@ func TestDryRun(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(EmptyListTagsResult, nil).Once()
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(nil, errors.New("error fetching tags")).Once()
-		deletedTags, deletedManifests, err := DryRunPurge(testCtx, mockClient, testLoginURL, testRepo, "0m", "[\\s\\S]*", true)
+		deletedTags, deletedManifests, err := dryRunPurge(testCtx, mockClient, testLoginURL, testRepo, "0m", "[\\s\\S]*", true)
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
 		assert.Equal(-1, deletedManifests, "Number of deleted elements should be -1")
 		assert.NotEqual(nil, err, "Error should not be nil")
@@ -449,7 +449,7 @@ func TestDryRun(t *testing.T) {
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "v4").Return(EmptyListTagsResult, nil).Twice()
 		mockClient.On("GetAcrManifests", testCtx, testRepo, "", "").Return(singleMultiArchWithTagsResult, nil).Once()
 		mockClient.On("GetManifest", testCtx, testRepo, "sha:356").Return(nil, errors.New("error getting manifest")).Once()
-		deletedTags, deletedManifests, err := DryRunPurge(testCtx, mockClient, testLoginURL, testRepo, "0m", "^lat.*", true)
+		deletedTags, deletedManifests, err := dryRunPurge(testCtx, mockClient, testLoginURL, testRepo, "0m", "^lat.*", true)
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
 		assert.Equal(-1, deletedManifests, "Number of deleted elements should be -1")
 		assert.NotEqual(nil, err, "Error should not be nil")
@@ -463,7 +463,7 @@ func TestDryRun(t *testing.T) {
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "v4").Return(EmptyListTagsResult, nil).Twice()
 		mockClient.On("GetAcrManifests", testCtx, testRepo, "", "").Return(singleMultiArchWithTagsResult, nil).Once()
 		mockClient.On("GetManifest", testCtx, testRepo, "sha:356").Return([]byte("invalid json"), nil).Once()
-		deletedTags, deletedManifests, err := DryRunPurge(testCtx, mockClient, testLoginURL, testRepo, "0m", "^lat.*", true)
+		deletedTags, deletedManifests, err := dryRunPurge(testCtx, mockClient, testLoginURL, testRepo, "0m", "^lat.*", true)
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
 		assert.Equal(-1, deletedManifests, "Number of deleted elements should be -1")
 		assert.NotEqual(nil, err, "Error should not be nil")
@@ -477,7 +477,7 @@ func TestDryRun(t *testing.T) {
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(FourTagsResult, nil).Once()
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "v4").Return(EmptyListTagsResult, nil).Once()
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "v4").Return(nil, errors.New("error fetching tags")).Once()
-		deletedTags, deletedManifests, err := DryRunPurge(testCtx, mockClient, testLoginURL, testRepo, "0m", "^lat.*", true)
+		deletedTags, deletedManifests, err := dryRunPurge(testCtx, mockClient, testLoginURL, testRepo, "0m", "^lat.*", true)
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
 		assert.Equal(-1, deletedManifests, "Number of deleted elements should be -1")
 		assert.NotEqual(nil, err, "Error should be nil")
@@ -494,7 +494,7 @@ func TestDryRun(t *testing.T) {
 		mockClient.On("GetAcrManifests", testCtx, testRepo, "", "").Return(singleMultiArchWithTagsResult, nil).Once()
 		mockClient.On("GetManifest", testCtx, testRepo, "sha:356").Return(multiArchBytes, nil).Once()
 		mockClient.On("GetAcrManifests", testCtx, testRepo, "", "sha:356").Return(nil, errors.New("error fetching manifests")).Once()
-		deletedTags, deletedManifests, err := DryRunPurge(testCtx, mockClient, testLoginURL, testRepo, "0m", "^lat.*", true)
+		deletedTags, deletedManifests, err := dryRunPurge(testCtx, mockClient, testLoginURL, testRepo, "0m", "^lat.*", true)
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
 		assert.Equal(-1, deletedManifests, "Number of deleted elements should be -1")
 		assert.NotEqual(nil, err, "Error should be nil")
@@ -511,7 +511,7 @@ func TestDryRun(t *testing.T) {
 		mockClient.On("GetManifest", testCtx, testRepo, "sha:356").Return(multiArchBytes, nil).Once()
 		mockClient.On("GetAcrManifests", testCtx, testRepo, "", "sha:356").Return(doubleManifestV2WithoutTagsResult, nil).Once()
 		mockClient.On("GetAcrManifests", testCtx, testRepo, "", "sha:234").Return(EmptyListManifestsResult, nil).Once()
-		deletedTags, deletedManifests, err := DryRunPurge(testCtx, mockClient, testLoginURL, testRepo, "0m", "^lat.*", true)
+		deletedTags, deletedManifests, err := dryRunPurge(testCtx, mockClient, testLoginURL, testRepo, "0m", "^lat.*", true)
 		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
 		assert.Equal(1, deletedManifests, "Number of deleted elements should be 1")
 		assert.Equal(nil, err, "Error should be nil")
@@ -566,7 +566,7 @@ func TestParseDuration(t *testing.T) {
 	}
 	assert := assert.New(t)
 	for _, table := range tables {
-		durationResult, errorResult := ParseDuration(table.durationString)
+		durationResult, errorResult := parseDuration(table.durationString)
 		assert.Equal(table.duration, durationResult)
 		assert.Equal(table.err, errorResult)
 	}
