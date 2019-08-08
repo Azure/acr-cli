@@ -25,14 +25,19 @@ import (
 // The constants for this file are defined here.
 const (
 	newPurgeCmdLongMessage = `acr purge: untag old images and delete dangling manifests.`
-	purgeExampleMessage    = `  - Delete all tags that are older than 1 day
-    acr purge -r MyRegistry --filter "MyRepository:.*" --ago 1d
+	purgeExampleMessage    = `  - Delete all tags that are older than 1 day in the example.azurecr.io registry inside the hello-world repository
+    	acr purge -r example --filter "hello-world:.*" --ago 1d
 
-  - Delete all tags that are older than 1 day and begin with hello
-    acr purge -r MyRegistry --filter "MyRepository:^hello.*" --ago 1d 
+  - Delete all tags that are older than 7 days and begin with hello in the example.azurecr.io registry inside the hello-world repository
+    	acr purge -r example --filter "hello-world:^hello.*" --ago 7d 
 
-  - Delete all tags that match a regex filter and remove the dangling manifests
-	acr purge -r MyRegistry --filter "MyRepository:RegexFilter" --ago 1d --untagged 
+  - Delete all tags that contain the word test in the tag name and are older than 5 days in the example.azurecr.io registry inside the hello-world 
+    repository, after that, remove the dangling manifests in the same repository
+	acr purge -r example --filter "hello-world:\w*test\w*" --ago 5d --untagged 
+
+  - Delete all tags older than 1 day in the example.azurecr.io registry inside the hello-world repository using the credentials found in 
+    the C://Users/docker/config.json path
+	acr purge -r example --filter "hello-world:.*" --ago 1d --config C://Users/docker/config.json
 `
 
 	defaultNumWorkers       = 6
@@ -135,12 +140,13 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().BoolVar(&purgeParams.untagged, "untagged", false, "If untagged is set all manifest that do not have any tags associated to them will be deleted")
-	cmd.Flags().BoolVar(&purgeParams.dryRun, "dry-run", false, "Don't actually remove any tag or manifest, instead, show if they would be deleted")
-	cmd.Flags().IntVar(&purgeParams.numWorkers, "concurrency", defaultNumWorkers, "The number of concurrent requests sent to the registry")
-	cmd.Flags().StringVar(&purgeParams.ago, "ago", "", "The images that were created before this duration will be deleted")
-	cmd.Flags().StringArrayVarP(&purgeParams.filters, "filter", "f", nil, "Given as a regular expression, if a tag matches the pattern and is older than the time specified in ago it gets deleted")
+	cmd.Flags().BoolVar(&purgeParams.untagged, "untagged", false, "If the untagged flag is set all the manifests that do not have any tags associated to them will be also purged, except if they belong to a manifest list that contains at least one tag")
+	cmd.Flags().BoolVar(&purgeParams.dryRun, "dry-run", false, "If the dry-run flag is set no manifest or tag will be deleted, the output would be the same as if they were deleted")
+	cmd.Flags().IntVar(&purgeParams.numWorkers, "concurrency", defaultNumWorkers, "The maximum number of concurrent requests sent to the registry")
+	cmd.Flags().StringVar(&purgeParams.ago, "ago", "", "The tags that were last updated before this duration will be deleted")
+	cmd.Flags().StringArrayVarP(&purgeParams.filters, "filter", "f", nil, "Specify the repository and a regular expression filter for the tag name, if a tag matches the filter and is older than the duration specified in ago it will be deleted")
 	cmd.Flags().StringArrayVarP(&purgeParams.configs, "config", "c", nil, "Authentication config paths")
+	cmd.Flags().BoolP("help", "h", false, "Print usage")
 	cmd.MarkFlagRequired("filter")
 	cmd.MarkFlagRequired("ago")
 	return cmd
