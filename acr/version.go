@@ -8,7 +8,7 @@ package acr
 
 // UserAgent returns the UserAgent string to use when sending http.Requests.
 func UserAgent() string {
-	return "Azure-SDK-For-Go/0.0.0 acr/2018-08-10-preview"
+	return "Azure-SDK-For-Go/0.0.0 acr/2019-07-15-preview"
 }
 
 // Version returns the semantic version (see http://semver.org) of the client.
