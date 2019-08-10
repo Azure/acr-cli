@@ -174,7 +174,7 @@ func (c *AcrCLIClient) isExpired() bool {
 		// there is no token so basic auth can be assumed.
 		return false
 	}
-	// 5 minutes are substracted to make sure that there won't be a case were a client with an expired token tries doing a request.
+	// 5 minutes are subtracted to make sure that there won't be a case were a client with an expired token tries doing a request.
 	return (time.Now().Add(5 * time.Minute)).Unix() > c.accessTokenExp
 }
 
@@ -221,7 +221,7 @@ func (c *AcrCLIClient) GetAcrManifests(ctx context.Context, repoName string, ord
 	return &manifests, nil
 }
 
-// DeleteManifestByDigest deletes a manifest using the digest as a reference.
+// DeleteManifest deletes a manifest using the digest as a reference.
 func (c *AcrCLIClient) DeleteManifest(ctx context.Context, repoName string, reference string) (*autorest.Response, error) {
 	if c.isExpired() {
 		if err := refreshAcrCLIClientToken(ctx, c); err != nil {

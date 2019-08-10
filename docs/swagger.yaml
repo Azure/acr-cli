@@ -422,7 +422,7 @@ paths:
       tags:
         - AcrRepository
         - AcrMetadata
-      description: List respository metadata
+      description: List repository metadata
       operationId: AcrListRepositoryMetadata
       parameters:
       - $ref: '#/parameters/ImageName'

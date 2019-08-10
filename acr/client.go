@@ -2250,7 +2250,7 @@ func (client BaseClient) ListManifestMetadataResponder(resp *http.Response) (res
 	return
 }
 
-// ListRepositoryMetadata list respository metadata
+// ListRepositoryMetadata list repository metadata
 // Parameters:
 // name - name of the image (including the namespace)
 func (client BaseClient) ListRepositoryMetadata(ctx context.Context, name string) (result RepositoryMetadata, err error) {

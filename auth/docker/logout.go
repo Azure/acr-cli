@@ -11,6 +11,7 @@ import (
 )
 
 var (
+	// ErrNotLoggedIn defines the error that appears when a user is not logged into a registry.
 	ErrNotLoggedIn = errors.New("not logged in")
 )
 

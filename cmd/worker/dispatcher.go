@@ -14,7 +14,7 @@ import (
 var WorkerQueue chan chan PurgeJob
 var workers []PurgeWorker
 
-// StartDispatcher creates the workers and a goroutine to continously fetch jobs for them.
+// StartDispatcher creates the workers and a goroutine to continuously fetch jobs for them.
 func StartDispatcher(ctx context.Context, wg *sync.WaitGroup, acrClient api.AcrCLIClientInterface, nWorkers int) {
 	WorkerQueue = make(chan chan PurgeJob, nWorkers)
 	workers = []PurgeWorker{}

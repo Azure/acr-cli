@@ -351,7 +351,7 @@ func getManifestsToDelete(ctx context.Context, acrClient api.AcrCLIClientInterfa
 				if err != nil {
 					return nil, err
 				}
-				var multiArchManifest MultiArchManifest
+				var multiArchManifest multiArchManifest
 				err = json.Unmarshal(manifestList, &multiArchManifest)
 				if err != nil {
 					return nil, err
@@ -455,7 +455,7 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 					if err != nil {
 						return -1, -1, err
 					}
-					var multiArchManifest MultiArchManifest
+					var multiArchManifest multiArchManifest
 					err = json.Unmarshal(manifestList, &multiArchManifest)
 					if err != nil {
 						return -1, -1, err
@@ -520,20 +520,20 @@ func countTagsByManifest(ctx context.Context, acrClient api.AcrCLIClientInterfac
 }
 
 // In order to parse the content of a mutliarch manifest string the following structs were defined.
-type MultiArchManifest struct {
-	Manifests     []Manifest `json:"manifests"`
+type multiArchManifest struct {
+	Manifests     []manifest `json:"manifests"`
 	MediaType     string     `json:"mediaType"`
 	SchemaVersion int        `json:"schemaVersion"`
 }
 
-type Manifest struct {
+type manifest struct {
 	Digest    string   `json:"digest"`
 	MediaType string   `json:"mediaType"`
-	Platform  Platform `json:"platform"`
+	Platform  platform `json:"platform"`
 	Size      int64    `json:"size"`
 }
 
-type Platform struct {
+type platform struct {
 	Architecture string `json:"architecture"`
 	Os           string `json:"os"`
 }
