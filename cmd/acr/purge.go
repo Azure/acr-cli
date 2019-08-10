@@ -346,17 +346,17 @@ func getManifestsToDelete(ctx context.Context, acrClient api.AcrCLIClientInterfa
 			if *manifest.MediaType == manifestListContentType && manifest.Tags != nil {
 				// If a manifest list is found and it has tags then all the dependent digests are
 				// marked to not be deleted.
-				var manifestList []byte
-				manifestList, err = acrClient.GetManifest(ctx, repoName, *manifest.Digest)
+				var manifestListBytes []byte
+				manifestListBytes, err = acrClient.GetManifest(ctx, repoName, *manifest.Digest)
 				if err != nil {
 					return nil, err
 				}
-				var multiArchManifest multiArchManifest
-				err = json.Unmarshal(manifestList, &multiArchManifest)
+				var manifestList multiArchManifest
+				err = json.Unmarshal(manifestListBytes, &manifestList)
 				if err != nil {
 					return nil, err
 				}
-				for _, dependentDigest := range multiArchManifest.Manifests {
+				for _, dependentDigest := range manifestList.Manifests {
 					doNotDelete[dependentDigest.Digest] = true
 				}
 			} else if manifest.Tags == nil {
@@ -450,17 +450,17 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 			for _, manifest := range manifests {
 				// If the manifest is manifest list and would not get deleted then mark it's dependant manifests as not deletable.
 				if *manifest.MediaType == manifestListContentType && (*countMap)[*manifest.Digest] != deletedTags[*manifest.Digest] {
-					var manifestList []byte
-					manifestList, err = acrClient.GetManifest(ctx, repoName, *manifest.Digest)
+					var manifestListBytes []byte
+					manifestListBytes, err = acrClient.GetManifest(ctx, repoName, *manifest.Digest)
 					if err != nil {
 						return -1, -1, err
 					}
-					var multiArchManifest multiArchManifest
-					err = json.Unmarshal(manifestList, &multiArchManifest)
+					var manifestList multiArchManifest
+					err = json.Unmarshal(manifestListBytes, &manifestList)
 					if err != nil {
 						return -1, -1, err
 					}
-					for _, dependentDigest := range multiArchManifest.Manifests {
+					for _, dependentDigest := range manifestList.Manifests {
 						doNotDelete[dependentDigest.Digest] = true
 					}
 				} else if (*countMap)[*manifest.Digest] == deletedTags[*manifest.Digest] {
