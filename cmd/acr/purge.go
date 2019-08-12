@@ -47,11 +47,10 @@ const (
 // purgeParameters defines the parameters that the purge command uses (including the registry name, username and password).
 type purgeParameters struct {
 	*rootParameters
-	ago        string
-	filters    []string
-	untagged   bool
-	dryRun     bool
-	numWorkers int
+	ago      string
+	filters  []string
+	untagged bool
+	dryRun   bool
 }
 
 // The WaitGroup is used to make sure that the http requests are finished before exiting the program, and also to limit the
@@ -81,7 +80,7 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 			}
 			// In order to only have a fixed amount of http requests a dispatcher is started that will keep forwarding the jobs
 			// to the workers, which are goroutines that continuously fetch for tags/manifests to delete.
-			worker.StartDispatcher(ctx, &wg, acrClient, purgeParams.numWorkers)
+			worker.StartDispatcher(ctx, &wg, acrClient, defaultNumWorkers)
 			// A map is used to keep the regex tags for every repository.
 			tagFilters := map[string][]string{}
 			for _, filter := range purgeParams.filters {
@@ -142,10 +141,9 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 
 	cmd.Flags().BoolVar(&purgeParams.untagged, "untagged", false, "If the untagged flag is set all the manifests that do not have any tags associated to them will be also purged, except if they belong to a manifest list that contains at least one tag")
 	cmd.Flags().BoolVar(&purgeParams.dryRun, "dry-run", false, "If the dry-run flag is set no manifest or tag will be deleted, the output would be the same as if they were deleted")
-	cmd.Flags().IntVar(&purgeParams.numWorkers, "concurrency", defaultNumWorkers, "The maximum number of concurrent requests sent to the registry")
-	cmd.Flags().StringVar(&purgeParams.ago, "ago", "", "The tags that were last updated before this duration will be deleted")
+	cmd.Flags().StringVar(&purgeParams.ago, "ago", "", "The tags that were last updated before this duration will be deleted, the format is [number]d[string] where the first number represents an amount of days and the string is in a Go duration format (e.g. 2d3h6m selects images older than 2 days, 3 hours and 6 minutes)")
 	cmd.Flags().StringArrayVarP(&purgeParams.filters, "filter", "f", nil, "Specify the repository and a regular expression filter for the tag name, if a tag matches the filter and is older than the duration specified in ago it will be deleted")
-	cmd.Flags().StringArrayVarP(&purgeParams.configs, "config", "c", nil, "Authentication config paths")
+	cmd.Flags().StringArrayVarP(&purgeParams.configs, "config", "c", nil, "Authentication config paths (e.g. C://Users/docker/config.json)")
 	cmd.Flags().BoolP("help", "h", false, "Print usage")
 	cmd.MarkFlagRequired("filter")
 	cmd.MarkFlagRequired("ago")
