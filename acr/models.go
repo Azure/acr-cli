@@ -13,6 +13,13 @@ import (
 // The package's fully qualified name.
 const fqdn = "github.com/Azure/acr-cli/acr"
 
+// AccessToken ...
+type AccessToken struct {
+	autorest.Response `json:"-"`
+	// AccessToken - The access token for performing authenticated requests
+	AccessToken *string `json:"access_token,omitempty"`
+}
+
 // ChangeableAttributes ...
 type ChangeableAttributes struct {
 	// DeleteEnabled - Delete enabled
@@ -54,27 +61,6 @@ type Errors struct {
 type FsLayer struct {
 	// BlobSum - SHA of an image layer
 	BlobSum *string `json:"blobSum,omitempty"`
-}
-
-// GetAcrAccessTokenFromLoginOKResponse ...
-type GetAcrAccessTokenFromLoginOKResponse struct {
-	autorest.Response `json:"-"`
-	// AccessToken - The access token for performing authenticated requests
-	AccessToken *string `json:"access_token,omitempty"`
-}
-
-// GetAcrAccessTokenOKResponse ...
-type GetAcrAccessTokenOKResponse struct {
-	autorest.Response `json:"-"`
-	// AccessToken - The access token for performing authenticated requests
-	AccessToken *string `json:"access_token,omitempty"`
-}
-
-// GetAcrRefreshTokenOKResponse ...
-type GetAcrRefreshTokenOKResponse struct {
-	autorest.Response `json:"-"`
-	// RefreshToken - The refresh token to be used for generating access tokens
-	RefreshToken *string `json:"refresh_token,omitempty"`
 }
 
 // History a list of unstructured historical data for v1 compatibility
@@ -155,7 +141,7 @@ type ManifestAttributesBase struct {
 	// Digest - Manifest digest
 	Digest *string `json:"digest,omitempty"`
 	// ImageSize - Image size
-	ImageSize *int32 `json:"imageSize,omitempty"`
+	ImageSize *int64 `json:"imageSize,omitempty"`
 	// CreatedTime - Created time
 	CreatedTime *string `json:"createdTime,omitempty"`
 	// LastUpdateTime - Last update time
@@ -226,6 +212,13 @@ type Manifests struct {
 	ImageName *string `json:"imageName,omitempty"`
 	// ManifestsAttributes - List of manifests
 	ManifestsAttributes *[]ManifestAttributesBase `json:"manifests,omitempty"`
+}
+
+// RefreshToken ...
+type RefreshToken struct {
+	autorest.Response `json:"-"`
+	// RefreshToken - The refresh token to be used for generating access tokens
+	RefreshToken *string `json:"refresh_token,omitempty"`
 }
 
 // Repositories list of repositories
@@ -351,7 +344,7 @@ type V2Descriptor struct {
 	// MediaType - Layer media type
 	MediaType *string `json:"mediaType,omitempty"`
 	// Size - Layer size
-	Size *int32 `json:"size,omitempty"`
+	Size *int64 `json:"size,omitempty"`
 	// Digest - Layer digest
 	Digest *string `json:"digest,omitempty"`
 }

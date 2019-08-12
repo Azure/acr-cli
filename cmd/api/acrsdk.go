@@ -6,12 +6,11 @@ package api
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"io/ioutil"
-	"net/http"
 	"strings"
 	"time"
 
+	// The autorest generated SDK is used, this file is just a wrapper to it.
 	acrapi "github.com/Azure/acr-cli/acr"
 	dockerAuth "github.com/Azure/acr-cli/auth/docker"
 	"github.com/Azure/go-autorest/autorest"
@@ -20,6 +19,7 @@ import (
 	"github.com/pkg/errors"
 )
 
+// Constants that are used throughout this file.
 const (
 	prefixHTTPS           = "https://"
 	registryURL           = ".azurecr.io"
@@ -27,12 +27,18 @@ const (
 	manifestV2ContentType = "application/vnd.docker.distribution.manifest.v2+json"
 )
 
+// The AcrCLIClient is the struct that will be in charge of doing the http requests to the registry.
+// it implements the AcrCLIClientInterface.
 type AcrCLIClient struct {
-	AutorestClient        acrapi.BaseClient
+	AutorestClient acrapi.BaseClient
+	// manifestTagFetchCount refers to how many tags or manifests can be retrieved in a single http request.
 	manifestTagFetchCount int32
 	loginURL              string
-	token                 *adal.Token
-	accessTokenExp        int64
+	// token refers to an ACR access token for use with bearer authentication.
+	token *adal.Token
+	// accessTokenExp refers to the expiration time for the access token, it is in a unix time format represented by a
+	// 64 bit integer.
+	accessTokenExp int64
 }
 
 // LoginURL returns the FQDN for a registry.
@@ -53,21 +59,25 @@ func LoginURLWithPrefix(loginURL string) string {
 	return urlWithPrefix
 }
 
+// newAcrCLIClient creates a client that does not have any authentication.
 func newAcrCLIClient(loginURL string) AcrCLIClient {
 	loginURLPrefix := LoginURLWithPrefix(loginURL)
 	return AcrCLIClient{
-		AutorestClient:        acrapi.NewWithoutDefaults(loginURLPrefix),
+		AutorestClient: acrapi.NewWithoutDefaults(loginURLPrefix),
+		// The manifestTagFetchCount is set to the default which is 100
 		manifestTagFetchCount: manifestTagFetchCount,
 		loginURL:              loginURL,
 	}
 }
 
+// newAcrCLIClientWithBasicAuth creates a client that uses basic authentication.
 func newAcrCLIClientWithBasicAuth(loginURL string, username string, password string) AcrCLIClient {
 	newAcrCLIClient := newAcrCLIClient(loginURL)
 	newAcrCLIClient.AutorestClient.Authorizer = autorest.NewBasicAuthorizer(username, password)
 	return newAcrCLIClient
 }
 
+// newAcrCLIClientWithBearerAuth creates a client that uses bearer token authentication.
 func newAcrCLIClientWithBearerAuth(loginURL string, refreshToken string) (AcrCLIClient, error) {
 	newAcrCLIClient := newAcrCLIClient(loginURL)
 	ctx := context.Background()
@@ -81,6 +91,7 @@ func newAcrCLIClientWithBearerAuth(loginURL string, refreshToken string) (AcrCLI
 	}
 	newAcrCLIClient.token = token
 	newAcrCLIClient.AutorestClient.Authorizer = autorest.NewBearerAuthorizer(token)
+	// The expiration time is stored in the struct to make it easy to determine if a token is expired.
 	exp, err := getExpiration(token.AccessToken)
 	if err != nil {
 		return newAcrCLIClient, err
@@ -92,6 +103,8 @@ func newAcrCLIClientWithBearerAuth(loginURL string, refreshToken string) (AcrCLI
 // GetAcrCLIClientWithAuth obtains a client that has authentication for making ACR http requests
 func GetAcrCLIClientWithAuth(loginURL string, username string, password string, configs []string) (*AcrCLIClient, error) {
 	if username == "" && password == "" {
+		// If both username and password are empty then the docker config file will be used, it can be found in the default
+		// location or in a location specified by the configs string array
 		client, err := dockerAuth.NewClient(configs...)
 		if err != nil {
 			return nil, errors.Wrap(err, "error resolving authentication")
@@ -101,12 +114,13 @@ func GetAcrCLIClientWithAuth(loginURL string, username string, password string, 
 			return nil, errors.Wrap(err, "error resolving authentication")
 		}
 	}
-
+	// If the password is empty then the authentication failed.
 	if password == "" {
 		return nil, errors.New("unable to resolve authentication, missing identity token or password")
 	}
 	var acrClient AcrCLIClient
 	if username == "" {
+		// If the username is empty an ACR refresh token was used.
 		var err error
 		acrClient, err = newAcrCLIClientWithBearerAuth(loginURL, password)
 		if err != nil {
@@ -114,11 +128,12 @@ func GetAcrCLIClientWithAuth(loginURL string, username string, password string, 
 		}
 		return &acrClient, nil
 	}
+	// if both the username and password were specified basic authentication can be assumed.
 	acrClient = newAcrCLIClientWithBasicAuth(loginURL, username, password)
 	return &acrClient, nil
-
 }
 
+// refreshAcrCLIClientToken obtains a new token and gets its expiration time.
 func refreshAcrCLIClientToken(ctx context.Context, c *AcrCLIClient) error {
 	accessTokenResponse, err := c.AutorestClient.GetAcrAccessToken(ctx, c.loginURL, "repository:*:*", c.token.RefreshToken)
 	if err != nil {
@@ -138,9 +153,11 @@ func refreshAcrCLIClientToken(ctx context.Context, c *AcrCLIClient) error {
 	return nil
 }
 
+// getExpiration is used to obtain the expiration out of a jwt token.
 func getExpiration(token string) (int64, error) {
 	parser := jwt.Parser{SkipClaimsValidation: true}
 	mapC := jwt.MapClaims{}
+	// Since we only need the expiration time there is no need for verifying the signature of the token.
 	_, _, err := parser.ParseUnverified(token, mapC)
 	if err != nil {
 		return 0, err
@@ -151,15 +168,17 @@ func getExpiration(token string) (int64, error) {
 	return 0, errors.New("unable to obtain expiration date for token")
 }
 
+// isExpired return true when the token inside an acrClient is expired and a new should be requested.
 func (c *AcrCLIClient) isExpired() bool {
 	if c.token == nil {
 		// there is no token so basic auth can be assumed.
 		return false
 	}
+	// 5 minutes are subtracted to make sure that there won't be a case were a client with an expired token tries doing a request.
 	return (time.Now().Add(5 * time.Minute)).Unix() > c.accessTokenExp
 }
 
-// AcrListTags list the tags of a repository with their attributes.
+// GetAcrTags list the tags of a repository with their attributes.
 func (c *AcrCLIClient) GetAcrTags(ctx context.Context, repoName string, orderBy string, last string) (*acrapi.RepositoryTagsType, error) {
 	if c.isExpired() {
 		if err := refreshAcrCLIClientToken(ctx, c); err != nil {
@@ -168,12 +187,13 @@ func (c *AcrCLIClient) GetAcrTags(ctx context.Context, repoName string, orderBy 
 	}
 	tags, err := c.AutorestClient.GetAcrTags(ctx, repoName, last, &c.manifestTagFetchCount, orderBy, "")
 	if err != nil {
+		// tags might contain information such as status codes, so it a pointer to it is returned instead of nil.
 		return &tags, err
 	}
 	return &tags, nil
 }
 
-// DeleteTag deletes the tag by reference.
+// DeleteAcrTag deletes the tag by reference.
 func (c *AcrCLIClient) DeleteAcrTag(ctx context.Context, repoName string, reference string) (*autorest.Response, error) {
 	if c.isExpired() {
 		if err := refreshAcrCLIClientToken(ctx, c); err != nil {
@@ -187,7 +207,7 @@ func (c *AcrCLIClient) DeleteAcrTag(ctx context.Context, repoName string, refere
 	return &resp, nil
 }
 
-// ListManifestsAttributes list all the manifest in a repository with their attributes.
+// GetAcrManifests list all the manifest in a repository with their attributes.
 func (c *AcrCLIClient) GetAcrManifests(ctx context.Context, repoName string, orderBy string, last string) (*acrapi.Manifests, error) {
 	if c.isExpired() {
 		if err := refreshAcrCLIClientToken(ctx, c); err != nil {
@@ -196,12 +216,12 @@ func (c *AcrCLIClient) GetAcrManifests(ctx context.Context, repoName string, ord
 	}
 	manifests, err := c.AutorestClient.GetAcrManifests(ctx, repoName, last, &c.manifestTagFetchCount, orderBy)
 	if err != nil {
-		return nil, err
+		return &manifests, err
 	}
 	return &manifests, nil
 }
 
-// DeleteManifestByDigest deletes a manifest using the digest as a reference.
+// DeleteManifest deletes a manifest using the digest as a reference.
 func (c *AcrCLIClient) DeleteManifest(ctx context.Context, repoName string, reference string) (*autorest.Response, error) {
 	if c.isExpired() {
 		if err := refreshAcrCLIClientToken(ctx, c); err != nil {
@@ -215,36 +235,8 @@ func (c *AcrCLIClient) DeleteManifest(ctx context.Context, repoName string, refe
 	return &resp, nil
 }
 
-func (c *AcrCLIClient) GetAcrManifestMetadata(ctx context.Context, repoName string, reference string) (string, error) {
-	if c.isExpired() {
-		if err := refreshAcrCLIClientToken(ctx, c); err != nil {
-			return "", err
-		}
-	}
-	metadataResponse, err := c.AutorestClient.GetAcrManifestMetadata(ctx, repoName, reference, "acrarchiveinfo")
-	if err != nil {
-		return "", err
-	}
-	metadataBytes, err := json.Marshal(metadataResponse.Value)
-	if err != nil {
-		return "", err
-	}
-	return string(metadataBytes), nil
-}
-
-func (c *AcrCLIClient) UpdateAcrManifestMetadata(ctx context.Context, repoName string, reference string, metadataValue interface{}) error {
-	if c.isExpired() {
-		if err := refreshAcrCLIClientToken(ctx, c); err != nil {
-			return err
-		}
-	}
-	_, err := c.AutorestClient.UpdateAcrManifestMetadata(ctx, repoName, reference, "acrarchiveinfo", &metadataValue)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
+// GetManifest fetches a manifest (could be a Manifest List or a v2 manifest) and returns it as a byte array.
+// This is used when a manifest list is wanted, first the bytes are obtained and then unmarshalled into a new struct.
 func (c *AcrCLIClient) GetManifest(ctx context.Context, repoName string, reference string) ([]byte, error) {
 	if c.isExpired() {
 		if err := refreshAcrCLIClientToken(ctx, c); err != nil {
@@ -284,85 +276,11 @@ func (c *AcrCLIClient) GetManifest(ctx context.Context, repoName string, referen
 	return manifestBytes, nil
 }
 
-func (c *AcrCLIClient) AcrCrossReferenceLayer(ctx context.Context, repoName string, reference string, repoFrom string) error {
-	if c.isExpired() {
-		if err := refreshAcrCLIClientToken(ctx, c); err != nil {
-			return err
-		}
-	}
-	_, err := c.AutorestClient.StartBlobUpload(ctx, repoName, "", repoFrom, reference)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (c *AcrCLIClient) PutManifest(ctx context.Context, repoName string, reference string, manifest string) error {
-	if c.isExpired() {
-		if err := refreshAcrCLIClientToken(ctx, c); err != nil {
-			return err
-		}
-	}
-	var result autorest.Response
-	urlParameters := map[string]interface{}{
-		"url": c.AutorestClient.LoginURI,
-	}
-
-	pathParameters := map[string]interface{}{
-		"name":      autorest.Encode("path", repoName),
-		"reference": autorest.Encode("path", reference),
-	}
-
-	preparer := autorest.CreatePreparer(
-		autorest.AsContentType(manifestV2ContentType),
-		autorest.AsPut(),
-		autorest.WithCustomBaseURL("{url}", urlParameters),
-		autorest.WithPathParameters("/v2/{name}/manifests/{reference}", pathParameters),
-		autorest.WithString(manifest))
-
-	req, err := preparer.Prepare((&http.Request{}).WithContext(ctx))
-
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acr.BaseClient", "PutManifest", nil, "Failure preparing request")
-		return err
-	}
-
-	resp, err := c.AutorestClient.PutManifestSender(req)
-	if err != nil {
-		result.Response = resp
-		err = autorest.NewErrorWithError(err, "acr.BaseClient", "PutManifest", resp, "Failure sending request")
-		return err
-	}
-
-	result, err = c.AutorestClient.PutManifestResponder(resp)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acr.BaseClient", "PutManifest", resp, "Failure responding to request")
-		return err
-	}
-	return nil
-}
-
-func (c *AcrCLIClient) UpdateAcrTagMetadata(ctx context.Context, repoName string, reference string, metadataValue interface{}) error {
-	if c.isExpired() {
-		if err := refreshAcrCLIClientToken(ctx, c); err != nil {
-			return err
-		}
-	}
-	_, err := c.AutorestClient.UpdateAcrTagMetadata(ctx, repoName, reference, "acrarchiveinfo", &metadataValue)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
+// AcrCLIClientInterface defines the required methods that the acr-cli will need to use.
 type AcrCLIClientInterface interface {
 	GetAcrTags(ctx context.Context, repoName string, orderBy string, last string) (*acrapi.RepositoryTagsType, error)
-	DeleteAcrTag(ctx context.Context, repoName string, reference string) error
+	DeleteAcrTag(ctx context.Context, repoName string, reference string) (*autorest.Response, error)
 	GetAcrManifests(ctx context.Context, repoName string, orderBy string, last string) (*acrapi.Manifests, error)
-	DeleteManifest(ctx context.Context, repoName string, reference string)
-	GetAcrManifestMetadata(ctx context.Context, repoName string, reference string)
-	UpdateAcrManifestMetadata(ctx context.Context, repoName string, reference string, metadataValue string)
-	GetManifest(ctx context.Context, repoName string, reference string)
-	AcrCrossReferenceLayer(ctx context.Context, repoName string, reference string, repoFrom string)
-	PutManifest(ctx context.Context, repoName string, reference string, manifest acrapi.Manifest)
+	DeleteManifest(ctx context.Context, repoName string, reference string) (*autorest.Response, error)
+	GetManifest(ctx context.Context, repoName string, reference string) ([]byte, error)
 }

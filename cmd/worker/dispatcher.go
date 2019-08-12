@@ -4,6 +4,7 @@
 package worker
 
 import (
+	"context"
 	"sync"
 
 	"github.com/Azure/acr-cli/cmd/api"
@@ -11,14 +12,16 @@ import (
 
 // WorkerQueue represents the queue of the workers
 var WorkerQueue chan chan PurgeJob
+var workers []PurgeWorker
 
-// StartDispatcher creates the workers and a goroutine to continously fetch jobs for them.
-func StartDispatcher(wg *sync.WaitGroup, acrClient api.AcrCLIClient, nWorkers int) {
+// StartDispatcher creates the workers and a goroutine to continuously fetch jobs for them.
+func StartDispatcher(ctx context.Context, wg *sync.WaitGroup, acrClient api.AcrCLIClientInterface, nWorkers int) {
 	WorkerQueue = make(chan chan PurgeJob, nWorkers)
-	var m sync.Mutex
+	workers = []PurgeWorker{}
 	for i := 0; i < nWorkers; i++ {
-		worker := NewPurgeWorker(wg, WorkerQueue, acrClient, &m)
-		worker.Start()
+		worker := NewPurgeWorker(wg, WorkerQueue, acrClient)
+		worker.Start(ctx)
+		workers = append(workers, worker)
 	}
 
 	go func() {
@@ -32,4 +35,11 @@ func StartDispatcher(wg *sync.WaitGroup, acrClient api.AcrCLIClient, nWorkers in
 			}(job)
 		}
 	}()
+}
+
+// StopDispatcher stops all the workers.
+func StopDispatcher() {
+	for _, worker := range workers {
+		worker.Stop()
+	}
 }

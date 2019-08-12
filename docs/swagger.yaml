@@ -1,14 +1,14 @@
 swagger: '2.0'
 info:
   description: Metadata API definition for the Azure Container Registry runtime
-  version: 2018-08-10-preview
+  version: 2019-07-15-preview
   title: Azure Container Registry
 x-ms-parameterized-host:
   hostTemplate: "{url}"
   useSchemePrefix: false
   positionInOperation: first
   parameters:
-  - "$ref": "#/parameters/url"
+  - $ref: "#/parameters/Url"
 securityDefinitions:
   registry_auth:
     type: basic
@@ -17,40 +17,40 @@ securityDefinitions:
     in: header
     name: Authorization
 security:
-  - registry_auth: []
-  - registry_oauth2: []
+- registry_auth: []
+- registry_oauth2: []
 tags:
-  - name: v2
-    description: Root API
-  - name: Manifest
-    description: Everything about manifests
-  - name: Tag
-    description: Everything about tags
-  - name: Layer
-    description: Everything about layers
-  - name: Repository
-    description: Everyting about repository
-  - name: AcrRepository
-    description: ACR APIs related to repositories
-  - name: AcrManifest
-    description: ACR APIs related to manifests
-  - name: AcrTag
-    description: ACR APIs related to tags
-  - name: AcrMetadata
-    description: ACR APIs related to metadata
+- name: v2
+  description: Root API
+- name: Manifest
+  description: Everything about manifests
+- name: Tag
+  description: Everything about tags
+- name: Layer
+  description: Everything about layers
+- name: Repository
+  description: Everything about repository
+- name: AcrRepository
+  description: ACR APIs related to repositories
+- name: AcrManifest
+  description: ACR APIs related to manifests
+- name: AcrTag
+  description: ACR APIs related to tags
+- name: AcrMetadata
+  description: ACR APIs related to metadata
 schemes:
-  - https
+- https
 produces:
-  - application/json
+- application/json
 paths:
   '/v2/':
     get:
       tags:
-        - v2
+      - v2
       description: >-
         Tells whether this Docker Registry instance supports Docker Registry
         HTTP API v2
-      operationId: CheckDockerRegistryV2Support
+      operationId: GetDockerRegistryV2Support
       responses:
         '200':
           description: Successful response. API v2 supported
@@ -61,11 +61,11 @@ paths:
   '/v2/{name}/tags/list':
     get:
       tags:
-        - Tag
-      description: Fetch the tags under the repository identified by 'name'
+      - Tag
+      description: Fetch the tags under the repository identified by name
       operationId: GetTagList
       parameters:
-        - $ref: '#/parameters/ImageName'
+      - $ref: '#/parameters/ImageName'
       responses:
         '200':
           description: Gives a list of tags for the names repository.
@@ -82,19 +82,19 @@ paths:
   '/v2/{name}/manifests/{reference}':
     get:
       tags:
-        - Manifest
+      - Manifest
       description: >-
         Pulls the image manifest file associated with the specified name and
-        reference. Reference may be a tag or a digest.
+        reference. Reference may be a tag or a digest
       operationId: GetManifest
       parameters:
-        - $ref: '#/parameters/ImageName'
-        - $ref: '#/parameters/ImageReference'
-        - name: accept
-          in: header
-          description: Accept header string delimited by comma. For example, application/vnd.docker.distribution.manifest.v2+json
-          required: false
-          type: string
+      - $ref: '#/parameters/ImageName'
+      - $ref: '#/parameters/ImageReference'
+      - name: accept
+        in: header
+        description: Accept header string delimited by comma. For example, application/vnd.docker.distribution.manifest.v2+json
+        required: false
+        type: string
       responses:
         '200':
           description: Returns the requested manifest file
@@ -106,43 +106,47 @@ paths:
             $ref: '#/definitions/AcrErrors'
     put:
       tags:
-        - Manifest
+      - Manifest
       description: >-
         Put the manifest identified by name and reference where reference can be
         a tag or digest.
-      consumes: 
-        - application/vnd.docker.distribution.manifest.v2+json
-      operationId: PutManifest
+      consumes:
+      - application/vnd.docker.distribution.manifest.v2+json
+      operationId: CreateManifest
       parameters:
-        - $ref: '#/parameters/ImageName'
-        - $ref: '#/parameters/ImageReference'
-        - name: payload
-          schema:
-            $ref: '#/definitions/Manifest'
-          in: body
-          required: true
+      - $ref: '#/parameters/ImageName'
+      - $ref: '#/parameters/ImageReference'
+      - $ref: '#/parameters/ManifestBody'
       responses:
         '201':
-          description: >-
-            The manifest has been accepted by the registry and is stored under
-            the specified name and tag.
+          description: The manifest is updated
+          schema: {}
+          headers:
+            Docker-Content-Digest:
+              type: string
+              description: Identifies the docker upload uuid for the current request.
+            Location:
+              type: string
+              description: The canonical location url of the uploaded manifest.
+            Content-Length:
+              type: integer
+              description: The canonical location url of the uploaded manifest.
         'default':
           description: ACR error response describing why the operation failed.
           schema:
             $ref: '#/definitions/AcrErrors'
     delete:
       tags:
-        - Manifest
-      description: >-
-        Delete the manifest identified by digest.
+      - Manifest
+      description: Delete the manifest identified by `name` and `reference`. Note
+        that a manifest can _only_ be deleted by `digest`.
       operationId: DeleteManifest
       parameters:
-        - $ref: '#/parameters/ImageName'
-        - $ref: '#/parameters/ImageReference'
+      - $ref: '#/parameters/ImageName'
+      - $ref: '#/parameters/ImageReference'
       responses:
         '202':
-          description: >-
-           The manifest has been deleted
+          description: The manifest has been deleted
         'default':
           description: ACR error response describing why the operation failed.
           schema:
@@ -317,16 +321,16 @@ paths:
   '/v2/_catalog':
     get:
       tags:
-        - Repository
-      description: List respositories
+      - Repository
+      description: List repositories
       operationId: GetRepositories
       parameters:
-        - $ref: '#/parameters/QueryLast'
-        - $ref: '#/parameters/QueryNum'
+      - $ref: '#/parameters/QueryLast'
+      - $ref: '#/parameters/QueryNum'
       responses:
         '200':
           description: Returns a list of repositories
-          headers: 
+          headers:
             Link:
               description: next paginated result
               type: string
@@ -339,12 +343,12 @@ paths:
   '/acr/v1/_catalog':
     get:
       tags:
-        - AcrRepository
-      description: List respositories
+      - AcrRepository
+      description: List repositories
       operationId: GetAcrRepositories
       parameters:
-        - $ref: '#/parameters/QueryLast'
-        - $ref: '#/parameters/QueryNum'
+      - $ref: '#/parameters/QueryLast'
+      - $ref: '#/parameters/QueryNum'
       responses:
         '200':
           description: Returns a list of repositories
@@ -355,14 +359,14 @@ paths:
           schema:
             $ref: '#/definitions/AcrErrors'
   '/acr/v1/{name}':
-    parameters:
-      - $ref: '#/parameters/ImageName'
     get:
       tags:
-        - AcrRepository
-        - AcrMetadata
-      description: Get respository attributes
+      - AcrRepository
+      - AcrMetadata
+      description: Get repository attributes
       operationId: GetAcrRepositoryAttributes
+      parameters:
+      - $ref: '#/parameters/ImageName'
       responses:
         '200':
           description: Returns a list of attributes
@@ -374,9 +378,11 @@ paths:
             $ref: '#/definitions/AcrErrors'
     delete:
       tags:
-        - AcrRepository
-      description: Delete a respository
+      - AcrRepository
+      description: Delete the repository identified by `name`
       operationId: DeleteAcrRepository
+      parameters:
+      - $ref: '#/parameters/ImageName'
       responses:
         '202':
           description: The repository is deleted
@@ -388,20 +394,24 @@ paths:
             $ref: '#/definitions/AcrErrors'
     patch:
       tags:
-        - AcrRepository
-        - AcrMetadata
-      description: Update attributes of a repository
+      - AcrRepository
+      - AcrMetadata
+      description: >-
+        Update the attribute identified by `name` where `reference` is
+        the name of the repository.
       operationId: UpdateAcrRepositoryAttributes
       consumes:
-        - application/json
+      - application/json
       parameters:
-        - in: body
-          name: value
-          schema:
-            type: object
-            $ref: '#/definitions/ChangeableAttributes'
+      - $ref: '#/parameters/ImageName'
+      - name: value
+        in: body
+        description: Repository attribute value
+        required: false
+        schema:
+          $ref: "#/definitions/ChangeableAttributes"
       responses:
-        '204':
+        '200':
           description: The attributes is updated
         'default':
           description: 'ACR error response describing why the operation failed.'
@@ -412,7 +422,7 @@ paths:
       tags:
         - AcrRepository
         - AcrMetadata
-      description: List respository metadata
+      description: List repository metadata
       operationId: AcrListRepositoryMetadata
       parameters:
       - $ref: '#/parameters/ImageName'
@@ -486,16 +496,16 @@ paths:
   '/acr/v1/{name}/_tags':
     get:
       tags:
-        - AcrTag
-        - AcrMetadata
+      - AcrTag
+      - AcrMetadata
       description: List tags of a repository
       operationId: GetAcrTags
       parameters:
-        - $ref: '#/parameters/ImageName'
-        - $ref: '#/parameters/QueryLast'
-        - $ref: '#/parameters/QueryNum'
-        - $ref: '#/parameters/QueryOrderBy'
-        - $ref: '#/parameters/QueryDigest'
+      - $ref: '#/parameters/ImageName'
+      - $ref: '#/parameters/QueryLast'
+      - $ref: '#/parameters/QueryNum'
+      - $ref: '#/parameters/QueryOrderBy'
+      - $ref: '#/parameters/QueryDigest'
       responses:
         '200':
           description: Tag details of a repository
@@ -508,8 +518,8 @@ paths:
   '/acr/v1/{name}/_tags/{reference}':
     get:
       tags:
-        - AcrTag
-        - AcrMetadata
+      - AcrTag
+      - AcrMetadata
       description: Get tag attributes by tag
       operationId: GetAcrTagAttributes
       parameters:
@@ -517,7 +527,7 @@ paths:
       - $ref: '#/parameters/ManifestReference'
       responses:
         '200':
-          description: Returns attributes of a tag
+          description: Tag attributes
           schema:
             $ref: '#/definitions/AcrTagAttributes'
         'default':
@@ -526,12 +536,12 @@ paths:
             $ref: '#/definitions/AcrErrors'
     patch:
       tags:
-        - AcrTag
-        - AcrMetadata
-      description: Update attributes of a tag
+      - AcrTag
+      - AcrMetadata
+      description: Update tag attributes
       operationId: UpdateAcrTagAttributes
       consumes:
-        - application/json
+      - application/json
       parameters:
       - $ref: '#/parameters/ImageName'
       - $ref: '#/parameters/ManifestReference'
@@ -545,15 +555,15 @@ paths:
             $ref: '#/definitions/AcrErrors'
     delete:
       tags:
-        - AcrTag
-        - AcrMetadata
-      description: Delete a tag
+      - AcrTag
+      - AcrMetadata
+      description: Delete tag
       operationId: DeleteAcrTag
-      consumes: 
-        - application/json
+      consumes:
+      - application/json
       parameters:
-        - $ref: '#/parameters/ImageName'
-        - $ref: '#/parameters/ManifestReference'
+      - $ref: '#/parameters/ImageName'
+      - $ref: '#/parameters/ManifestReference'
       responses:
         '202':
           description: The tag is deleted
@@ -644,15 +654,15 @@ paths:
   '/acr/v1/{name}/_manifests':
     get:
       tags:
-        - AcrManifest
-        - AcrMetadata
+      - AcrManifest
+      - AcrMetadata
       description: List manifests of a repository
       operationId: GetAcrManifests
       parameters:
-        - $ref: '#/parameters/ImageName'
-        - $ref: '#/parameters/QueryLast'
-        - $ref: '#/parameters/QueryNum'
-        - $ref: '#/parameters/QueryOrderBy'
+      - $ref: '#/parameters/ImageName'
+      - $ref: '#/parameters/QueryLast'
+      - $ref: '#/parameters/QueryNum'
+      - $ref: '#/parameters/QueryOrderBy'
       responses:
         '200':
           description: Returns a list of manifests
@@ -665,17 +675,13 @@ paths:
   '/acr/v1/{name}/_manifests/{reference}':
     get:
       tags:
-        - AcrManifest
-        - AcrMetadata
+      - AcrManifest
+      - AcrMetadata
       description: Get manifest attributes
       operationId: GetAcrManifestAttributes
       parameters:
       - $ref: '#/parameters/ImageName'
-      - name: reference
-        in: path
-        description: A digest pointing to a specific image,
-        required: true
-        type: string
+      - $ref: '#/parameters/ImageReference'
       responses:
         '200':
           description: List of attributes
@@ -687,12 +693,12 @@ paths:
             $ref: '#/definitions/AcrErrors'
     patch:
       tags:
-        - AcrManifest
-        - AcrMetadata
+      - AcrManifest
+      - AcrMetadata
       description: Update attributes of a manifest
       operationId: UpdateAcrManifestAttributes
       consumes:
-        - application/json
+      - application/json
       parameters:
       - $ref: '#/parameters/ImageName'
       - $ref: '#/parameters/ImageReference'
@@ -790,28 +796,24 @@ paths:
       - AcrToken
       - RefreshToken
       description: Exchange AAD tokens for an ACR refresh Token
-      operationId: GetAcrRefreshToken
+      operationId: GetAcrRefreshTokenFromExchange
       consumes:
       - application/x-www-form-urlencoded
       parameters:
-      - "$ref": "#/parameters/Grant_type"
-      - "$ref": "#/parameters/Service"
-      - "$ref": "#/parameters/Tenant"
-      - "$ref": "#/parameters/Refresh_token"
-      - "$ref": "#/parameters/Access_token"
+      - $ref: '#/parameters/Grant_type'
+      - $ref: '#/parameters/Service'
+      - $ref: '#/parameters/Tenant'
+      - $ref: '#/parameters/RefreshToken'
+      - $ref: '#/parameters/AccessToken'
       responses:
         '200':
           description: Refresh token acquired
           schema:
-            type: object
-            properties:
-              refresh_token:
-                description: The refresh token to be used for generating access tokens
-                type: string
-        default:
-          description: ACR error response describing why the operation failed.
+            $ref: '#/definitions/RefreshToken'
+        'default':
+          description: 'ACR error response describing why the operation failed.'
           schema:
-            "$ref": "#/definitions/AcrErrors"
+            $ref: '#/definitions/AcrErrors'
       security: []
   '/oauth2/token':
     post:
@@ -830,7 +832,7 @@ paths:
         type: string
         enum:
         - refresh_token
-      - "$ref": "#/parameters/Service"
+      - $ref: '#/parameters/Service'
       - name: scope
         in: formData
         required: true
@@ -847,15 +849,11 @@ paths:
         '200':
           description: Access token acquired
           schema:
-            type: object
-            properties:
-              access_token:
-                description: The access token for performing authenticated requests
-                type: string
-        default:
-          description: ACR error response describing why the operation failed.
+            $ref: '#/definitions/AccessToken'
+        'default':
+          description: 'ACR error response describing why the operation failed.'
           schema:
-            "$ref": "#/definitions/AcrErrors"
+            $ref: '#/definitions/AcrErrors'
       security: []
     get:
       tags:
@@ -873,7 +871,7 @@ paths:
       - name: scope
         in: query
         required: true
-        description: Expected to be a valid scope, and can be specified more than once
+        description: Expected to be a valid scope, and can be specified more than once 
           for multiple scope requests. You can obtain this from the Www-Authenticate
           response header from the challenge.
         type: string
@@ -881,15 +879,11 @@ paths:
         '200':
           description: Access token acquired
           schema:
-            type: object
-            properties:
-              access_token:
-                description: The access token for performing authenticated requests
-                type: string
-        default:
-          description: ACR error response describing why the operation failed.
+            $ref: '#/definitions/AccessToken'
+        'default':
+          description: 'ACR error response describing why the operation failed.'
           schema:
-            "$ref": "#/definitions/AcrErrors"
+            $ref: '#/definitions/AcrErrors'
       security:
       - registry_auth: []
 definitions:
@@ -917,7 +911,7 @@ definitions:
         description: Number of the tags
       changeableAttributes:
         description: Changeable attributes
-        "$ref": "#/definitions/ChangeableAttributes"
+        $ref: '#/definitions/ChangeableAttributes'
   AcrRepositoryTags:
     description: List of tag details
     properties:
@@ -932,7 +926,7 @@ definitions:
         x-ms-client-name: TagsAttributes
         description: List of tag attribute details
         items:
-          "$ref": "#/definitions/AcrTagAttributesBase"
+          $ref: '#/definitions/AcrTagAttributesBase'
   AcrTagAttributes:
     description: Tag attributes
     properties:
@@ -945,7 +939,7 @@ definitions:
       tag:
         x-ms-client-name: TagAttributes
         description: List of tag attribute details
-        "$ref": "#/definitions/AcrTagAttributesBase"
+        $ref: '#/definitions/AcrTagAttributesBase'
   TagAttributes:
     description: Tag attributes
     properties:
@@ -956,7 +950,7 @@ definitions:
         description: Image name
         type: string
       tag:
-        "$ref": "#/definitions/TagAttributes_tag"
+        $ref: '#/definitions/TagAttributes_tag'
         description: Tag attributes
   AcrTagAttributesBase:
     description: Tag attribute details
@@ -977,7 +971,7 @@ definitions:
         type: boolean
         description: Is signed
       changeableAttributes:
-        "$ref": "#/definitions/ChangeableAttributes"
+        $ref: '#/definitions/ChangeableAttributes'
         description: Changeable attributes
   AcrManifests:
     description: Manifest attributes
@@ -993,7 +987,7 @@ definitions:
         type: array
         description: List of manifests
         items:
-          "$ref": "#/definitions/AcrManifestAttributesBase"
+          $ref: '#/definitions/AcrManifestAttributesBase'
           description: Manifest details
   AcrManifestAttributes:
     description: Manifest attributes details
@@ -1007,7 +1001,7 @@ definitions:
       manifest:
         x-ms-client-name: ManifestAttributes
         description: Manifest attributes
-        "$ref": "#/definitions/AcrManifestAttributesBase"
+        $ref: '#/definitions/AcrManifestAttributesBase'
   AcrManifestAttributesBase:
     type: object
     description: Manifest details
@@ -1017,6 +1011,7 @@ definitions:
         description: Manifest digest
       imageSize:
         type: integer
+        format: int64
         description: Image size
       createdTime:
         type: string
@@ -1043,8 +1038,20 @@ definitions:
           type: string
           description: Tag name
       changeableAttributes:
-        "$ref": "#/definitions/ChangeableAttributes"
+        $ref: '#/definitions/ChangeableAttributes'
         description: Changeable attributes
+  RefreshToken:
+    type: object
+    properties:
+      refresh_token:
+        description: The refresh token to be used for generating access tokens
+        type: string
+  AccessToken:
+    type: object
+    properties:
+      access_token:
+        description: The access token for performing authenticated requests
+        type: string
   AcrErrors:
     description: Acr error response describing why the operation failed
     properties:
@@ -1052,7 +1059,7 @@ definitions:
         type: array
         description: Array of detailed error
         items:
-          "$ref": "#/definitions/AcrErrorInfo"
+          $ref: '#/definitions/AcrErrorInfo'
   RepositoryTags:
     description: Result of the request to list tags of the image
     properties:
@@ -1073,16 +1080,16 @@ definitions:
         description: Schema version
       mediaType:
         type: string
-        description: Media type usually application/vnd.docker.distribution.manifest.v2+json 
+        description: Media type usually application/vnd.docker.distribution.manifest.v2+json
           if this is in the accept header
       config:
         description: V2 image config descriptor
-        "$ref": "#/definitions/V2Descriptor"
+        $ref: '#/definitions/V2Descriptor'
       layers:
         type: array
         description: List of V2 image layer information
         items:
-          "$ref": "#/definitions/V2Descriptor"
+          $ref: '#/definitions/V2Descriptor'
       architecture:
         type: string
         description: CPU architecture
@@ -1096,23 +1103,23 @@ definitions:
         type: array
         description: List of layer information
         items:
-          "$ref": "#/definitions/FsLayer"
+          $ref: '#/definitions/FsLayer'
       history:
         type: array
         description: Image history
         items:
-          "$ref": "#/definitions/History"
+          $ref: '#/definitions/History'
       signatures:
         type: array
         description: Image signature
         items:
-          "$ref": "#/definitions/ImageSignature"
+          $ref: '#/definitions/ImageSignature'
   ImageSignature:
     description: Signature of a signed manifest
     properties:
       header:
         description: A JSON web signature
-        "$ref": "#/definitions/JWK"
+        $ref: '#/definitions/JWK'
       signature:
         type: string
         description: A signature for the image manifest, signed by a libtrust private
@@ -1124,7 +1131,7 @@ definitions:
     description: A JSON web signature
     properties:
       jwk:
-        "$ref": "#/definitions/JWKHeader"
+        $ref: '#/definitions/JWKHeader'
       alg:
         type: string
         description: The algorithm used to sign or encrypt the JWT
@@ -1199,7 +1206,8 @@ definitions:
         type: string
         description: Layer media type
       size:
-        type: integer
+        type: integer        
+        format: int64
         description: Layer size
       digest:
         type: string
@@ -1243,7 +1251,7 @@ definitions:
         type: array
         description: List of manifest attributes details
         items:
-          "$ref": "#/definitions/ManifestAttributes_manifest_references"
+          $ref: '#/definitions/ManifestAttributes_manifest_references'
           description: Manifest attributes details
       quarantineTag:
         type: string
@@ -1304,15 +1312,15 @@ definitions:
         items:
           type: string
 parameters:
-  url:
+  Url:
     name: url
     x-ms-client-name: loginUri
     description: Registry login URL
     required: true
     type: string
-    format: url
     in: path
     x-ms-skip-url-encoding: true
+    x-ms-parameter-location: client
   ImageReference:
     name: reference
     in: path
@@ -1341,7 +1349,7 @@ parameters:
     required: true
     type: string
     x-ms-parameter-location: method
-  property: 
+  property:
     name: property
     in: path
     description: Name of the property
@@ -1354,7 +1362,7 @@ parameters:
     description: Repository attribute value
     required: false
     schema:
-      "$ref": "#/definitions/ChangeableAttributes"
+      $ref: '#/definitions/ChangeableAttributes'
     x-ms-parameter-location: method
   QueryOrderBy:
     name: orderby
@@ -1373,7 +1381,9 @@ parameters:
   QueryLast:
     name: last
     in: query
-    description: query parameter for the last item in previous query
+    description: >-
+      Query parameter for the last item in previous query. Result set will
+      include values lexically after last.
     required: false
     type: string
     x-ms-parameter-location: method
@@ -1386,8 +1396,9 @@ parameters:
     x-ms-parameter-location: method
   Grant_type:
     name: grant_type
-    description: Can take a value of access_token_refresh_token, or access_token, or
-      refresh_token
+    description: >-
+      Can take a value of access_token_refresh_token, or access_token,
+      or refresh_token
     type: string
     in: formData
     required: true
@@ -1414,12 +1425,13 @@ parameters:
     name: scope
     in: formData
     required: true
-    description: Which is expected to be a valid scope, and can be specified more than
-      once for multiple scope requests. You can obtain this from the Www-Authenticate
-      response header from the challenge.
+    description: >-
+      Which is expected to be a valid scope, and can be specified more
+      than once for multiple scope requests. You can obtain this from 
+      the Www-Authenticate response header from the challenge.
     type: string
     x-ms-parameter-location: method
-  Refresh_token:
+  RefreshToken:
     name: refresh_token
     in: formData
     required: false
@@ -1427,7 +1439,7 @@ parameters:
       or refresh_token
     type: string
     x-ms-parameter-location: method
-  Access_token:
+  AccessToken:
     name: access_token
     in: formData
     required: false
@@ -1441,4 +1453,12 @@ parameters:
     description: Name of the image (including the namespace)
     required: true
     type: string
+    x-ms-parameter-location: method
+  ManifestBody:
+    description: Manifest body, can take v1 or v2 values depending on accept header
+    name: payload
+    in: body
+    required: true
+    schema:
+      $ref: '#/definitions/Manifest'
     x-ms-parameter-location: method

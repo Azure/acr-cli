@@ -1,4 +1,4 @@
-// Package acr implements the Azure ARM Acr service API version 2018-08-10-preview.
+// Package acr implements the Azure ARM Acr service API version 2019-07-15-preview.
 //
 // Metadata API definition for the Azure Container Registry runtime
 package acr
@@ -184,68 +184,80 @@ func (client BaseClient) CheckBlobExistenceResponder(resp *http.Response) (resul
 	return
 }
 
-// CheckDockerRegistryV2Support tells whether this Docker Registry instance supports Docker Registry HTTP API v2
-func (client BaseClient) CheckDockerRegistryV2Support(ctx context.Context) (result autorest.Response, err error) {
+// CreateManifest put the manifest identified by name and reference where reference can be a tag or digest.
+// Parameters:
+// name - name of the image (including the namespace)
+// reference - a tag or a digest, pointing to a specific image
+// payload - manifest body, can take v1 or v2 values depending on accept header
+func (client BaseClient) CreateManifest(ctx context.Context, name string, reference string, payload Manifest) (result SetObject, err error) {
 	if tracing.IsEnabled() {
-		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.CheckDockerRegistryV2Support")
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.CreateManifest")
 		defer func() {
 			sc := -1
-			if result.Response != nil {
-				sc = result.Response.StatusCode
+			if result.Response.Response != nil {
+				sc = result.Response.Response.StatusCode
 			}
 			tracing.EndSpan(ctx, sc, err)
 		}()
 	}
-	req, err := client.CheckDockerRegistryV2SupportPreparer(ctx)
+	req, err := client.CreateManifestPreparer(ctx, name, reference, payload)
 	if err != nil {
-		err = autorest.NewErrorWithError(err, "acr.BaseClient", "CheckDockerRegistryV2Support", nil, "Failure preparing request")
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "CreateManifest", nil, "Failure preparing request")
 		return
 	}
 
-	resp, err := client.CheckDockerRegistryV2SupportSender(req)
+	resp, err := client.CreateManifestSender(req)
 	if err != nil {
-		result.Response = resp
-		err = autorest.NewErrorWithError(err, "acr.BaseClient", "CheckDockerRegistryV2Support", resp, "Failure sending request")
+		result.Response = autorest.Response{Response: resp}
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "CreateManifest", resp, "Failure sending request")
 		return
 	}
 
-	result, err = client.CheckDockerRegistryV2SupportResponder(resp)
+	result, err = client.CreateManifestResponder(resp)
 	if err != nil {
-		err = autorest.NewErrorWithError(err, "acr.BaseClient", "CheckDockerRegistryV2Support", resp, "Failure responding to request")
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "CreateManifest", resp, "Failure responding to request")
 	}
 
 	return
 }
 
-// CheckDockerRegistryV2SupportPreparer prepares the CheckDockerRegistryV2Support request.
-func (client BaseClient) CheckDockerRegistryV2SupportPreparer(ctx context.Context) (*http.Request, error) {
+// CreateManifestPreparer prepares the CreateManifest request.
+func (client BaseClient) CreateManifestPreparer(ctx context.Context, name string, reference string, payload Manifest) (*http.Request, error) {
 	urlParameters := map[string]interface{}{
 		"url": client.LoginURI,
 	}
 
+	pathParameters := map[string]interface{}{
+		"name":      autorest.Encode("path", name),
+		"reference": autorest.Encode("path", reference),
+	}
+
 	preparer := autorest.CreatePreparer(
-		autorest.AsGet(),
+		autorest.AsContentType("application/vnd.docker.distribution.manifest.v2+json"),
+		autorest.AsPut(),
 		autorest.WithCustomBaseURL("{url}", urlParameters),
-		autorest.WithPath("/v2/"))
+		autorest.WithPathParameters("/v2/{name}/manifests/{reference}", pathParameters),
+		autorest.WithJSON(payload))
 	return preparer.Prepare((&http.Request{}).WithContext(ctx))
 }
 
-// CheckDockerRegistryV2SupportSender sends the CheckDockerRegistryV2Support request. The method will close the
+// CreateManifestSender sends the CreateManifest request. The method will close the
 // http.Response Body if it receives an error.
-func (client BaseClient) CheckDockerRegistryV2SupportSender(req *http.Request) (*http.Response, error) {
+func (client BaseClient) CreateManifestSender(req *http.Request) (*http.Response, error) {
 	return autorest.SendWithSender(client, req,
 		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
 }
 
-// CheckDockerRegistryV2SupportResponder handles the response to the CheckDockerRegistryV2Support request. The method always
+// CreateManifestResponder handles the response to the CreateManifest request. The method always
 // closes the http.Response Body.
-func (client BaseClient) CheckDockerRegistryV2SupportResponder(resp *http.Response) (result autorest.Response, err error) {
+func (client BaseClient) CreateManifestResponder(resp *http.Response) (result SetObject, err error) {
 	err = autorest.Respond(
 		resp,
 		client.ByInspecting(),
-		azure.WithErrorUnlessStatusCode(http.StatusOK),
+		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusCreated),
+		autorest.ByUnmarshallingJSON(&result.Value),
 		autorest.ByClosing())
-	result.Response = resp
+	result.Response = autorest.Response{Response: resp}
 	return
 }
 
@@ -324,7 +336,7 @@ func (client BaseClient) DeleteAcrManifestMetadataResponder(resp *http.Response)
 	return
 }
 
-// DeleteAcrRepository delete a respository
+// DeleteAcrRepository delete the repository identified by `name`
 // Parameters:
 // name - name of the image (including the namespace)
 func (client BaseClient) DeleteAcrRepository(ctx context.Context, name string) (result DeletedRepository, err error) {
@@ -469,7 +481,7 @@ func (client BaseClient) DeleteAcrRepositoryMetadataResponder(resp *http.Respons
 	return
 }
 
-// DeleteAcrTag delete a tag
+// DeleteAcrTag delete tag
 // Parameters:
 // name - name of the image (including the namespace)
 // reference - tag or digest of the target manifest
@@ -617,7 +629,8 @@ func (client BaseClient) DeleteAcrTagMetadataResponder(resp *http.Response) (res
 	return
 }
 
-// DeleteManifest delete the manifest identified by digest.
+// DeleteManifest delete the manifest identified by `name` and `reference`. Note that a manifest can _only_ be deleted
+// by `digest`.
 // Parameters:
 // name - name of the image (including the namespace)
 // reference - a tag or a digest, pointing to a specific image
@@ -777,7 +790,7 @@ func (client BaseClient) EndBlobUploadResponder(resp *http.Response) (result aut
 // scope - which is expected to be a valid scope, and can be specified more than once for multiple scope
 // requests. You obtained this from the Www-Authenticate response header from the challenge.
 // refreshToken - must be a valid ACR refresh token
-func (client BaseClient) GetAcrAccessToken(ctx context.Context, service string, scope string, refreshToken string) (result GetAcrAccessTokenOKResponse, err error) {
+func (client BaseClient) GetAcrAccessToken(ctx context.Context, service string, scope string, refreshToken string) (result AccessToken, err error) {
 	if tracing.IsEnabled() {
 		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.GetAcrAccessToken")
 		defer func() {
@@ -839,7 +852,7 @@ func (client BaseClient) GetAcrAccessTokenSender(req *http.Request) (*http.Respo
 
 // GetAcrAccessTokenResponder handles the response to the GetAcrAccessToken request. The method always
 // closes the http.Response Body.
-func (client BaseClient) GetAcrAccessTokenResponder(resp *http.Response) (result GetAcrAccessTokenOKResponse, err error) {
+func (client BaseClient) GetAcrAccessTokenResponder(resp *http.Response) (result AccessToken, err error) {
 	err = autorest.Respond(
 		resp,
 		client.ByInspecting(),
@@ -855,7 +868,7 @@ func (client BaseClient) GetAcrAccessTokenResponder(resp *http.Response) (result
 // service - indicates the name of your Azure container registry.
 // scope - expected to be a valid scope, and can be specified more than once for multiple scope requests. You
 // can obtain this from the Www-Authenticate response header from the challenge.
-func (client BaseClient) GetAcrAccessTokenFromLogin(ctx context.Context, service string, scope string) (result GetAcrAccessTokenFromLoginOKResponse, err error) {
+func (client BaseClient) GetAcrAccessTokenFromLogin(ctx context.Context, service string, scope string) (result AccessToken, err error) {
 	if tracing.IsEnabled() {
 		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.GetAcrAccessTokenFromLogin")
 		defer func() {
@@ -915,7 +928,7 @@ func (client BaseClient) GetAcrAccessTokenFromLoginSender(req *http.Request) (*h
 
 // GetAcrAccessTokenFromLoginResponder handles the response to the GetAcrAccessTokenFromLogin request. The method always
 // closes the http.Response Body.
-func (client BaseClient) GetAcrAccessTokenFromLoginResponder(resp *http.Response) (result GetAcrAccessTokenFromLoginOKResponse, err error) {
+func (client BaseClient) GetAcrAccessTokenFromLoginResponder(resp *http.Response) (result AccessToken, err error) {
 	err = autorest.Respond(
 		resp,
 		client.ByInspecting(),
@@ -929,7 +942,7 @@ func (client BaseClient) GetAcrAccessTokenFromLoginResponder(resp *http.Response
 // GetAcrManifestAttributes get manifest attributes
 // Parameters:
 // name - name of the image (including the namespace)
-// reference - a digest pointing to a specific image,
+// reference - a tag or a digest, pointing to a specific image
 func (client BaseClient) GetAcrManifestAttributes(ctx context.Context, name string, reference string) (result ManifestAttributes, err error) {
 	if tracing.IsEnabled() {
 		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.GetAcrManifestAttributes")
@@ -1079,7 +1092,8 @@ func (client BaseClient) GetAcrManifestMetadataResponder(resp *http.Response) (r
 // GetAcrManifests list manifests of a repository
 // Parameters:
 // name - name of the image (including the namespace)
-// last - query parameter for the last item in previous query
+// last - query parameter for the last item in previous query. Result set will include values lexically after
+// last.
 // n - query parameter for max number of items
 // orderby - orderby query parameter
 func (client BaseClient) GetAcrManifests(ctx context.Context, name string, last string, n *int32, orderby string) (result Manifests, err error) {
@@ -1163,16 +1177,16 @@ func (client BaseClient) GetAcrManifestsResponder(resp *http.Response) (result M
 	return
 }
 
-// GetAcrRefreshToken exchange AAD tokens for an ACR refresh Token
+// GetAcrRefreshTokenFromExchange exchange AAD tokens for an ACR refresh Token
 // Parameters:
 // grantType - can take a value of access_token_refresh_token, or access_token, or refresh_token
 // service - indicates the name of your Azure container registry.
 // tenant - AAD tenant associated to the AAD credentials.
 // refreshToken - AAD refresh token, mandatory when grant_type is access_token_refresh_token or refresh_token
 // accessToken - AAD access token, mandatory when grant_type is access_token_refresh_token or access_token.
-func (client BaseClient) GetAcrRefreshToken(ctx context.Context, grantType string, service string, tenant string, refreshToken string, accessToken string) (result GetAcrRefreshTokenOKResponse, err error) {
+func (client BaseClient) GetAcrRefreshTokenFromExchange(ctx context.Context, grantType string, service string, tenant string, refreshToken string, accessToken string) (result RefreshToken, err error) {
 	if tracing.IsEnabled() {
-		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.GetAcrRefreshToken")
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.GetAcrRefreshTokenFromExchange")
 		defer func() {
 			sc := -1
 			if result.Response.Response != nil {
@@ -1181,29 +1195,29 @@ func (client BaseClient) GetAcrRefreshToken(ctx context.Context, grantType strin
 			tracing.EndSpan(ctx, sc, err)
 		}()
 	}
-	req, err := client.GetAcrRefreshTokenPreparer(ctx, grantType, service, tenant, refreshToken, accessToken)
+	req, err := client.GetAcrRefreshTokenFromExchangePreparer(ctx, grantType, service, tenant, refreshToken, accessToken)
 	if err != nil {
-		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrRefreshToken", nil, "Failure preparing request")
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrRefreshTokenFromExchange", nil, "Failure preparing request")
 		return
 	}
 
-	resp, err := client.GetAcrRefreshTokenSender(req)
+	resp, err := client.GetAcrRefreshTokenFromExchangeSender(req)
 	if err != nil {
 		result.Response = autorest.Response{Response: resp}
-		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrRefreshToken", resp, "Failure sending request")
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrRefreshTokenFromExchange", resp, "Failure sending request")
 		return
 	}
 
-	result, err = client.GetAcrRefreshTokenResponder(resp)
+	result, err = client.GetAcrRefreshTokenFromExchangeResponder(resp)
 	if err != nil {
-		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrRefreshToken", resp, "Failure responding to request")
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetAcrRefreshTokenFromExchange", resp, "Failure responding to request")
 	}
 
 	return
 }
 
-// GetAcrRefreshTokenPreparer prepares the GetAcrRefreshToken request.
-func (client BaseClient) GetAcrRefreshTokenPreparer(ctx context.Context, grantType string, service string, tenant string, refreshToken string, accessToken string) (*http.Request, error) {
+// GetAcrRefreshTokenFromExchangePreparer prepares the GetAcrRefreshTokenFromExchange request.
+func (client BaseClient) GetAcrRefreshTokenFromExchangePreparer(ctx context.Context, grantType string, service string, tenant string, refreshToken string, accessToken string) (*http.Request, error) {
 	urlParameters := map[string]interface{}{
 		"url": client.LoginURI,
 	}
@@ -1230,16 +1244,16 @@ func (client BaseClient) GetAcrRefreshTokenPreparer(ctx context.Context, grantTy
 	return preparer.Prepare((&http.Request{}).WithContext(ctx))
 }
 
-// GetAcrRefreshTokenSender sends the GetAcrRefreshToken request. The method will close the
+// GetAcrRefreshTokenFromExchangeSender sends the GetAcrRefreshTokenFromExchange request. The method will close the
 // http.Response Body if it receives an error.
-func (client BaseClient) GetAcrRefreshTokenSender(req *http.Request) (*http.Response, error) {
+func (client BaseClient) GetAcrRefreshTokenFromExchangeSender(req *http.Request) (*http.Response, error) {
 	return autorest.SendWithSender(client, req,
 		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
 }
 
-// GetAcrRefreshTokenResponder handles the response to the GetAcrRefreshToken request. The method always
+// GetAcrRefreshTokenFromExchangeResponder handles the response to the GetAcrRefreshTokenFromExchange request. The method always
 // closes the http.Response Body.
-func (client BaseClient) GetAcrRefreshTokenResponder(resp *http.Response) (result GetAcrRefreshTokenOKResponse, err error) {
+func (client BaseClient) GetAcrRefreshTokenFromExchangeResponder(resp *http.Response) (result RefreshToken, err error) {
 	err = autorest.Respond(
 		resp,
 		client.ByInspecting(),
@@ -1250,9 +1264,10 @@ func (client BaseClient) GetAcrRefreshTokenResponder(resp *http.Response) (resul
 	return
 }
 
-// GetAcrRepositories list respositories
+// GetAcrRepositories list repositories
 // Parameters:
-// last - query parameter for the last item in previous query
+// last - query parameter for the last item in previous query. Result set will include values lexically after
+// last.
 // n - query parameter for max number of items
 func (client BaseClient) GetAcrRepositories(ctx context.Context, last string, n *int32) (result Repositories, err error) {
 	if tracing.IsEnabled() {
@@ -1328,7 +1343,7 @@ func (client BaseClient) GetAcrRepositoriesResponder(resp *http.Response) (resul
 	return
 }
 
-// GetAcrRepositoryAttributes get respository attributes
+// GetAcrRepositoryAttributes get repository attributes
 // Parameters:
 // name - name of the image (including the namespace)
 func (client BaseClient) GetAcrRepositoryAttributes(ctx context.Context, name string) (result RepositoryAttributes, err error) {
@@ -1627,7 +1642,8 @@ func (client BaseClient) GetAcrTagMetadataResponder(resp *http.Response) (result
 // GetAcrTags list tags of a repository
 // Parameters:
 // name - name of the image (including the namespace)
-// last - query parameter for the last item in previous query
+// last - query parameter for the last item in previous query. Result set will include values lexically after
+// last.
 // n - query parameter for max number of items
 // orderby - orderby query parameter
 // digest - filter by digest
@@ -1863,8 +1879,73 @@ func (client BaseClient) GetBlobUploadStatusResponder(resp *http.Response) (resu
 	return
 }
 
+// GetDockerRegistryV2Support tells whether this Docker Registry instance supports Docker Registry HTTP API v2
+func (client BaseClient) GetDockerRegistryV2Support(ctx context.Context) (result autorest.Response, err error) {
+	if tracing.IsEnabled() {
+		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.GetDockerRegistryV2Support")
+		defer func() {
+			sc := -1
+			if result.Response != nil {
+				sc = result.Response.StatusCode
+			}
+			tracing.EndSpan(ctx, sc, err)
+		}()
+	}
+	req, err := client.GetDockerRegistryV2SupportPreparer(ctx)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetDockerRegistryV2Support", nil, "Failure preparing request")
+		return
+	}
+
+	resp, err := client.GetDockerRegistryV2SupportSender(req)
+	if err != nil {
+		result.Response = resp
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetDockerRegistryV2Support", resp, "Failure sending request")
+		return
+	}
+
+	result, err = client.GetDockerRegistryV2SupportResponder(resp)
+	if err != nil {
+		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetDockerRegistryV2Support", resp, "Failure responding to request")
+	}
+
+	return
+}
+
+// GetDockerRegistryV2SupportPreparer prepares the GetDockerRegistryV2Support request.
+func (client BaseClient) GetDockerRegistryV2SupportPreparer(ctx context.Context) (*http.Request, error) {
+	urlParameters := map[string]interface{}{
+		"url": client.LoginURI,
+	}
+
+	preparer := autorest.CreatePreparer(
+		autorest.AsGet(),
+		autorest.WithCustomBaseURL("{url}", urlParameters),
+		autorest.WithPath("/v2/"))
+	return preparer.Prepare((&http.Request{}).WithContext(ctx))
+}
+
+// GetDockerRegistryV2SupportSender sends the GetDockerRegistryV2Support request. The method will close the
+// http.Response Body if it receives an error.
+func (client BaseClient) GetDockerRegistryV2SupportSender(req *http.Request) (*http.Response, error) {
+	return autorest.SendWithSender(client, req,
+		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
+}
+
+// GetDockerRegistryV2SupportResponder handles the response to the GetDockerRegistryV2Support request. The method always
+// closes the http.Response Body.
+func (client BaseClient) GetDockerRegistryV2SupportResponder(resp *http.Response) (result autorest.Response, err error) {
+	err = autorest.Respond(
+		resp,
+		client.ByInspecting(),
+		azure.WithErrorUnlessStatusCode(http.StatusOK),
+		autorest.ByClosing())
+	result.Response = resp
+	return
+}
+
 // GetManifest pulls the image manifest file associated with the specified name and reference. Reference may be a tag
-// or a digest.
+// or a digest
 // Parameters:
 // name - name of the image (including the namespace)
 // reference - a tag or a digest, pointing to a specific image
@@ -1944,9 +2025,10 @@ func (client BaseClient) GetManifestResponder(resp *http.Response) (result Manif
 	return
 }
 
-// GetRepositories list respositories
+// GetRepositories list repositories
 // Parameters:
-// last - query parameter for the last item in previous query
+// last - query parameter for the last item in previous query. Result set will include values lexically after
+// last.
 // n - query parameter for max number of items
 func (client BaseClient) GetRepositories(ctx context.Context, last string, n *int32) (result Repositories, err error) {
 	if tracing.IsEnabled() {
@@ -2022,7 +2104,7 @@ func (client BaseClient) GetRepositoriesResponder(resp *http.Response) (result R
 	return
 }
 
-// GetTagList fetch the tags under the repository identified by 'name'
+// GetTagList fetch the tags under the repository identified by name
 // Parameters:
 // name - name of the image (including the namespace)
 func (client BaseClient) GetTagList(ctx context.Context, name string) (result RepositoryTags, err error) {
@@ -2168,7 +2250,7 @@ func (client BaseClient) ListManifestMetadataResponder(resp *http.Response) (res
 	return
 }
 
-// ListRepositoryMetadata list respository metadata
+// ListRepositoryMetadata list repository metadata
 // Parameters:
 // name - name of the image (including the namespace)
 func (client BaseClient) ListRepositoryMetadata(ctx context.Context, name string) (result RepositoryMetadata, err error) {
@@ -2311,81 +2393,6 @@ func (client BaseClient) ListTagMetadataResponder(resp *http.Response) (result T
 		autorest.ByUnmarshallingJSON(&result),
 		autorest.ByClosing())
 	result.Response = autorest.Response{Response: resp}
-	return
-}
-
-// PutManifest put the manifest identified by name and reference where reference can be a tag or digest.
-// Parameters:
-// name - name of the image (including the namespace)
-// reference - a tag or a digest, pointing to a specific image
-func (client BaseClient) PutManifest(ctx context.Context, name string, reference string, payload Manifest) (result autorest.Response, err error) {
-	if tracing.IsEnabled() {
-		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.PutManifest")
-		defer func() {
-			sc := -1
-			if result.Response != nil {
-				sc = result.Response.StatusCode
-			}
-			tracing.EndSpan(ctx, sc, err)
-		}()
-	}
-	req, err := client.PutManifestPreparer(ctx, name, reference, payload)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acr.BaseClient", "PutManifest", nil, "Failure preparing request")
-		return
-	}
-
-	resp, err := client.PutManifestSender(req)
-	if err != nil {
-		result.Response = resp
-		err = autorest.NewErrorWithError(err, "acr.BaseClient", "PutManifest", resp, "Failure sending request")
-		return
-	}
-
-	result, err = client.PutManifestResponder(resp)
-	if err != nil {
-		err = autorest.NewErrorWithError(err, "acr.BaseClient", "PutManifest", resp, "Failure responding to request")
-	}
-
-	return
-}
-
-// PutManifestPreparer prepares the PutManifest request.
-func (client BaseClient) PutManifestPreparer(ctx context.Context, name string, reference string, payload Manifest) (*http.Request, error) {
-	urlParameters := map[string]interface{}{
-		"url": client.LoginURI,
-	}
-
-	pathParameters := map[string]interface{}{
-		"name":      autorest.Encode("path", name),
-		"reference": autorest.Encode("path", reference),
-	}
-
-	preparer := autorest.CreatePreparer(
-		autorest.AsContentType("application/vnd.docker.distribution.manifest.v2+json"),
-		autorest.AsPut(),
-		autorest.WithCustomBaseURL("{url}", urlParameters),
-		autorest.WithPathParameters("/v2/{name}/manifests/{reference}", pathParameters),
-		autorest.WithJSON(payload))
-	return preparer.Prepare((&http.Request{}).WithContext(ctx))
-}
-
-// PutManifestSender sends the PutManifest request. The method will close the
-// http.Response Body if it receives an error.
-func (client BaseClient) PutManifestSender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		autorest.DoRetryForStatusCodes(client.RetryAttempts, client.RetryDuration, autorest.StatusCodesForRetry...))
-}
-
-// PutManifestResponder handles the response to the PutManifest request. The method always
-// closes the http.Response Body.
-func (client BaseClient) PutManifestResponder(resp *http.Response) (result autorest.Response, err error) {
-	err = autorest.Respond(
-		resp,
-		client.ByInspecting(),
-		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusCreated),
-		autorest.ByClosing())
-	result.Response = resp
 	return
 }
 
@@ -2634,9 +2641,11 @@ func (client BaseClient) UpdateAcrManifestMetadataResponder(resp *http.Response)
 	return
 }
 
-// UpdateAcrRepositoryAttributes update attributes of a repository
+// UpdateAcrRepositoryAttributes update the attribute identified by `name` where `reference` is the name of the
+// repository.
 // Parameters:
 // name - name of the image (including the namespace)
+// value - repository attribute value
 func (client BaseClient) UpdateAcrRepositoryAttributes(ctx context.Context, name string, value *ChangeableAttributes) (result autorest.Response, err error) {
 	if tracing.IsEnabled() {
 		ctx = tracing.StartSpan(ctx, fqdn+"/BaseClient.UpdateAcrRepositoryAttributes")
@@ -2704,7 +2713,7 @@ func (client BaseClient) UpdateAcrRepositoryAttributesResponder(resp *http.Respo
 	err = autorest.Respond(
 		resp,
 		client.ByInspecting(),
-		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusNoContent),
+		azure.WithErrorUnlessStatusCode(http.StatusOK),
 		autorest.ByClosing())
 	result.Response = resp
 	return
@@ -2788,7 +2797,7 @@ func (client BaseClient) UpdateAcrRepositoryMetadataResponder(resp *http.Respons
 	return
 }
 
-// UpdateAcrTagAttributes update attributes of a tag
+// UpdateAcrTagAttributes update tag attributes
 // Parameters:
 // name - name of the image (including the namespace)
 // reference - tag or digest of the target manifest

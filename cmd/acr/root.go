@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// rootParameters defines the parameters that will be used in all of the commands.
 type rootParameters struct {
 	registryName string
 	username     string
@@ -43,7 +44,9 @@ To start working with the CLI, run acr --help`,
 	cmd.PersistentFlags().StringVarP(&rootParams.registryName, "registry", "r", "", "Registry name")
 	cmd.PersistentFlags().StringVarP(&rootParams.username, "username", "u", "", "Registry username")
 	cmd.PersistentFlags().StringVarP(&rootParams.password, "password", "p", "", "Registry password")
+	cmd.Flags().BoolP("help", "h", false, "Print usage")
 	cmd.Flags().StringArrayVarP(&rootParams.configs, "config", "c", nil, "Auth config paths")
+	// No parameter is marked as required because the registry could be inferred from a task context, same with username and password
 
 	_ = flags.Parse(args)
 	return cmd

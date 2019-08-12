@@ -7,6 +7,7 @@ import (
 	"context"
 )
 
+// Client is the interface defined for a docker authentication client
 type Client interface {
 	// Login logs into a container registry.
 	Login(ctx context.Context, hostname, username, secret string) error

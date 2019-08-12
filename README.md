@@ -1,9 +1,9 @@
 
 # Azure Container Registry CLI
 
-| Linux | Windows |
-|----|----|
-|[![Build Status](https://dev.azure.com/azurecontainerregistry/acr-cli/_apis/build/status/acr-cli?branchName=master)](https://dev.azure.com/azurecontainerregistry/acr-cli/_build/latest?definitionId=1&branchName=master)|[![Build Status](https://dev.azure.com/azurecontainerregistry/acr-cli/_apis/build/status/acr-cli%20(Windows)?branchName=master)](https://dev.azure.com/azurecontainerregistry/acr-cli/_build/latest?definitionId=6&branchName=master)|
+| Linux Build | Windows Build | Go Report |
+|----|----|----|
+|[![Build Status](https://dev.azure.com/azurecontainerregistry/acr-cli/_apis/build/status/acr-cli?branchName=master)](https://dev.azure.com/azurecontainerregistry/acr-cli/_build/latest?definitionId=1&branchName=master)|[![Build Status](https://dev.azure.com/azurecontainerregistry/acr-cli/_apis/build/status/acr-cli%20(Windows)?branchName=master)](https://dev.azure.com/azurecontainerregistry/acr-cli/_build/latest?definitionId=6&branchName=master)|[![Go Report Card](https://goreportcard.com/badge/github.com/Azure/acr-cli)](https://goreportcard.com/report/github.com/Azure/acr-cli)|
 
 This repository contains the source code for CLI components for Azure Container Registry.
 The CLI consists of a new way to interact with Container Registries, the currently supported commands include
