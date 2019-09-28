@@ -98,12 +98,15 @@ acr manifest delete -r <Registry Name> --repository <Repository Name> <Manifest 
 
 #### Purge Command
 
-To delete all the tags that are older than the default duration (1 day) and after that delete all manifests that were left without a tag that references them:
+To delete all the tags that are older than a certain duration:
 ```sh
 acr purge \
     --registry <Registry Name> \
     --filter <Repository Name>:<Regex filter>
+    --ago <Go Style Duration>
 ```
+
+##### Filter flag
 The filter flag is used to specify the repository and a regex filter, if a tag is older than the duration specified by the ago flag and matches the regex filter then it is untagged, for example:
 
 Examples of filters
@@ -112,23 +115,13 @@ Examples of filters
 |--------------------------------------------------------------------------------|-------------------------------------|
 | Untag all tags that begin with hello                                           | --filter `"<repository>:^hello.*"`  |
 | Untag tags that end with world                                                 | --filter `"<repository>:\w*world\b"`  |
-| Untag tags that are exactly called hello-world                                 | --filter `"<repository>:hello-world"` |
+| Untag tags that include hello-world in their name                              | --filter `"<repository>:hello-world"` |
 | Untag all tags that are older than the duration                                | --filter `"<repository>:.*"`          |
 
-#### Optional purge flags
-##### Untagged flag
-
-To delete all the manifests that do not have any tags linked to them, the ```--untagged``` flag should be set.
-```sh
-acr purge \
-    --registry <Registry Name> \
-    --filter <Repository Name>:<Regex filter>
-    --untagged
-```
 
 ##### Ago flag
 
-The ago flag can be used to change the default expiration time of a tag, for example, the following command would purge all tags that are older than 30 days instead of the default 1 day.
+The ago flag can be used to change the default expiration time of a tag, for example, the following command would purge all tags that are older than 30 days:
 ```sh
 acr purge \
     --registry <Registry Name> \
@@ -144,6 +137,18 @@ The following table further explains the functionality of this flag.
 | To delete all images that were last modified before 10 minutes ago            | --ago 10m   |
 | To delete all images that were last modified before 1 hour and 15 minutes ago | --ago 1h15m |
 
+The duration should be of the form \[integer\]d\[string\] where the first integer specifies the number of days and the string is in a go style duration (can be omitted)
+
+#### Optional purge flags
+##### Untagged flag
+
+To delete all the manifests that do not have any tags linked to them, the ```--untagged``` flag should be set.
+```sh
+acr purge \
+    --registry <Registry Name> \
+    --filter <Repository Name>:<Regex filter>
+    --untagged
+```
 ##### Dry run flag
 
 To know which tags and manifests would be deleted the ```dry-run``` flag can be set, nothing will be deleted and the output would be the same as if the purge command was executed normally.
