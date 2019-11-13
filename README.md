@@ -102,7 +102,8 @@ To delete all the tags that are older than a certain duration:
 ```sh
 acr purge \
     --registry <Registry Name> \
-    --filter <Repository Name>:<Regex filter>
+    --filter <Repository Name>:<Regex filter> \
+    --exclude-filter <Regex filter> \
     --ago <Go Style Duration>
 ```
 
@@ -117,7 +118,7 @@ Examples of filters
 | Untag tags that end with world                                                 | --filter `"<repository>:\w*world\b"`  |
 | Untag tags that include hello-world in their name                              | --filter `"<repository>:hello-world"` |
 | Untag all tags that are older than the duration                                | --filter `"<repository>:.*"`          |
-
+| Exclude all tags from untagging that end with -prod                                | --filter `".*-prod$"`          |
 
 ##### Ago flag
 
@@ -158,6 +159,19 @@ acr purge \
     --registry <Registry Name> \
     --filter <Repository Name>:<Regex filter> \
     --dry-run
+```
+
+##### Exclude filter tag
+
+To exclude tags from untagging one or more --exclude-filter arguments can be added
+
+```sh
+acr purge \
+    --registry <Registry Name> \
+    --filter <Repository Name>:<Regex filter> \
+    --exclude-filter <Regex exclude 1> \
+    --exclude-filter <Regex exclude 2>
+    ...
 ```
 
 ### Integration with ACR Tasks
