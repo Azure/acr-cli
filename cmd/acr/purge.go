@@ -272,13 +272,13 @@ func getTagsToDelete(ctx context.Context,
 			}
 			isExcluded := false
 			for _, exFilter := range excludeFilter {
-				exFilterRegex, err := regexp.Compile(exFilter)
-				if err != nil {
-					return nil, "", err
+				exFilterRegex, exFilterErr := regexp.Compile(exFilter)
+				if exFilterErr != nil {
+					return nil, "", exFilterErr
 				}
 				if exFilterRegex.MatchString(*tag.Name) {
 					isExcluded = true
-          continue
+					continue
 				}
 			}
 			if isExcluded {
