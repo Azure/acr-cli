@@ -338,7 +338,7 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient.On("GetAcrManifests", testCtx, testRepo, "", "").Return(singleMultiArchWithTagsResult, nil).Once()
 		mockClient.On("GetManifest", testCtx, testRepo, "sha:356").Return(multiArchBytes, nil).Once()
 		mockClient.On("GetAcrManifests", testCtx, testRepo, "", "sha:356").Return(doubleManifestV2WithoutTagsResult, nil).Once()
-    mockClient.On("GetAcrManifests", testCtx, testRepo, "", "sha:234").Return(EmptyListManifestsResult, nil).Once()
+		mockClient.On("GetAcrManifests", testCtx, testRepo, "", "sha:234").Return(EmptyListManifestsResult, nil).Once()
 		mockClient.On("DeleteManifest", testCtx, testRepo, "sha:234").Return(nil, nil).Once()
 		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, testLoginURL, testRepo)
 		worker.StopDispatcher()
