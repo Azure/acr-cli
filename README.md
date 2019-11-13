@@ -118,7 +118,7 @@ Examples of filters
 | Untag tags that end with world                                                 | --filter `"<repository>:\w*world\b"`  |
 | Untag tags that include hello-world in their name                              | --filter `"<repository>:hello-world"` |
 | Untag all tags that are older than the duration                                | --filter `"<repository>:.*"`          |
-| Exclude all tags from untagging that end with -prod                                | --filter `".*-prod$"`          |
+| Exclude all tags from untagging that end with -prod                            | --exclude-filter `".*-prod$"`          |
 
 ##### Ago flag
 
