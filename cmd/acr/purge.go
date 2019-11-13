@@ -40,7 +40,7 @@ const (
 	acr purge -r example --filter "hello-world:.*" --ago 1d --config C://Users/docker/config.json
 
   - Delete all tags that starts with hello but not if the tag is a production tag ending on -prod
-  acr purge -r example --filter "hello-world:hello.*" --exclude-filter ".*-prod$"
+        acr purge -r example --filter "hello-world:hello.*" --exclude-filter ".*-prod$"
 `
 
 	defaultNumWorkers       = 6
