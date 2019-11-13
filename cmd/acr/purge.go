@@ -278,6 +278,7 @@ func getTagsToDelete(ctx context.Context,
 				}
 				if exFilterRegex.MatchString(*tag.Name) {
 					isExcluded = true
+          continue
 				}
 			}
 			if isExcluded {
