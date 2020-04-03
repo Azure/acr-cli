@@ -66,7 +66,7 @@ func (pw *PurgeWorker) ProcessJob(ctx context.Context, job PurgeJob) {
 			// In case a tag is going to be purged DeleteAcrTag method is used.
 			resp, err := pw.acrClient.DeleteAcrTag(ctx, job.RepoName, job.Tag)
 			if err != nil {
-				if resp != nil && resp.StatusCode == http.StatusNotFound {
+				if resp != nil && resp.Response != nil && resp.StatusCode == http.StatusNotFound {
 					// If the tag is not found it can be assumed to have been deleted.
 					fmt.Printf("Skipped %s/%s:%s, HTTP status: %d\n", job.LoginURL, job.RepoName, job.Tag, resp.StatusCode)
 				} else {
@@ -82,7 +82,7 @@ func (pw *PurgeWorker) ProcessJob(ctx context.Context, job PurgeJob) {
 			// In case a manifest is going to be purged DeleteManifest method is used.
 			resp, err := pw.acrClient.DeleteManifest(ctx, job.RepoName, job.Digest)
 			if err != nil {
-				if resp != nil && resp.StatusCode == http.StatusNotFound {
+				if resp != nil && resp.Response != nil && resp.StatusCode == http.StatusNotFound {
 					// If the manifest is not found it can be assumed to have been deleted.
 					fmt.Printf("Skipped %s/%s@%s, HTTP status: %d\n", job.LoginURL, job.RepoName, job.Digest, resp.StatusCode)
 				} else {
