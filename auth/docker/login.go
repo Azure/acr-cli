@@ -30,9 +30,7 @@ func (c *Client) Login(ctx context.Context, hostname, username, secret string) e
 	}
 
 	remote, err := registry.NewService(
-		registry.ServiceOptions{
-			V2Only: true,
-		})
+		registry.ServiceOptions{})
 	if err != nil {
 		return err
 	}
