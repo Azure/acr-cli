@@ -159,6 +159,17 @@ acr purge \
     --untagged
 ```
 
+#### Keep flag
+
+To keep at least x number of tags, the `--keep` flag should be set.
+
+```sh
+acr purge \
+    --registry <Registry Name> \
+    --filter <Repository Name>:<Regex filter>
+    --keep 3
+```
+
 #### Dry run flag
 
 To know which tags and manifests would be deleted the `dry-run` flag can be set, nothing will be deleted and the output would be the same as if the purge command was executed normally.
