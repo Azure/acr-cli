@@ -579,6 +579,19 @@ func TestGetLastTagFromResponse(t *testing.T) {
 		lastTag := getLastTagFromResponse(OneTagResultWithNext)
 		assert.Equal("latest", lastTag)
 	})
+
+	t.Run("ReturnLastWithAmpersand", func(t *testing.T) {
+		assert := assert.New(t)
+		lastTag := getLastTagFromResponse(OneTagResultWithAmpersand)
+		assert.Equal("123&latest", lastTag)
+	})
+
+	t.Run("ReturnLastWhenQueryEndingWithLast", func(t *testing.T) {
+		assert := assert.New(t)
+		lastTag := getLastTagFromResponse(OneTagResultQueryEndingWithLast)
+		assert.Equal("123&latest", lastTag)
+	})
+
 }
 
 // TestParseDuration returns an extended duration from a string.
@@ -658,7 +671,45 @@ var (
 		Response: autorest.Response{
 			Response: &http.Response{
 				StatusCode: 200,
-				Header:     http.Header{linkHeader: {"/acr/v1/&testRepo/_tags?last=latest&n=3&orderby=timedesc"}},
+				Header:     http.Header{linkHeader: {"/acr/v1/&testRepo/_tags?last=latest&n=3&orderby=timedesc rel=\"next\""}},
+			},
+		},
+		Registry:  &testLoginURL,
+		ImageName: &testRepo,
+		TagsAttributes: &[]acr.TagAttributesBase{
+			{
+				Name:                 &tagName,
+				LastUpdateTime:       &lastUpdateTime,
+				ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+				Digest:               &digest,
+			},
+		},
+	}
+
+	OneTagResultWithAmpersand = &acr.RepositoryTagsType{
+		Response: autorest.Response{
+			Response: &http.Response{
+				StatusCode: 200,
+				Header:     http.Header{linkHeader: {"/acr/v1/&testRepo/_tags?last=123%26latest&n=3&orderby=timedesc rel=\"next\""}},
+			},
+		},
+		Registry:  &testLoginURL,
+		ImageName: &testRepo,
+		TagsAttributes: &[]acr.TagAttributesBase{
+			{
+				Name:                 &tagName,
+				LastUpdateTime:       &lastUpdateTime,
+				ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+				Digest:               &digest,
+			},
+		},
+	}
+
+	OneTagResultQueryEndingWithLast = &acr.RepositoryTagsType{
+		Response: autorest.Response{
+			Response: &http.Response{
+				StatusCode: 200,
+				Header:     http.Header{linkHeader: {"/acr/v1/&testRepo/_tags?last=123%26latest&n=3&orderby=timedesc rel=\"next\""}},
 			},
 		},
 		Registry:  &testLoginURL,
