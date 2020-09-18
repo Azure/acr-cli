@@ -428,11 +428,10 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 	// The loop to get the deleted tags follows the same logic as the one in the purgeTags function
 	for {
 		tagsToDelete, newLastTag, err := getTagsToDelete(ctx, acrClient, repoName, regex, timeToCompare, lastTag)
-		lastTag = newLastTag
 		if err != nil {
 			return -1, -1, err
 		}
-
+        lastTag = newLastTag
 		if tagsToDelete != nil {
 			for _, tag := range *tagsToDelete {
 				// For every tag that would be deleted first check if it exists in the map, if it doesn't add a new key
