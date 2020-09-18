@@ -431,7 +431,7 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 		if err != nil {
 			return -1, -1, err
 		}
-        lastTag = newLastTag
+		lastTag = newLastTag
 		if tagsToDelete != nil {
 			for _, tag := range *tagsToDelete {
 				// For every tag that would be deleted first check if it exists in the map, if it doesn't add a new key
