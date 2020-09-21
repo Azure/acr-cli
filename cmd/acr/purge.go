@@ -300,7 +300,8 @@ func getLastTagFromResponse(resultTags *acr.RepositoryTagsType) string {
 	if len(queryString) <= 1 {
 		return ""
 	}
-	vals, err := url.ParseQuery(queryString[1])
+	queryStringToParse := strings.Split(queryString[1], ">")
+	vals, err := url.ParseQuery(queryStringToParse[0])
 	if err != nil {
 		return ""
 	}
