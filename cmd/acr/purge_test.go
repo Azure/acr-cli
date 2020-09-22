@@ -47,7 +47,6 @@ func TestPurgeTags(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(OneTagResult, nil).Once()
-		mockClient.On("GetAcrTags", testCtx, testRepo, "", "latest").Return(EmptyListTagsResult, nil).Once()
 		deletedTags, err := purgeTags(testCtx, mockClient, testLoginURL, testRepo, "1d", "[\\s\\S]*")
 		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
@@ -59,7 +58,6 @@ func TestPurgeTags(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(OneTagResult, nil).Once()
-		mockClient.On("GetAcrTags", testCtx, testRepo, "", "latest").Return(EmptyListTagsResult, nil).Once()
 		deletedTags, err := purgeTags(testCtx, mockClient, testLoginURL, testRepo, "0m", "^hello.*")
 		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
@@ -98,7 +96,7 @@ func TestPurgeTags(t *testing.T) {
 	t.Run("GetAcrTagsErrorMultiplePageTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
-		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(OneTagResult, nil).Once()
+		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(OneTagResultWithNext, nil).Once()
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "latest").Return(nil, errors.New("unauthorized")).Once()
 		deletedTags, err := purgeTags(testCtx, mockClient, testLoginURL, testRepo, "1d", "[\\s\\S]*")
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
@@ -111,7 +109,6 @@ func TestPurgeTags(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(DeleteDisabledOneTagResult, nil).Once()
-		mockClient.On("GetAcrTags", testCtx, testRepo, "", "latest").Return(EmptyListTagsResult, nil).Once()
 		deletedTags, err := purgeTags(testCtx, mockClient, testLoginURL, testRepo, "0m", "^la.*")
 		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
@@ -134,7 +131,6 @@ func TestPurgeTags(t *testing.T) {
 		mockClient := mocks.AcrCLIClientInterface{}
 		worker.StartDispatcher(testCtx, &wg, &mockClient, 6)
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(OneTagResult, nil).Once()
-		mockClient.On("GetAcrTags", testCtx, testRepo, "", "latest").Return(EmptyListTagsResult, nil).Once()
 		mockClient.On("DeleteAcrTag", testCtx, testRepo, "latest").Return(&deletedResponse, nil).Once()
 		deletedTags, err := purgeTags(testCtx, &mockClient, testLoginURL, testRepo, "0m", "^la.*")
 		worker.StopDispatcher()
@@ -148,9 +144,8 @@ func TestPurgeTags(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := mocks.AcrCLIClientInterface{}
 		worker.StartDispatcher(testCtx, &wg, &mockClient, 6)
-		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(OneTagResult, nil).Once()
+		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(OneTagResultWithNext, nil).Once()
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "latest").Return(FourTagsResult, nil).Once()
-		mockClient.On("GetAcrTags", testCtx, testRepo, "", "v4").Return(EmptyListTagsResult, nil).Once()
 		mockClient.On("DeleteAcrTag", testCtx, testRepo, "latest").Return(&deletedResponse, nil).Once()
 		mockClient.On("DeleteAcrTag", testCtx, testRepo, "v1").Return(&deletedResponse, nil).Once()
 		mockClient.On("DeleteAcrTag", testCtx, testRepo, "v2").Return(&deletedResponse, nil).Once()
@@ -168,7 +163,6 @@ func TestPurgeTags(t *testing.T) {
 		mockClient := mocks.AcrCLIClientInterface{}
 		worker.StartDispatcher(testCtx, &wg, &mockClient, 6)
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(OneTagResult, nil).Once()
-		mockClient.On("GetAcrTags", testCtx, testRepo, "", "latest").Return(nil, nil).Once()
 		mockClient.On("DeleteAcrTag", testCtx, testRepo, "latest").Return(&notFoundResponse, errors.New("not found")).Once()
 		deletedTags, err := purgeTags(testCtx, &mockClient, testLoginURL, testRepo, "0m", "^la.*")
 		worker.StopDispatcher()
@@ -387,7 +381,6 @@ func TestDryRun(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(FourTagsResult, nil).Once()
-		mockClient.On("GetAcrTags", testCtx, testRepo, "", "v4").Return(EmptyListTagsResult, nil).Once()
 		deletedTags, deletedManifests, err := dryRunPurge(testCtx, mockClient, testLoginURL, testRepo, "0m", "[\\s\\S]*", false)
 		assert.Equal(4, deletedTags, "Number of deleted elements should be 4")
 		assert.Equal(0, deletedManifests, "Number of deleted elements should be 0")
@@ -409,8 +402,7 @@ func TestDryRun(t *testing.T) {
 	t.Run("GetAcrTagsError2Test", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
-		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(FourTagsResult, nil).Once()
-		mockClient.On("GetAcrTags", testCtx, testRepo, "", "v4").Return(nil, errors.New("error fetching tags")).Once()
+		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(nil, errors.New("error fetching tags")).Once()
 		deletedTags, deletedManifests, err := dryRunPurge(testCtx, mockClient, testLoginURL, testRepo, "0m", "[\\s\\S]*", false)
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
 		assert.Equal(-1, deletedManifests, "Number of deleted elements should be -1")
@@ -446,7 +438,7 @@ func TestDryRun(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(FourTagsResult, nil).Twice()
-		mockClient.On("GetAcrTags", testCtx, testRepo, "", "v4").Return(EmptyListTagsResult, nil).Twice()
+		mockClient.On("GetAcrTags", testCtx, testRepo, "", "v4").Return(EmptyListTagsResult, nil).Once()
 		mockClient.On("GetAcrManifests", testCtx, testRepo, "", "").Return(singleMultiArchWithTagsResult, nil).Once()
 		mockClient.On("GetManifest", testCtx, testRepo, "sha:356").Return(nil, errors.New("error getting manifest")).Once()
 		deletedTags, deletedManifests, err := dryRunPurge(testCtx, mockClient, testLoginURL, testRepo, "0m", "^lat.*", true)
@@ -460,7 +452,7 @@ func TestDryRun(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(FourTagsResult, nil).Twice()
-		mockClient.On("GetAcrTags", testCtx, testRepo, "", "v4").Return(EmptyListTagsResult, nil).Twice()
+		mockClient.On("GetAcrTags", testCtx, testRepo, "", "v4").Return(EmptyListTagsResult, nil).Once()
 		mockClient.On("GetAcrManifests", testCtx, testRepo, "", "").Return(singleMultiArchWithTagsResult, nil).Once()
 		mockClient.On("GetManifest", testCtx, testRepo, "sha:356").Return([]byte("invalid json"), nil).Once()
 		deletedTags, deletedManifests, err := dryRunPurge(testCtx, mockClient, testLoginURL, testRepo, "0m", "^lat.*", true)
@@ -473,9 +465,7 @@ func TestDryRun(t *testing.T) {
 	t.Run("MultiArchGetAcrTagsErrorTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
-		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(FourTagsResult, nil).Once()
-		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(FourTagsResult, nil).Once()
-		mockClient.On("GetAcrTags", testCtx, testRepo, "", "v4").Return(EmptyListTagsResult, nil).Once()
+		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(FourTagsResult, nil).Twice()
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "v4").Return(nil, errors.New("error fetching tags")).Once()
 		deletedTags, deletedManifests, err := dryRunPurge(testCtx, mockClient, testLoginURL, testRepo, "0m", "^lat.*", true)
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
@@ -487,9 +477,7 @@ func TestDryRun(t *testing.T) {
 	t.Run("MultiArchGetAcrTagsError2Test", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
-		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(FourTagsResult, nil).Once()
-		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(FourTagsResult, nil).Once()
-		mockClient.On("GetAcrTags", testCtx, testRepo, "", "v4").Return(EmptyListTagsResult, nil).Once()
+		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(FourTagsResult, nil).Twice()
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "v4").Return(EmptyListTagsResult, nil).Once()
 		mockClient.On("GetAcrManifests", testCtx, testRepo, "", "").Return(singleMultiArchWithTagsResult, nil).Once()
 		mockClient.On("GetManifest", testCtx, testRepo, "sha:356").Return(multiArchBytes, nil).Once()
@@ -506,7 +494,7 @@ func TestDryRun(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(FourTagsResult, nil).Twice()
-		mockClient.On("GetAcrTags", testCtx, testRepo, "", "v4").Return(EmptyListTagsResult, nil).Twice()
+		mockClient.On("GetAcrTags", testCtx, testRepo, "", "v4").Return(EmptyListTagsResult, nil).Once()
 		mockClient.On("GetAcrManifests", testCtx, testRepo, "", "").Return(singleMultiArchWithTagsResult, nil).Once()
 		mockClient.On("GetManifest", testCtx, testRepo, "sha:356").Return(multiArchBytes, nil).Once()
 		mockClient.On("GetAcrManifests", testCtx, testRepo, "", "sha:356").Return(doubleManifestV2WithoutTagsResult, nil).Once()
@@ -548,6 +536,62 @@ func TestGetRepositoryAndTagRegex(t *testing.T) {
 		assert.Equal("", filter)
 		assert.NotEqual(nil, err, "Error should not be nil")
 	})
+}
+
+// TestGetLastTagFromResponse returns the last tag from response.
+func TestGetLastTagFromResponse(t *testing.T) {
+
+	t.Run("ReturnEmptyForNoHeaders", func(t *testing.T) {
+		assert := assert.New(t)
+		lastTag := getLastTagFromResponse(OneTagResult)
+		assert.Equal("", lastTag)
+	})
+
+	t.Run("ReturnEmptyForNoLinkHeaders", func(t *testing.T) {
+		assert := assert.New(t)
+		ResultWithNoLinkHeader := &acr.RepositoryTagsType{
+			Response: autorest.Response{
+				Response: &http.Response{
+					StatusCode: 200,
+					Header:     http.Header{"testHeader": {"Test Values"}},
+				},
+			},
+		}
+		lastTag := getLastTagFromResponse(ResultWithNoLinkHeader)
+		assert.Equal("", lastTag)
+	})
+
+	t.Run("ReturnEmptyForNoQueryString", func(t *testing.T) {
+		assert := assert.New(t)
+		ResultWithNoQuery := &acr.RepositoryTagsType{
+			Response: autorest.Response{
+				Response: &http.Response{
+					StatusCode: 200,
+					Header:     http.Header{linkHeader: {"/acr/v1/&testRepo/_tags"}}},
+			},
+		}
+		lastTag := getLastTagFromResponse(ResultWithNoQuery)
+		assert.Equal("", lastTag)
+	})
+
+	t.Run("ReturnLastTagFromHeader", func(t *testing.T) {
+		assert := assert.New(t)
+		lastTag := getLastTagFromResponse(OneTagResultWithNext)
+		assert.Equal("latest", lastTag)
+	})
+
+	t.Run("ReturnLastWithAmpersand", func(t *testing.T) {
+		assert := assert.New(t)
+		lastTag := getLastTagFromResponse(OneTagResultWithAmpersand)
+		assert.Equal("123&latest", lastTag)
+	})
+
+	t.Run("ReturnLastWhenQueryEndingWithLast", func(t *testing.T) {
+		assert := assert.New(t)
+		lastTag := getLastTagFromResponse(OneTagResultQueryEndingWithLast)
+		assert.Equal("123&latest", lastTag)
+	})
+
 }
 
 // TestParseDuration returns an extended duration from a string.
@@ -606,6 +650,68 @@ var (
 	invalidLastUpdateTime = "date"
 
 	OneTagResult = &acr.RepositoryTagsType{
+		Response: autorest.Response{
+			Response: &http.Response{
+				StatusCode: 200,
+			},
+		},
+		Registry:  &testLoginURL,
+		ImageName: &testRepo,
+		TagsAttributes: &[]acr.TagAttributesBase{
+			{
+				Name:                 &tagName,
+				LastUpdateTime:       &lastUpdateTime,
+				ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+				Digest:               &digest,
+			},
+		},
+	}
+
+	OneTagResultWithNext = &acr.RepositoryTagsType{
+		Response: autorest.Response{
+			Response: &http.Response{
+				StatusCode: 200,
+				Header:     http.Header{linkHeader: {"</acr/v1/&testRepo/_tags?last=latest&n=3&orderby=timedesc>; rel=\"next\""}},
+			},
+		},
+		Registry:  &testLoginURL,
+		ImageName: &testRepo,
+		TagsAttributes: &[]acr.TagAttributesBase{
+			{
+				Name:                 &tagName,
+				LastUpdateTime:       &lastUpdateTime,
+				ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+				Digest:               &digest,
+			},
+		},
+	}
+
+	OneTagResultWithAmpersand = &acr.RepositoryTagsType{
+		Response: autorest.Response{
+			Response: &http.Response{
+				StatusCode: 200,
+				Header:     http.Header{linkHeader: {"</acr/v1/&testRepo/_tags?last=123%26latest&n=3&orderby=>; rel=\"next\""}},
+			},
+		},
+		Registry:  &testLoginURL,
+		ImageName: &testRepo,
+		TagsAttributes: &[]acr.TagAttributesBase{
+			{
+				Name:                 &tagName,
+				LastUpdateTime:       &lastUpdateTime,
+				ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+				Digest:               &digest,
+			},
+		},
+	}
+
+	OneTagResultQueryEndingWithLast = &acr.RepositoryTagsType{
+		Response: autorest.Response{
+			Response: &http.Response{
+				StatusCode: 200,
+				Header:     http.Header{linkHeader: {"</acr/v1/&testRepo/_tags?n=3&orderby=timedesc&last=123%26latest>; rel=\"next\""}},
+			},
+		},
 		Registry:  &testLoginURL,
 		ImageName: &testRepo,
 		TagsAttributes: &[]acr.TagAttributesBase{
@@ -619,6 +725,11 @@ var (
 	}
 
 	InvalidDateOneTagResult = &acr.RepositoryTagsType{
+		Response: autorest.Response{
+			Response: &http.Response{
+				StatusCode: 200,
+			},
+		},
 		Registry:  &testLoginURL,
 		ImageName: &testRepo,
 		TagsAttributes: &[]acr.TagAttributesBase{
@@ -632,6 +743,11 @@ var (
 	}
 
 	DeleteDisabledOneTagResult = &acr.RepositoryTagsType{
+		Response: autorest.Response{
+			Response: &http.Response{
+				StatusCode: 200,
+			},
+		},
 		Registry:  &testLoginURL,
 		ImageName: &testRepo,
 		TagsAttributes: &[]acr.TagAttributesBase{
@@ -649,6 +765,11 @@ var (
 	tagName4 = "v4"
 
 	FourTagsResult = &acr.RepositoryTagsType{
+		Response: autorest.Response{
+			Response: &http.Response{
+				StatusCode: 200,
+			},
+		},
 		Registry:  &testLoginURL,
 		ImageName: &testRepo,
 		TagsAttributes: &[]acr.TagAttributesBase{{
