@@ -10,6 +10,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"sync"
@@ -45,6 +46,7 @@ const (
 
 	defaultNumWorkers       = 6
 	manifestListContentType = "application/vnd.docker.distribution.manifest.list.v2+json"
+	linkHeader              = "Link"
 )
 
 // purgeParameters defines the parameters that the purge command uses (including the registry name, username and password).
@@ -172,30 +174,34 @@ func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, loginUR
 		return -1, err
 	}
 	lastTag := ""
-	tagsToDelete, lastTag, skippedTagsCount, err := getTagsToDelete(ctx, acrClient, repoName, tagRegex, timeToCompare, "", keep, 0)
-	if err != nil {
-		return -1, err
-	}
+	skippedTagsCount := 0
 	// GetTagsToDelete will return an empty lastTag when there are no more tags.
-	for len(lastTag) > 0 {
-		for _, tag := range *tagsToDelete {
-			wg.Add(1)
-			// The purge job is queued, after a purge worker picks it up the tag will be deleted.
-			worker.QueuePurgeTag(loginURL, repoName, *tag.Name, *tag.Digest)
-			deletedTagsCount++
-		}
-		// To not overflow the error channel capacity the purgeTags function waits for a whole block of
-		// 100 jobs to be finished before continuing.
-		wg.Wait()
-		for len(worker.ErrorChannel) > 0 {
-			wErr := <-worker.ErrorChannel
-			if wErr.Error != nil {
-				return -1, wErr.Error
-			}
-		}
-		tagsToDelete, lastTag, skippedTagsCount, err = getTagsToDelete(ctx, acrClient, repoName, tagRegex, timeToCompare, lastTag, keep, skippedTagsCount)
+	for {
+		tagsToDelete, newLastTag, newSkippedTagsCount, err := getTagsToDelete(ctx, acrClient, repoName, tagRegex, timeToCompare, lastTag, keep, skippedTagsCount)
 		if err != nil {
 			return -1, err
+		}
+		lastTag = newLastTag
+		skippedTagsCount = newSkippedTagsCount
+		if tagsToDelete != nil {
+			for _, tag := range *tagsToDelete {
+				wg.Add(1)
+				// The purge job is queued, after a purge worker picks it up the tag will be deleted.
+				worker.QueuePurgeTag(loginURL, repoName, *tag.Name, *tag.Digest)
+				deletedTagsCount++
+			}
+			// To not overflow the error channel capacity the purgeTags function waits for a whole block of
+			// 100 jobs to be finished before continuing.
+			wg.Wait()
+			for len(worker.ErrorChannel) > 0 {
+				wErr := <-worker.ErrorChannel
+				if wErr.Error != nil {
+					return -1, wErr.Error
+				}
+			}
+		}
+		if len(lastTag) == 0 {
+			break
 		}
 	}
 	return deletedTagsCount, nil
@@ -296,12 +302,32 @@ func getTagsToDelete(ctx context.Context,
 				}
 			}
 		}
-		// The lastTag is updated to keep the for loop going.
-		newLastTag = *tags[len(tags)-1].Name
+		newLastTag = getLastTagFromResponse(resultTags)
 		return &tagsToDelete, newLastTag, skippedTagsCount, nil
 	}
 	// In case there are no more tags return empty string as lastTag so that the purgeTags function stops
 	return nil, "", skippedTagsCount, nil
+}
+
+func getLastTagFromResponse(resultTags *acr.RepositoryTagsType) string {
+	// The lastTag is updated to keep the for loop going.
+	if resultTags.Header == nil {
+		return ""
+	}
+	link := resultTags.Header.Get(linkHeader)
+	if len(link) == 0 {
+		return ""
+	}
+	queryString := strings.Split(link, "?")
+	if len(queryString) <= 1 {
+		return ""
+	}
+	queryStringToParse := strings.Split(queryString[1], ">")
+	vals, err := url.ParseQuery(queryStringToParse[0])
+	if err != nil {
+		return ""
+	}
+	return vals.Get("last")
 }
 
 // purgeDanglingManifests deletes all manifests that do not have any tags associated with them.
@@ -422,26 +448,30 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 		return -1, -1, err
 	}
 	lastTag := ""
-	tagsToDelete, lastTag, skippedTagsCount, err := getTagsToDelete(ctx, acrClient, repoName, regex, timeToCompare, "", keep, 0)
-	if err != nil {
-		return -1, -1, err
-	}
+	skippedTagsCount := 0
 	// The loop to get the deleted tags follows the same logic as the one in the purgeTags function
-	for len(lastTag) > 0 {
-		for _, tag := range *tagsToDelete {
-			// For every tag that would be deleted first check if it exists in the map, if it doesn't add a new key
-			// with value 1 and if it does just add 1 to the existent value.
-			if _, exists := deletedTags[*tag.Digest]; exists {
-				deletedTags[*tag.Digest]++
-			} else {
-				deletedTags[*tag.Digest] = 1
-			}
-			fmt.Printf("%s/%s:%s\n", loginURL, repoName, *tag.Name)
-			deletedTagsCount++
-		}
-		tagsToDelete, lastTag, skippedTagsCount, err = getTagsToDelete(ctx, acrClient, repoName, regex, timeToCompare, lastTag, keep, skippedTagsCount)
+	for {
+		tagsToDelete, newLastTag, newSkippedTagsCount, err := getTagsToDelete(ctx, acrClient, repoName, regex, timeToCompare, lastTag, keep, skippedTagsCount)
 		if err != nil {
 			return -1, -1, err
+		}
+		lastTag = newLastTag
+		skippedTagsCount = newSkippedTagsCount
+		if tagsToDelete != nil {
+			for _, tag := range *tagsToDelete {
+				// For every tag that would be deleted first check if it exists in the map, if it doesn't add a new key
+				// with value 1 and if it does just add 1 to the existent value.
+				if _, exists := deletedTags[*tag.Digest]; exists {
+					deletedTags[*tag.Digest]++
+				} else {
+					deletedTags[*tag.Digest] = 1
+				}
+				fmt.Printf("%s/%s:%s\n", loginURL, repoName, *tag.Name)
+				deletedTagsCount++
+			}
+		}
+		if len(lastTag) == 0 {
+			break
 		}
 	}
 	if untagged {
