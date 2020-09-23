@@ -289,20 +289,19 @@ func getTagsToDelete(ctx context.Context,
 		}
 
 		tagsToDelete := []acr.TagAttributesBase{}
-
+		newLastTag = getLastTagFromResponse(resultTags)
 		if keep == 0 || skippedTagsCount == keep {
 			tagsToDelete = tagsEligibleForDeletion
-		} else {
-			for _, tag := range tagsEligibleForDeletion {
-				// Keep at least the configured number of tags
-				if skippedTagsCount < keep {
-					skippedTagsCount++
-				} else {
-					tagsToDelete = append(tagsToDelete, tag)
-				}
+			return &tagsToDelete, newLastTag, skippedTagsCount, nil
+		}
+		for _, tag := range tagsEligibleForDeletion {
+			// Keep at least the configured number of tags
+			if skippedTagsCount < keep {
+				skippedTagsCount++
+			} else {
+				tagsToDelete = append(tagsToDelete, tag)
 			}
 		}
-		newLastTag = getLastTagFromResponse(resultTags)
 		return &tagsToDelete, newLastTag, skippedTagsCount, nil
 	}
 	// In case there are no more tags return empty string as lastTag so that the purgeTags function stops
