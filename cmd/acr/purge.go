@@ -290,15 +290,15 @@ func getTagsToDelete(ctx context.Context,
 
 		tagsToDelete := []acr.TagAttributesBase{}
 
-		if keep == 0 {
+		if keep == 0 || skippedTagsCount == keep {
 			tagsToDelete = tagsEligibleForDeletion
 		} else {
 			for _, tag := range tagsEligibleForDeletion {
 				// Keep at least the configured number of tags
-				if keep-skippedTagsCount == 0 {
-					tagsToDelete = append(tagsToDelete, tag)
-				} else {
+				if skippedTagsCount < keep {
 					skippedTagsCount++
+				} else {
+					tagsToDelete = append(tagsToDelete, tag)
 				}
 			}
 		}
