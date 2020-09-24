@@ -32,7 +32,7 @@ const (
   - Delete all tags that are older than 7 days and begin with hello in the example.azurecr.io registry inside the hello-world repository
     	acr purge -r example --filter "hello-world:^hello.*" --ago 7d 
 
-  - Delete all tags that are older than 7 days, begin with hello, keeping at least 2 in the example.azurecr.io registry inside the hello-world repository
+  - Delete all tags that are older than 7 days, begin with hello, keeping the latest 2 in example.azurecr.io registry inside the hello-world repository
     	acr purge -r example --filter "hello-world:^hello.*" --ago 7d --keep 2
 
   - Delete all tags that contain the word test in the tag name and are older than 5 days in the example.azurecr.io registry inside the hello-world 

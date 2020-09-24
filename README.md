@@ -161,7 +161,7 @@ acr purge \
 
 #### Keep flag
 
-To keep at least x number of tags, the `--keep` flag should be set.
+To keep the latest x number of tags, the `--keep` flag should be set.
 
 ```sh
 acr purge \
