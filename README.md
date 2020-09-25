@@ -108,7 +108,7 @@ To delete all the tags that are older than a certain duration:
 ```sh
 acr purge \
     --registry <Registry Name> \
-    --filter <Repository Name>:<Regex filter>
+    --filter <Repository Name>:<Regex filter> \
     --ago <Go Style Duration>
 ```
 
@@ -132,7 +132,7 @@ The ago flag can be used to change the default expiration time of a tag, for exa
 ```sh
 acr purge \
     --registry <Registry Name> \
-    --filter <Repository Name>:<Regex filter>
+    --filter <Repository Name>:<Regex filter> \
     --ago 30d
 ```
 
@@ -155,18 +155,19 @@ To delete all the manifests that do not have any tags linked to them, the `--unt
 ```sh
 acr purge \
     --registry <Registry Name> \
-    --filter <Repository Name>:<Regex filter>
+    --filter <Repository Name>:<Regex filter> \
     --untagged
 ```
 
 #### Keep flag
 
-To keep the latest x number of tags, the `--keep` flag should be set.
+To keep the latest x number of to-be-deleted tags, the `--keep` flag should be set.
 
 ```sh
 acr purge \
     --registry <Registry Name> \
-    --filter <Repository Name>:<Regex filter>
+    --filter <Repository Name>:<Regex filter> \
+    --ago 30d \
     --keep 3
 ```
 
