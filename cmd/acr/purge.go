@@ -42,7 +42,7 @@ const (
     the C://Users/docker/config.json path
 	acr purge -r example --filter "hello-world:.*" --ago 1d --config C://Users/docker/config.json
 `
-	batchSize               = 100
+	batchSize               = 100 // ACR list APIs return 100 results per page
 	manifestListContentType = "application/vnd.docker.distribution.manifest.list.v2+json"
 	linkHeader              = "Link"
 )
