@@ -8,7 +8,7 @@ import (
 	"github.com/Azure/acr-cli/cmd/api"
 )
 
-// Purger defines a worker pool that can process PurgeJobs.
+// Purger defines a worker pool that manages workers to process PurgeJobs.
 type Purger struct {
 	wp *workerPool
 }
@@ -23,7 +23,7 @@ func NewPurger(batchSize int, acrClient api.AcrCLIClientInterface) *Purger {
 	}
 }
 
-// ErrChan returns a channel that contains workerError occurred during processing PurgeJobs.
+// ErrChan returns a channel that stores workerError occurred during processing PurgeJobs.
 func (p *Purger) ErrChan() chan WorkerError {
 	return p.wp.errChan
 }

@@ -78,7 +78,7 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			// In order to only have a limited amount of http requests a purger is used that will starts goroutines to delete tags/manifests.
+			// In order to only have a limited amount of http requests a purger is used that will start goroutines to delete tags/manifests.
 			purger := worker.NewPurger(batchSize, acrClient)
 			// A map is used to keep the regex tags for every repository.
 			tagFilters := map[string][]string{}
@@ -182,7 +182,7 @@ func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, p *work
 				deletedTagsCount++
 			}
 			// To not overflow the error channel capacity the purgeTags function waits for a whole block of
-			// 100 jobs to be finished before continuing.
+			// jobs to be finished before continuing.
 			p.Wait(ctx)
 			for len(p.ErrChan()) > 0 {
 				wErr := <-p.ErrChan()

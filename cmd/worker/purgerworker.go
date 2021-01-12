@@ -8,19 +8,19 @@ import (
 	"github.com/Azure/acr-cli/cmd/api"
 )
 
-// purgeWorker implements worker interface
+// purgeWorker leverages an acrClient to process purge jobs.
 type purgeWorker struct {
 	acrClient api.AcrCLIClientInterface
 }
 
-// newPurgeWorker creates a purgeWorker
+// newPurgeWorker creates a purgeWorker.
 func newPurgeWorker(acrClient api.AcrCLIClientInterface) *purgeWorker {
 	return &purgeWorker{
 		acrClient: acrClient,
 	}
 }
 
-// work processes purge jobs (currently PurgeTag and PurgeManifest)
+// work processes purge jobs (currently PurgeTag and PurgeManifest).
 func (pw *purgeWorker) work(ctx context.Context, job PurgeJob) (wErr WorkerError) {
 	switch job.JobType {
 	case PurgeTag:
