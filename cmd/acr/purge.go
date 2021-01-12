@@ -185,9 +185,9 @@ func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, p *work
 			// jobs to be finished before continuing.
 			p.Wait(ctx)
 			for len(p.ErrChan()) > 0 {
-				wErr := <-p.ErrChan()
-				if wErr.Error != nil {
-					return -1, wErr.Error
+				pjErr := <-p.ErrChan()
+				if pjErr.Error != nil {
+					return -1, pjErr.Error
 				}
 			}
 		}
@@ -339,9 +339,9 @@ func purgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInter
 		if math.Mod(float64(i), batchSize) == 0 {
 			p.Wait(ctx)
 			for len(p.ErrChan()) > 0 {
-				wErr := <-p.ErrChan()
-				if wErr.Error != nil {
-					return -1, wErr.Error
+				pjErr := <-p.ErrChan()
+				if pjErr.Error != nil {
+					return -1, pjErr.Error
 				}
 			}
 		}
@@ -350,9 +350,9 @@ func purgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInter
 	// Wait for all the worker jobs to finish.
 	p.Wait(ctx)
 	for len(p.ErrChan()) > 0 {
-		wErr := <-p.ErrChan()
-		if wErr.Error != nil {
-			return -1, wErr.Error
+		pjErr := <-p.ErrChan()
+		if pjErr.Error != nil {
+			return -1, pjErr.Error
 		}
 	}
 	return deletedManifestsCount, nil

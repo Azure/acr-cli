@@ -13,12 +13,12 @@ type workerPool struct {
 	workerNum int64
 	batchSize int
 	sem       *semaphore.Weighted
-	errChan   chan WorkerError
+	errChan   chan PurgeJobError
 }
 
-// worker defines a work function that handles PurgeJob and returns WorkerError.
+// worker defines a work function that handles PurgeJob and returns PurgeJobError.
 type worker interface {
-	work(context.Context, PurgeJob) WorkerError
+	work(context.Context, PurgeJob) PurgeJobError
 }
 
 // newWorkerPool creates a new workerPool.
@@ -28,7 +28,7 @@ func newWorkerPool(worker worker, workerNum int64, batchSize int) *workerPool {
 		workerNum: workerNum,
 		batchSize: batchSize,
 		sem:       semaphore.NewWeighted(workerNum),
-		errChan:   make(chan WorkerError, batchSize),
+		errChan:   make(chan PurgeJobError, batchSize),
 	}
 }
 

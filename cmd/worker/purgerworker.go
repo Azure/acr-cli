@@ -21,7 +21,7 @@ func newPurgeWorker(acrClient api.AcrCLIClientInterface) *purgeWorker {
 }
 
 // work processes purge jobs (currently PurgeTag and PurgeManifest).
-func (pw *purgeWorker) work(ctx context.Context, job PurgeJob) (wErr WorkerError) {
+func (pw *purgeWorker) work(ctx context.Context, job PurgeJob) (wErr PurgeJobError) {
 	switch job.JobType {
 	case PurgeTag:
 		// In case a tag is going to be purged DeleteAcrTag method is used.
@@ -31,7 +31,7 @@ func (pw *purgeWorker) work(ctx context.Context, job PurgeJob) (wErr WorkerError
 				// If the tag is not found it can be assumed to have been deleted.
 				fmt.Printf("Skipped %s/%s:%s, HTTP status: %d\n", job.LoginURL, job.RepoName, job.Tag, resp.StatusCode)
 			} else {
-				wErr = WorkerError{
+				wErr = PurgeJobError{
 					JobType: PurgeTag,
 					Error:   err,
 				}
@@ -47,7 +47,7 @@ func (pw *purgeWorker) work(ctx context.Context, job PurgeJob) (wErr WorkerError
 				// If the manifest is not found it can be assumed to have been deleted.
 				fmt.Printf("Skipped %s/%s@%s, HTTP status: %d\n", job.LoginURL, job.RepoName, job.Digest, resp.StatusCode)
 			} else {
-				wErr = WorkerError{
+				wErr = PurgeJobError{
 					JobType: PurgeTag,
 					Error:   err,
 				}

@@ -24,7 +24,7 @@ func NewPurger(batchSize int, acrClient api.AcrCLIClientInterface) *Purger {
 }
 
 // ErrChan returns a channel that stores workerError occurred during processing PurgeJobs.
-func (p *Purger) ErrChan() chan WorkerError {
+func (p *Purger) ErrChan() chan PurgeJobError {
 	return p.wp.errChan
 }
 
