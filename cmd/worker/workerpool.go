@@ -7,7 +7,7 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-// workerPool uses semaphore to limit the amount of the number of goroutines processing PurgeJob.
+// workerPool uses semaphore to limit the number of goroutines processing PurgeJob.
 type workerPool struct {
 	worker    worker
 	workerNum int64
