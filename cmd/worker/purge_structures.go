@@ -26,8 +26,8 @@ const (
 	PurgeManifest JobTypeEnum = "purgemanifest"
 )
 
-// workerError describes an error which occurred inside a worker.
-type workerError struct {
+// WorkerError describes an error which occurred inside a worker.
+type WorkerError struct {
 	JobType JobTypeEnum
 	Error   error
 }

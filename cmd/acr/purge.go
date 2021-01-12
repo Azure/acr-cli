@@ -13,7 +13,6 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/Azure/acr-cli/acr"
@@ -43,8 +42,7 @@ const (
     the C://Users/docker/config.json path
 	acr purge -r example --filter "hello-world:.*" --ago 1d --config C://Users/docker/config.json
 `
-
-	defaultNumWorkers       = 6
+	batchSize               = 100
 	manifestListContentType = "application/vnd.docker.distribution.manifest.list.v2+json"
 	linkHeader              = "Link"
 )
@@ -58,10 +56,6 @@ type purgeParameters struct {
 	untagged bool
 	dryRun   bool
 }
-
-// The WaitGroup is used to make sure that the http requests are finished before exiting the program, and also to limit the
-// amount of concurrent http calls to the defaultNumWorkers
-var wg sync.WaitGroup
 
 // newPurgeCmd defines the purge command.
 func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
@@ -84,9 +78,8 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			// In order to only have a fixed amount of http requests a dispatcher is started that will keep forwarding the jobs
-			// to the workers, which are goroutines that continuously fetch for tags/manifests to delete.
-			worker.StartDispatcher(ctx, &wg, acrClient, defaultNumWorkers)
+			// In order to only have a limited amount of http requests a purger is used that will starts goroutines to delete tags/manifests.
+			purger := worker.NewPurger(batchSize, acrClient)
 			// A map is used to keep the regex tags for every repository.
 			tagFilters := map[string][]string{}
 			for _, filter := range purgeParams.filters {
@@ -111,14 +104,14 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 					tagRegex = tagRegex + "|" + listOfTagRegex[i]
 				}
 				if !purgeParams.dryRun {
-					singleDeletedTagsCount, err := purgeTags(ctx, acrClient, loginURL, repoName, purgeParams.ago, tagRegex, purgeParams.keep)
+					singleDeletedTagsCount, err := purgeTags(ctx, acrClient, purger, loginURL, repoName, purgeParams.ago, tagRegex, purgeParams.keep)
 					if err != nil {
 						return errors.Wrap(err, "failed to purge tags")
 					}
 					singleDeletedManifestsCount := 0
 					// If the untagged flag is set then also manifests are deleted.
 					if purgeParams.untagged {
-						singleDeletedManifestsCount, err = purgeDanglingManifests(ctx, acrClient, loginURL, repoName)
+						singleDeletedManifestsCount, err = purgeDanglingManifests(ctx, acrClient, purger, loginURL, repoName)
 						if err != nil {
 							return errors.Wrap(err, "failed to purge manifests")
 						}
@@ -158,7 +151,7 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 }
 
 // purgeTags deletes all tags that are older than the ago value and that match the tagFilter string.
-func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string, ago string, tagFilter string, keep int) (int, error) {
+func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, p *worker.Purger, loginURL string, repoName string, ago string, tagFilter string, keep int) (int, error) {
 	fmt.Printf("Deleting tags for repository: %s\n", repoName)
 	deletedTagsCount := 0
 	agoDuration, err := parseDuration(ago)
@@ -185,16 +178,14 @@ func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, loginUR
 		skippedTagsCount = newSkippedTagsCount
 		if tagsToDelete != nil {
 			for _, tag := range *tagsToDelete {
-				wg.Add(1)
-				// The purge job is queued, after a purge worker picks it up the tag will be deleted.
-				worker.QueuePurgeTag(loginURL, repoName, *tag.Name, *tag.Digest)
+				p.StartPurgeTag(ctx, loginURL, repoName, *tag.Name, *tag.Digest)
 				deletedTagsCount++
 			}
 			// To not overflow the error channel capacity the purgeTags function waits for a whole block of
 			// 100 jobs to be finished before continuing.
-			wg.Wait()
-			for len(worker.ErrorChannel) > 0 {
-				wErr := <-worker.ErrorChannel
+			p.Wait(ctx)
+			for len(p.ErrChan()) > 0 {
+				wErr := <-p.ErrChan()
 				if wErr.Error != nil {
 					return -1, wErr.Error
 				}
@@ -331,7 +322,7 @@ func getLastTagFromResponse(resultTags *acr.RepositoryTagsType) string {
 }
 
 // purgeDanglingManifests deletes all manifests that do not have any tags associated with them.
-func purgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string) (int, error) {
+func purgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, p *worker.Purger, loginURL string, repoName string) (int, error) {
 	fmt.Printf("Deleting manifests for repository: %s\n", repoName)
 	deletedManifestsCount := 0
 	// Contrary to getTagsToDelete, getManifestsToDelete gets all the Manifests at once, this was done because if there is a manifest that has no
@@ -342,14 +333,13 @@ func purgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInter
 	}
 	i := 0
 	for _, manifest := range *manifestsToDelete {
-		wg.Add(1)
-		worker.QueuePurgeManifest(loginURL, repoName, *manifest.Digest)
+		p.StartPurgeManifest(ctx, loginURL, repoName, *manifest.Digest)
 		deletedManifestsCount++
-		// Because the worker ErrorChannel has a capacity of 100 it has to periodically be checked for errors
-		if math.Mod(float64(i), 100) == 0 {
-			wg.Wait()
-			for len(worker.ErrorChannel) > 0 {
-				wErr := <-worker.ErrorChannel
+		// Because the purger ErrChan has a capacity of batchSize it has to periodically be checked for errors
+		if math.Mod(float64(i), batchSize) == 0 {
+			p.Wait(ctx)
+			for len(p.ErrChan()) > 0 {
+				wErr := <-p.ErrChan()
 				if wErr.Error != nil {
 					return -1, wErr.Error
 				}
@@ -358,9 +348,9 @@ func purgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInter
 		i++
 	}
 	// Wait for all the worker jobs to finish.
-	wg.Wait()
-	for len(worker.ErrorChannel) > 0 {
-		wErr := <-worker.ErrorChannel
+	p.Wait(ctx)
+	for len(p.ErrChan()) > 0 {
+		wErr := <-p.ErrChan()
 		if wErr.Error != nil {
 			return -1, wErr.Error
 		}
