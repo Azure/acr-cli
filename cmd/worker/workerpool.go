@@ -14,7 +14,7 @@ type workerPool struct {
 	workerNum int
 	batchSize int
 	sem       *semaphore.Weighted
-	errChan   chan PurgeJobError
+	errChan   chan error
 }
 
 // newWorkerPool creates a new workerPool.
@@ -23,12 +23,12 @@ func newWorkerPool(workerNum int, batchSize int) *workerPool {
 		workerNum: workerNum,
 		batchSize: batchSize,
 		sem:       semaphore.NewWeighted(int64(workerNum)),
-		errChan:   make(chan PurgeJobError, batchSize),
+		errChan:   make(chan error, batchSize),
 	}
 }
 
 // start starts a worker to handle PurgeJob.
-func (pool *workerPool) start(ctx context.Context, job PurgeJob, acrClient api.AcrCLIClientInterface, wg *sync.WaitGroup) {
+func (pool *workerPool) start(ctx context.Context, job purgeJob, acrClient api.AcrCLIClientInterface, wg *sync.WaitGroup) {
 	if err := pool.sem.Acquire(ctx, 1); err != nil {
 		fmt.Printf("Failed to acquire semaphore: %v", err)
 		return
@@ -37,7 +37,20 @@ func (pool *workerPool) start(ctx context.Context, job PurgeJob, acrClient api.A
 
 	go func() {
 		defer pool.sem.Release(1)
-		pool.errChan <- job.Process(ctx, acrClient)
+		if err := job.process(ctx, acrClient); err != nil {
+			pool.errChan <- err
+		}
 		wg.Done()
 	}()
+}
+
+// flushErrChan flushes the error channel and returns the last error occurred during processing PurgeJobs.
+func (pool *workerPool) flushErrChan() (purgeErr error) {
+	for len(pool.errChan) > 0 {
+		if err := <-pool.errChan; err != nil {
+			purgeErr = err
+		}
+	}
+
+	return purgeErr
 }

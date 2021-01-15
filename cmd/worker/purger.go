@@ -24,9 +24,9 @@ func NewPurger(workerNum int, batchSize int, acrClient api.AcrCLIClientInterface
 	}
 }
 
-// ErrChan returns a channel that stores workerError occurred during processing PurgeJobs.
-func (p *Purger) ErrChan() chan PurgeJobError {
-	return p.workerPool.errChan
+// FlushErrChan flushes the error channel and returns the last error occurred during processing PurgeJobs.
+func (p *Purger) FlushErrChan() error {
+	return p.workerPool.flushErrChan()
 }
 
 // BatchSize returns the size of a batch of PurgeJobs.
@@ -36,16 +36,16 @@ func (p *Purger) BatchSize() int {
 
 // StartPurgeManifest starts a purge manifest job in worker pool.
 func (p *Purger) StartPurgeManifest(ctx context.Context, loginURL string, repoName string, digest string) {
-	pmJob := NewPurgeManifestJob(loginURL, repoName, digest)
+	job := newPurgeManifestJob(loginURL, repoName, digest)
 
-	p.workerPool.start(ctx, pmJob, p.acrClient, &p.wg)
+	p.workerPool.start(ctx, job, p.acrClient, &p.wg)
 }
 
 // StartPurgeTag starts a purge tag job in worker pool.
 func (p *Purger) StartPurgeTag(ctx context.Context, loginURL string, repoName string, digest string, tag string) {
-	ptJob := NewPurgeTagJob(loginURL, repoName, digest, tag)
+	job := newPurgeTagJob(loginURL, repoName, digest, tag)
 
-	p.workerPool.start(ctx, ptJob, p.acrClient, &p.wg)
+	p.workerPool.start(ctx, job, p.acrClient, &p.wg)
 }
 
 // Wait waits for all the workers in worker pool to finish.

@@ -47,7 +47,7 @@ const (
 	acr purge -r example --filter "hello-world:.*" --ago 1d --task-number 4
 	`
 	batchSize               = 100 // ACR list APIs return 100 results per page
-	maxWorkerNum            = 64
+	maxWorkerNum            = 64  // The max number of parallel delete requests recommended by ACR server
 	manifestListContentType = "application/vnd.docker.distribution.manifest.list.v2+json"
 	linkHeader              = "Link"
 )
@@ -93,13 +93,12 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 			workerNum := purgeParams.taskNumber
 			if workerNum <= 0 {
 				workerNum = defaultWorkerNum
-				fmt.Printf("Specified worker number invalid. Set to default worker number: %d \n", defaultWorkerNum)
-			}
-			if workerNum > maxWorkerNum {
+				fmt.Printf("Set to default worker number: %d \n", defaultWorkerNum)
+			} else if workerNum > maxWorkerNum {
 				workerNum = maxWorkerNum
 				fmt.Printf("Specified worker number too large. Set to maximum worker number: %d \n", maxWorkerNum)
 			}
-			purger := worker.NewPurger(purgeParams.taskNumber, batchSize, acrClient)
+			purger := worker.NewPurger(workerNum, batchSize, acrClient)
 			// A map is used to keep the regex tags for every repository.
 			tagFilters := map[string][]string{}
 			for _, filter := range purgeParams.filters {
@@ -202,24 +201,20 @@ func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, purger 
 				purger.StartPurgeTag(ctx, loginURL, repoName, *tag.Digest, *tag.Name)
 				deletedTagsCount++
 				// Because the purger ErrChan has a capacity of batchSize it has to periodically be checked for errors
-				if math.Mod(float64(i), float64(purger.BatchSize())) == 0 {
+				if math.Mod(float64(i+1), float64(purger.BatchSize())) == 0 {
 					purger.Wait()
-					for len(purger.ErrChan()) > 0 {
-						pjErr := <-purger.ErrChan()
-						if pjErr.Error != nil {
-							return -1, pjErr.Error
-						}
+					err := purger.FlushErrChan()
+					if err != nil {
+						return -1, err
 					}
 				}
 			}
 			// To not overflow the error channel capacity the purgeTags function waits for a whole block of
 			// jobs to be finished before continuing.
 			purger.Wait()
-			for len(purger.ErrChan()) > 0 {
-				pjErr := <-purger.ErrChan()
-				if pjErr.Error != nil {
-					return -1, pjErr.Error
-				}
+			err = purger.FlushErrChan()
+			if err != nil {
+				return -1, err
 			}
 		}
 		if len(lastTag) == 0 {
@@ -366,23 +361,19 @@ func purgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInter
 		purger.StartPurgeManifest(ctx, loginURL, repoName, *manifest.Digest)
 		deletedManifestsCount++
 		// Because the purger ErrChan has a capacity of batchSize it has to periodically be checked for errors
-		if math.Mod(float64(i), float64(purger.BatchSize())) == 0 {
+		if math.Mod(float64(i+1), float64(purger.BatchSize())) == 0 {
 			purger.Wait()
-			for len(purger.ErrChan()) > 0 {
-				pjErr := <-purger.ErrChan()
-				if pjErr.Error != nil {
-					return -1, pjErr.Error
-				}
+			err := purger.FlushErrChan()
+			if err != nil {
+				return -1, err
 			}
 		}
 	}
 	// Wait for all the worker jobs to finish.
 	purger.Wait()
-	for len(purger.ErrChan()) > 0 {
-		pjErr := <-purger.ErrChan()
-		if pjErr.Error != nil {
-			return -1, pjErr.Error
-		}
+	err = purger.FlushErrChan()
+	if err != nil {
+		return -1, err
 	}
 	return deletedManifestsCount, nil
 }
