@@ -156,6 +156,7 @@ To delete all the manifests that do not have any tags linked to them, the `--unt
 acr purge \
     --registry <Registry Name> \
     --filter <Repository Name>:<Regex filter> \
+    --ago 30d \
     --untagged
 ```
 
@@ -180,9 +181,19 @@ An example of this would be:
 acr purge \
     --registry <Registry Name> \
     --filter <Repository Name>:<Regex filter> \
+    --ago 30d \
     --dry-run
 ```
 
+#### Task number flag
+To control the number of concurrent purge tasks, the `--task-number` flag should be set. A default value will be used if `--task-number` is not specified.
+```sh
+acr purge \
+    --registry <Registry Name> \
+    --filter <Repository Name>:<Regex filter> \
+    --ago 30d \
+    --task-number 4
+```
 ### Integration with ACR Tasks
 
 To run a locally built version of the ACR-CLI using ACR Tasks follow these steps:
