@@ -260,7 +260,7 @@ func getTagsToDelete(ctx context.Context,
 	var lastUpdateTime time.Time
 	resultTags, err := acrClient.GetAcrTags(ctx, repoName, "timedesc", lastTag)
 	if err != nil {
-		if resultTags != nil && resultTags.StatusCode == http.StatusNotFound {
+		if resultTags != nil && resultTags.Response.Response != nil && resultTags.StatusCode == http.StatusNotFound {
 			fmt.Printf("%s repository not found\n", repoName)
 			return nil, "", skippedTagsCount, nil
 		}
@@ -375,7 +375,7 @@ func getManifestsToDelete(ctx context.Context, acrClient api.AcrCLIClientInterfa
 	manifestsToDelete := []acr.ManifestAttributesBase{}
 	resultManifests, err := acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
 	if err != nil {
-		if resultManifests != nil && resultManifests.StatusCode == http.StatusNotFound {
+		if resultManifests != nil && resultManifests.Response.Response != nil && resultManifests.StatusCode == http.StatusNotFound {
 			fmt.Printf("%s repository not found\n", repoName)
 			return &manifestsToDelete, nil
 		}
@@ -484,7 +484,7 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 		lastManifestDigest := ""
 		resultManifests, err := acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
 		if err != nil {
-			if resultManifests != nil && resultManifests.StatusCode == http.StatusNotFound {
+			if resultManifests != nil && resultManifests.Response.Response != nil && resultManifests.StatusCode == http.StatusNotFound {
 				fmt.Printf("%s repository not found\n", repoName)
 				return 0, 0, nil
 			}
@@ -542,7 +542,7 @@ func countTagsByManifest(ctx context.Context, acrClient api.AcrCLIClientInterfac
 	lastTag := ""
 	resultTags, err := acrClient.GetAcrTags(ctx, repoName, "", lastTag)
 	if err != nil {
-		if resultTags != nil && resultTags.StatusCode == http.StatusNotFound {
+		if resultTags != nil && resultTags.Response.Response != nil && resultTags.StatusCode == http.StatusNotFound {
 			//Repository not found, will be handled in the GetAcrManifests call
 			return nil, nil
 		}
