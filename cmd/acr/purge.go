@@ -203,9 +203,9 @@ func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, purger 
 				// Because the purger ErrChan has a capacity of batchSize it has to periodically be checked for errors
 				if math.Mod(float64(i+1), float64(purger.BatchSize())) == 0 {
 					purger.Wait()
-					err := purger.FlushErrChan()
-					if err != nil {
-						return -1, err
+					purgeErr := purger.FlushErrChan()
+					if purgeErr != nil {
+						return -1, purgeErr
 					}
 				}
 			}
@@ -371,9 +371,9 @@ func purgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInter
 	}
 	// Wait for all the worker jobs to finish.
 	purger.Wait()
-	err = purger.FlushErrChan()
-	if err != nil {
-		return -1, err
+	purgeErr := purger.FlushErrChan()
+	if purgeErr != nil {
+		return -1, purgeErr
 	}
 	return deletedManifestsCount, nil
 }
