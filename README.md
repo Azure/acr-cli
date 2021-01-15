@@ -186,7 +186,7 @@ acr purge \
 ```
 
 #### Task number flag
-To control the number of concurrent purge tasks, the `--task-number` flag should be set. A default value will be used if `--task-number` is not specified.
+To control the number of concurrent purge tasks, the `--task-number` flag should be set, the allowed range is [1, 32]. A default value will be used if `--task-number` is not specified.
 ```sh
 acr purge \
     --registry <Registry Name> \

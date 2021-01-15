@@ -47,7 +47,7 @@ const (
 	acr purge -r example --filter "hello-world:.*" --ago 1d --task-number 4
 	`
 	batchSize               = 100 // ACR list APIs return 100 results per page
-	maxWorkerNum            = 64  // The max number of parallel delete requests recommended by ACR server
+	maxWorkerNum            = 32  // The max number of parallel delete requests recommended by ACR server
 	manifestListContentType = "application/vnd.docker.distribution.manifest.list.v2+json"
 	linkHeader              = "Link"
 )
