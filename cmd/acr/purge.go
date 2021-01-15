@@ -93,10 +93,10 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 			workerNum := purgeParams.taskNumber
 			if workerNum <= 0 {
 				workerNum = defaultWorkerNum
-				fmt.Printf("Set to default worker number: %d \n", defaultWorkerNum)
+				fmt.Printf("Set to default task number: %d \n", defaultWorkerNum)
 			} else if workerNum > maxWorkerNum {
 				workerNum = maxWorkerNum
-				fmt.Printf("Specified worker number too large. Set to maximum worker number: %d \n", maxWorkerNum)
+				fmt.Printf("Specified task number too large. Set to maximum task number: %d \n", maxWorkerNum)
 			}
 			purger := worker.NewPurger(workerNum, batchSize, acrClient)
 			// A map is used to keep the regex tags for every repository.
@@ -198,7 +198,7 @@ func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, purger 
 		skippedTagsCount = newSkippedTagsCount
 		if tagsToDelete != nil {
 			for i, tag := range *tagsToDelete {
-				purger.StartPurgeTag(ctx, loginURL, repoName, *tag.Digest, *tag.Name)
+				purger.StartPurgeTag(ctx, loginURL, repoName, *tag.Name)
 				deletedTagsCount++
 				// Because the purger ErrChan has a capacity of batchSize it has to periodically be checked for errors
 				if math.Mod(float64(i+1), float64(purger.BatchSize())) == 0 {

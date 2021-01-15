@@ -45,7 +45,7 @@ func newPurgeManifestJob(loginURL string, repoName string, digest string) *purge
 	}
 }
 
-func newPurgeTagJob(loginURL string, repoName string, digest string, tag string) *purgeTagJob {
+func newPurgeTagJob(loginURL string, repoName string, tag string) *purgeTagJob {
 	base := purgeJobBase{
 		loginURL:    loginURL,
 		repoName:    repoName,

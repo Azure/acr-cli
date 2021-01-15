@@ -42,8 +42,8 @@ func (p *Purger) StartPurgeManifest(ctx context.Context, loginURL string, repoNa
 }
 
 // StartPurgeTag starts a purge tag job in worker pool.
-func (p *Purger) StartPurgeTag(ctx context.Context, loginURL string, repoName string, digest string, tag string) {
-	job := newPurgeTagJob(loginURL, repoName, digest, tag)
+func (p *Purger) StartPurgeTag(ctx context.Context, loginURL string, repoName string, tag string) {
+	job := newPurgeTagJob(loginURL, repoName, tag)
 
 	p.workerPool.start(ctx, job, p.acrClient, &p.wg)
 }
