@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -46,15 +45,14 @@ const (
   - Delete all tags older than 1 day in the example.azurecr.io registry inside the hello-world repository, with 4 purge tasks running concurrently
 	acr purge -r example --filter "hello-world:.*" --ago 1d --task-number 4
 	`
-	batchSize               = 100 // ACR list APIs return 100 results per page
-	maxWorkerNum            = 32  // The max number of parallel delete requests recommended by ACR server
+	maxPoolSize             = 32 // The max number of parallel delete requests recommended by ACR server
 	manifestListContentType = "application/vnd.docker.distribution.manifest.list.v2+json"
 	linkHeader              = "Link"
 )
 
 var (
-	defaultWorkerNum      = runtime.GOMAXPROCS(0)
-	taskNumberDescription = fmt.Sprintf("Number of concurrent purge tasks. Range: [1 - %d]", maxWorkerNum)
+	defaultPoolSize       = runtime.GOMAXPROCS(0)
+	taskNumberDescription = fmt.Sprintf("Number of concurrent purge tasks. Range: [1 - %d]", maxPoolSize)
 )
 
 // purgeParameters defines the parameters that the purge command uses (including the registry name, username and password).
@@ -90,12 +88,15 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 				return err
 			}
 			// In order to only have a limited amount of http requests a purger is used that will start goroutines to delete tags/manifests.
-			workerNum := purgeParams.taskNumber
-			if workerNum > maxWorkerNum {
-				workerNum = maxWorkerNum
-				fmt.Printf("Specified task number too large. Set to maximum task number: %d \n", maxWorkerNum)
+			poolSize := purgeParams.taskNumber
+			if poolSize <= 0 {
+				poolSize = defaultPoolSize
+				fmt.Printf("Specified task number invalid. Set to default task number: %d \n", defaultPoolSize)
+			} else if poolSize > maxPoolSize {
+				poolSize = maxPoolSize
+				fmt.Printf("Specified task number too large. Set to maximum task number: %d \n", maxPoolSize)
 			}
-			purger := worker.NewPurger(workerNum, batchSize, acrClient)
+			purger := worker.NewPurger(ctx, poolSize, acrClient)
 			// A map is used to keep the regex tags for every repository.
 			tagFilters := map[string][]string{}
 			for _, filter := range purgeParams.filters {
@@ -160,7 +161,7 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 	cmd.Flags().IntVar(&purgeParams.keep, "keep", 0, "Number of latest to-be-deleted tags to keep, use this when you want to keep at least x number of latest tags that could be deleted meeting all other filter criteria")
 	cmd.Flags().StringArrayVarP(&purgeParams.filters, "filter", "f", nil, "Specify the repository and a regular expression filter for the tag name, if a tag matches the filter and is older than the duration specified in ago it will be deleted")
 	cmd.Flags().StringArrayVarP(&purgeParams.configs, "config", "c", nil, "Authentication config paths (e.g. C://Users/docker/config.json)")
-	cmd.Flags().IntVarP(&purgeParams.taskNumber, "task-number", "t", defaultWorkerNum, taskNumberDescription)
+	cmd.Flags().IntVarP(&purgeParams.taskNumber, "task-number", "t", defaultPoolSize, taskNumberDescription)
 	cmd.Flags().BoolP("help", "h", false, "Print usage")
 	cmd.MarkFlagRequired("filter")
 	cmd.MarkFlagRequired("ago")
@@ -194,25 +195,22 @@ func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, purger 
 		lastTag = newLastTag
 		skippedTagsCount = newSkippedTagsCount
 		if tagsToDelete != nil {
-			for i, tag := range *tagsToDelete {
+			for _, tag := range *tagsToDelete {
 				purger.StartPurgeTag(ctx, loginURL, repoName, *tag.Name)
-				deletedTagsCount++
-				// Because the purger ErrChan has a capacity of batchSize it has to periodically be checked for errors
-				if math.Mod(float64(i+1), float64(purger.BatchSize())) == 0 {
-					purger.Wait()
-					purgeErr := purger.FlushErrChan()
-					if purgeErr != nil {
-						return -1, purgeErr
-					}
+				// Check if there is error occurred so far.
+				purgeErr := purger.CheckError()
+				if purgeErr != nil {
+					return -1, purgeErr
 				}
 			}
-			// To not overflow the error channel capacity the purgeTags function waits for a whole block of
-			// jobs to be finished before continuing.
+			// Wait for all jobs to finish and check error.
 			purger.Wait()
-			err = purger.FlushErrChan()
-			if err != nil {
-				return -1, err
+			purgeErr := purger.CheckError()
+			if purgeErr != nil {
+				return -1, purgeErr
 			}
+			// Calculate the successful purge jobs.
+			deletedTagsCount = purger.SuccessCount()
 		}
 		if len(lastTag) == 0 {
 			break
@@ -354,24 +352,22 @@ func purgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInter
 	if err != nil {
 		return -1, err
 	}
-	for i, manifest := range *manifestsToDelete {
+	for _, manifest := range *manifestsToDelete {
 		purger.StartPurgeManifest(ctx, loginURL, repoName, *manifest.Digest)
-		deletedManifestsCount++
-		// Because the purger ErrChan has a capacity of batchSize it has to periodically be checked for errors
-		if math.Mod(float64(i+1), float64(purger.BatchSize())) == 0 {
-			purger.Wait()
-			err := purger.FlushErrChan()
-			if err != nil {
-				return -1, err
-			}
+		// Check if there is error occurred so far.
+		purgeErr := purger.CheckError()
+		if purgeErr != nil {
+			return -1, purgeErr
 		}
 	}
 	// Wait for all the worker jobs to finish.
 	purger.Wait()
-	purgeErr := purger.FlushErrChan()
+	purgeErr := purger.CheckError()
 	if purgeErr != nil {
 		return -1, purgeErr
 	}
+	// Calculate the successful purge jobs.
+	deletedManifestsCount = purger.SuccessCount()
 	return deletedManifestsCount, nil
 }
 
