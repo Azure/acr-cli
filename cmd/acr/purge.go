@@ -54,7 +54,7 @@ const (
 
 var (
 	defaultWorkerNum      = runtime.GOMAXPROCS(0)
-	taskNumberDescription = fmt.Sprintf("Number of concurrent purge tasks. Range: [1 - %d]. Default: %d", maxWorkerNum, defaultWorkerNum)
+	taskNumberDescription = fmt.Sprintf("Number of concurrent purge tasks. Range: [1 - %d]", maxWorkerNum)
 )
 
 // purgeParameters defines the parameters that the purge command uses (including the registry name, username and password).
@@ -91,10 +91,7 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 			}
 			// In order to only have a limited amount of http requests a purger is used that will start goroutines to delete tags/manifests.
 			workerNum := purgeParams.taskNumber
-			if workerNum <= 0 {
-				workerNum = defaultWorkerNum
-				fmt.Printf("Set to default task number: %d \n", defaultWorkerNum)
-			} else if workerNum > maxWorkerNum {
+			if workerNum > maxWorkerNum {
 				workerNum = maxWorkerNum
 				fmt.Printf("Specified task number too large. Set to maximum task number: %d \n", maxWorkerNum)
 			}
@@ -163,7 +160,7 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 	cmd.Flags().IntVar(&purgeParams.keep, "keep", 0, "Number of latest to-be-deleted tags to keep, use this when you want to keep at least x number of latest tags that could be deleted meeting all other filter criteria")
 	cmd.Flags().StringArrayVarP(&purgeParams.filters, "filter", "f", nil, "Specify the repository and a regular expression filter for the tag name, if a tag matches the filter and is older than the duration specified in ago it will be deleted")
 	cmd.Flags().StringArrayVarP(&purgeParams.configs, "config", "c", nil, "Authentication config paths (e.g. C://Users/docker/config.json)")
-	cmd.Flags().IntVarP(&purgeParams.taskNumber, "task-number", "t", 0, taskNumberDescription)
+	cmd.Flags().IntVarP(&purgeParams.taskNumber, "task-number", "t", defaultWorkerNum, taskNumberDescription)
 	cmd.Flags().BoolP("help", "h", false, "Print usage")
 	cmd.MarkFlagRequired("filter")
 	cmd.MarkFlagRequired("ago")
