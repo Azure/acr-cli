@@ -35,8 +35,8 @@ func NewPool(ctx context.Context, size int) *Pool {
 
 // Start starts a worker to handle PurgeJob.
 // If error occurrs during processing job, it will be put into errChan and other workers will be canceled.
-func (pool *Pool) Start(ctx context.Context, job purgeJob, acrClient api.AcrCLIClientInterface) {
-	if err := pool.sem.Acquire(ctx, 1); err != nil {
+func (pool *Pool) Start(job purgeJob, acrClient api.AcrCLIClientInterface) {
+	if err := pool.sem.Acquire(pool.ctx, 1); err != nil {
 		fmt.Printf("Failed to acquire semaphore: %v", err)
 		return
 	}
@@ -46,7 +46,7 @@ func (pool *Pool) Start(ctx context.Context, job purgeJob, acrClient api.AcrCLIC
 		defer pool.sem.Release(1)
 
 		// Check if there is error during processing job.
-		if err := job.process(ctx, acrClient); err != nil {
+		if err := job.process(pool.ctx, acrClient); err != nil {
 			select {
 			case pool.errChan <- err:
 				// If err can be put into errChan, it means this is the first error occurred in the pool. Cancel other jobs.

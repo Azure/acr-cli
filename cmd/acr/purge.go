@@ -43,7 +43,7 @@ const (
 	acr purge -r example --filter "hello-world:.*" --ago 1d --config C://Users/docker/config.json
 
   - Delete all tags older than 1 day in the example.azurecr.io registry inside the hello-world repository, with 4 purge tasks running concurrently
-	acr purge -r example --filter "hello-world:.*" --ago 1d --task-number 4
+	acr purge -r example --filter "hello-world:.*" --ago 1d --concurrency 4
 	`
 	maxPoolSize             = 32 // The max number of parallel delete requests recommended by ACR server
 	manifestListContentType = "application/vnd.docker.distribution.manifest.list.v2+json"
@@ -51,19 +51,19 @@ const (
 )
 
 var (
-	defaultPoolSize       = runtime.GOMAXPROCS(0)
-	taskNumberDescription = fmt.Sprintf("Number of concurrent purge tasks. Range: [1 - %d]", maxPoolSize)
+	defaultPoolSize        = runtime.GOMAXPROCS(0)
+	concurrencyDescription = fmt.Sprintf("Number of concurrent purge tasks. Range: [1 - %d]", maxPoolSize)
 )
 
 // purgeParameters defines the parameters that the purge command uses (including the registry name, username and password).
 type purgeParameters struct {
 	*rootParameters
-	ago        string
-	keep       int
-	filters    []string
-	untagged   bool
-	dryRun     bool
-	taskNumber int
+	ago         string
+	keep        int
+	filters     []string
+	untagged    bool
+	dryRun      bool
+	concurrency int
 }
 
 // newPurgeCmd defines the purge command.
@@ -88,13 +88,13 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 				return err
 			}
 			// In order to only have a limited amount of http requests a purger is used that will start goroutines to delete tags/manifests.
-			poolSize := purgeParams.taskNumber
+			poolSize := purgeParams.concurrency
 			if poolSize <= 0 {
 				poolSize = defaultPoolSize
-				fmt.Printf("Specified task number invalid. Set to default task number: %d \n", defaultPoolSize)
+				fmt.Printf("Specified concurrency value invalid. Set to default value: %d \n", defaultPoolSize)
 			} else if poolSize > maxPoolSize {
 				poolSize = maxPoolSize
-				fmt.Printf("Specified task number too large. Set to maximum task number: %d \n", maxPoolSize)
+				fmt.Printf("Specified concurrency value too large. Set to maximum value: %d \n", maxPoolSize)
 			}
 			purger := worker.NewPurger(ctx, poolSize, acrClient)
 			// A map is used to keep the regex tags for every repository.
@@ -161,7 +161,7 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 	cmd.Flags().IntVar(&purgeParams.keep, "keep", 0, "Number of latest to-be-deleted tags to keep, use this when you want to keep at least x number of latest tags that could be deleted meeting all other filter criteria")
 	cmd.Flags().StringArrayVarP(&purgeParams.filters, "filter", "f", nil, "Specify the repository and a regular expression filter for the tag name, if a tag matches the filter and is older than the duration specified in ago it will be deleted")
 	cmd.Flags().StringArrayVarP(&purgeParams.configs, "config", "c", nil, "Authentication config paths (e.g. C://Users/docker/config.json)")
-	cmd.Flags().IntVarP(&purgeParams.taskNumber, "task-number", "t", defaultPoolSize, taskNumberDescription)
+	cmd.Flags().IntVar(&purgeParams.concurrency, "concurrency", defaultPoolSize, concurrencyDescription)
 	cmd.Flags().BoolP("help", "h", false, "Print usage")
 	cmd.MarkFlagRequired("filter")
 	cmd.MarkFlagRequired("ago")
@@ -196,7 +196,7 @@ func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, purger 
 		skippedTagsCount = newSkippedTagsCount
 		if tagsToDelete != nil {
 			for _, tag := range *tagsToDelete {
-				purger.StartPurgeTag(ctx, loginURL, repoName, *tag.Name)
+				purger.StartPurgeTag(loginURL, repoName, *tag.Name)
 				// Check if there is error occurred so far.
 				purgeErr := purger.CheckError()
 				if purgeErr != nil {
@@ -353,7 +353,7 @@ func purgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInter
 		return -1, err
 	}
 	for _, manifest := range *manifestsToDelete {
-		purger.StartPurgeManifest(ctx, loginURL, repoName, *manifest.Digest)
+		purger.StartPurgeManifest(loginURL, repoName, *manifest.Digest)
 		// Check if there is error occurred so far.
 		purgeErr := purger.CheckError()
 		if purgeErr != nil {

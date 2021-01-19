@@ -185,14 +185,14 @@ acr purge \
     --dry-run
 ```
 
-#### Task number flag
-To control the number of concurrent purge tasks, the `--task-number` flag should be set, the allowed range is [1, 32]. A default value will be used if `--task-number` is not specified.
+#### Concurrency flag
+To control the number of concurrent purge tasks, the `--concurrency` flag should be set, the allowed range is [1, 32]. A default value will be used if `--concurrency` is not specified.
 ```sh
 acr purge \
     --registry <Registry Name> \
     --filter <Repository Name>:<Regex filter> \
     --ago 30d \
-    --task-number 4
+    --concurrency 4
 ```
 ### Integration with ACR Tasks
 

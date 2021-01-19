@@ -22,15 +22,15 @@ func NewPurger(ctx context.Context, poolSize int, acrClient api.AcrCLIClientInte
 }
 
 // StartPurgeManifest starts a purge manifest job in worker pool.
-func (p *Purger) StartPurgeManifest(ctx context.Context, loginURL string, repoName string, digest string) {
+func (p *Purger) StartPurgeManifest(loginURL string, repoName string, digest string) {
 	job := newPurgeManifestJob(loginURL, repoName, digest)
 
-	p.Start(ctx, job, p.acrClient)
+	p.Start(job, p.acrClient)
 }
 
 // StartPurgeTag starts a purge tag job in worker pool.
-func (p *Purger) StartPurgeTag(ctx context.Context, loginURL string, repoName string, tag string) {
+func (p *Purger) StartPurgeTag(loginURL string, repoName string, tag string) {
 	job := newPurgeTagJob(loginURL, repoName, tag)
 
-	p.Start(ctx, job, p.acrClient)
+	p.Start(job, p.acrClient)
 }
