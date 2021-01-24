@@ -2,35 +2,83 @@ package worker
 
 import (
 	"context"
+	"sync"
 
+	"github.com/Azure/acr-cli/acr"
 	"github.com/Azure/acr-cli/cmd/api"
 )
 
-// Purger defines a worker pool, an ACR client and a wait group to manage concurrent PurgeJobs.
+// Purger purges tags or manifests concurrently.
 type Purger struct {
-	*Pool
+	pool      *pool
 	acrClient api.AcrCLIClientInterface
+	loginURL  string
+	repoName  string
 }
 
 // NewPurger creates a new Purger.
-func NewPurger(ctx context.Context, poolSize int, acrClient api.AcrCLIClientInterface) *Purger {
-	pool := NewPool(ctx, poolSize)
+func NewPurger(poolSize int, acrClient api.AcrCLIClientInterface, loginURL string, repoName string) *Purger {
+	pool := newPool(poolSize)
 	return &Purger{
-		Pool:      pool,
+		pool:      pool,
 		acrClient: acrClient,
+		loginURL:  loginURL,
+		repoName:  repoName,
 	}
 }
 
-// StartPurgeManifest starts a purge manifest job in worker pool.
-func (p *Purger) StartPurgeManifest(loginURL string, repoName string, digest string) {
-	job := newPurgeManifestJob(loginURL, repoName, digest)
+// process starts purge jobs in worker pool, and returns a count of successful jobs and the first error occurred.
+func (p *Purger) process(ctx context.Context, jobs []purgeJob) (int, error) {
+	errChan := make(chan error)
+	var wg sync.WaitGroup
+	var succ int64
 
-	p.Start(job, p.acrClient)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	// Start purge jobs in worker pool.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for _, job := range jobs {
+			p.pool.start(ctx, job, p.acrClient, errChan, &wg, &succ)
+		}
+	}()
+
+	// Wait for all purge jobs to finish.
+	go func() {
+		wg.Wait()
+		close(errChan)
+	}()
+
+	// If there are errors occurred during processing purge jobs, record the first error and cancel other jobs.
+	var firstErr error
+	for err := range errChan {
+		if firstErr == nil {
+			firstErr = err
+			cancel()
+		}
+	}
+
+	return int(succ), firstErr
 }
 
-// StartPurgeTag starts a purge tag job in worker pool.
-func (p *Purger) StartPurgeTag(loginURL string, repoName string, tag string) {
-	job := newPurgeTagJob(loginURL, repoName, tag)
+// PurgeTags purges a list of tags concurrently, and returns a count of deleted tags and the first error occurred.
+func (p *Purger) PurgeTags(ctx context.Context, tags *[]acr.TagAttributesBase) (int, error) {
+	jobs := make([]purgeJob, len(*tags))
+	for i, tag := range *tags {
+		jobs[i] = newPurgeTagJob(p.loginURL, p.repoName, *tag.Name)
+	}
 
-	p.Start(job, p.acrClient)
+	return p.process(ctx, jobs)
+}
+
+// PurgeManifests purges a list of manifests concurrently, and returns a count of deleted manifests and the first error occurred.
+func (p *Purger) PurgeManifests(ctx context.Context, manifests *[]acr.ManifestAttributesBase) (int, error) {
+	jobs := make([]purgeJob, len(*manifests))
+	for i, manifest := range *manifests {
+		jobs[i] = newPurgeManifestJob(p.loginURL, p.repoName, *manifest.Digest)
+	}
+
+	return p.process(ctx, jobs)
 }

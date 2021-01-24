@@ -58,7 +58,7 @@ func newPurgeTagJob(loginURL string, repoName string, tag string) *purgeTagJob {
 	}
 }
 
-// process calls acrClient to delete a manifest
+// process calls acrClient to delete a manifest.
 func (job *purgeManifestJob) process(ctx context.Context, acrClient api.AcrCLIClientInterface) error {
 	resp, err := acrClient.DeleteManifest(ctx, job.repoName, job.digest)
 	if err == nil {
@@ -75,7 +75,7 @@ func (job *purgeManifestJob) process(ctx context.Context, acrClient api.AcrCLICl
 	return err
 }
 
-// process calls acrClient to delete a tag
+// process calls acrClient to delete a tag.
 func (job *purgeTagJob) process(ctx context.Context, acrClient api.AcrCLIClientInterface) error {
 	resp, err := acrClient.DeleteAcrTag(ctx, job.repoName, job.tag)
 	if err == nil {
