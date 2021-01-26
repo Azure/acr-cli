@@ -18,9 +18,8 @@ type Purger struct {
 
 // NewPurger creates a new Purger.
 func NewPurger(poolSize int, acrClient api.AcrCLIClientInterface, loginURL string, repoName string) *Purger {
-	pool := newPool(poolSize)
 	return &Purger{
-		pool:      pool,
+		pool:      newPool(poolSize),
 		acrClient: acrClient,
 		loginURL:  loginURL,
 		repoName:  repoName,
@@ -28,19 +27,19 @@ func NewPurger(poolSize int, acrClient api.AcrCLIClientInterface, loginURL strin
 }
 
 // process starts purge jobs in worker pool, and returns a count of successful jobs and the first error occurred.
-func (p *Purger) process(ctx context.Context, jobs []purgeJob) (int, error) {
-	errChan := make(chan error)
-	var wg sync.WaitGroup
-	var succ int64
-
+func (p *Purger) process(ctx context.Context, jobs *[]purgeJob) (int, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+
+	var wg sync.WaitGroup
+	var succ int64
+	errChan := make(chan error)
 
 	// Start purge jobs in worker pool.
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		for _, job := range jobs {
+		for _, job := range *jobs {
 			p.pool.start(ctx, job, p.acrClient, errChan, &wg, &succ)
 		}
 	}()
@@ -70,7 +69,7 @@ func (p *Purger) PurgeTags(ctx context.Context, tags *[]acr.TagAttributesBase) (
 		jobs[i] = newPurgeTagJob(p.loginURL, p.repoName, *tag.Name)
 	}
 
-	return p.process(ctx, jobs)
+	return p.process(ctx, &jobs)
 }
 
 // PurgeManifests purges a list of manifests concurrently, and returns a count of deleted manifests and the first error occurred.
@@ -80,5 +79,5 @@ func (p *Purger) PurgeManifests(ctx context.Context, manifests *[]acr.ManifestAt
 		jobs[i] = newPurgeManifestJob(p.loginURL, p.repoName, *manifest.Digest)
 	}
 
-	return p.process(ctx, jobs)
+	return p.process(ctx, &jobs)
 }

@@ -26,18 +26,21 @@ func newPool(size int) *pool {
 func (p *pool) start(ctx context.Context, job purgeJob, acrClient api.AcrCLIClientInterface, errChan chan error, wg *sync.WaitGroup, succ *int64) {
 	select {
 	case <-ctx.Done():
+		// Return when context is canceled
 		return
-	case p.sem <- struct{}{}:
+	case p.sem <- struct{}{}: // Acquire a semaphore
 	}
 
 	wg.Add(1)
 	go func() {
+		// Release a semaphore
 		defer func() {
 			<-p.sem
 		}()
 		defer wg.Done()
 
 		err := job.process(ctx, acrClient)
+		// If error occurs, put error in errChan, otherwise increase the success count
 		if err != nil {
 			errChan <- err
 		} else {
