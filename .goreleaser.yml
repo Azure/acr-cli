@@ -35,3 +35,8 @@ changelog:
     exclude:
       - '^docs:'
       - '^test:'
+release:
+  github:
+    owner: Azure
+    name: acr-cli
+  prerelease: auto
