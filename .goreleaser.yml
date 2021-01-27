@@ -10,7 +10,7 @@ builds:
       - windows
       - darwin
     ldflags:
-      - -s -w -X $(PKG)/version.Version=$(VERSION) -X $(PKG)/version.Revision=$(GITCOMMIT)
+      - -s -w -X github.com/Azure/acr-cli/version.Version={{.Version}} -X github.com/Azure/acr-cli/version.Revision={{.FullCommit}}
 archives:
   - format: tar.gz
     format_overrides:
