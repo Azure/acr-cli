@@ -10,15 +10,13 @@ import (
 
 // pool manages a limited number of workers that process purgeJob.
 type pool struct {
-	size int
-	sem  chan struct{}
+	sem chan struct{}
 }
 
 // newPool creates a new pool.
 func newPool(size int) *pool {
 	return &pool{
-		size: size,
-		sem:  make(chan struct{}, size),
+		sem: make(chan struct{}, size),
 	}
 }
 
