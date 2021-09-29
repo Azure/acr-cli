@@ -8,7 +8,6 @@ require (
 	github.com/Azure/go-autorest/autorest/adal v0.1.0
 	github.com/Azure/go-autorest/tracing v0.1.0
 	github.com/containerd/containerd v1.3.3 // indirect
-	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/docker/cli v0.0.0-20190506213505-d88565df0c2d
 	github.com/docker/distribution v2.7.1+incompatible // indirect
 	github.com/docker/docker v1.14.0-0.20190131205458-8a43b7bb99cd
@@ -17,6 +16,7 @@ require (
 	github.com/docker/go-metrics v0.0.0-20181218153428-b84716841b82 // indirect
 	github.com/docker/go-units v0.3.3 // indirect
 	github.com/docker/libtrust v0.0.0-20160708172513-aabc10ec26b7 // indirect
+	github.com/golang-jwt/jwt/v4 v4.1.0
 	github.com/morikuni/aec v0.0.0-20170113033406-39771216ff4c // indirect
 	github.com/opencontainers/go-digest v1.0.0-rc1 // indirect
 	github.com/opencontainers/image-spec v1.0.1 // indirect
