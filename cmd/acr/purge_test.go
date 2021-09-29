@@ -650,8 +650,8 @@ func TestParseDuration(t *testing.T) {
 		{"1d1h3m", -25*time.Hour - 3*time.Minute, nil},
 		{"3d", -3 * 24 * time.Hour, nil},
 		{"", 0, io.EOF},
-		{"15p", 0, errors.New("time: unknown unit p in duration 15p")},
-		{"15", 0 * time.Minute, errors.New("time: missing unit in duration 15")},
+		{"15p", 0, errors.New("time: unknown unit \"p\" in duration \"15p\"")},
+		{"15", 0 * time.Minute, errors.New("time: missing unit in duration \"15\"")},
 	}
 	assert := assert.New(t)
 	for _, table := range tables {
