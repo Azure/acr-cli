@@ -108,7 +108,7 @@ To delete all the tags that are older than a certain duration:
 ```sh
 acr purge \
     --registry <Registry Name> \
-    --filter <Repository Name>:<Regex filter> \
+    --filter <Repository Filter/Name>:<Regex Filter> \
     --ago <Go Style Duration>
 ```
 
@@ -118,12 +118,14 @@ The filter flag is used to specify the repository and a regex filter, if a tag i
 
 Examples of filters
 
-| Intention                                                                      | Flag                                  |
-|--------------------------------------------------------------------------------|---------------------------------------|
-| Untag all tags that begin with hello                                           | --filter `"<repository>:^hello.*"`    |
-| Untag tags that end with world                                                 | --filter `"<repository>:\w*world\b"`  |
-| Untag tags that include hello-world in their name                              | --filter `"<repository>:hello-world"` |
-| Untag all tags that are older than the duration                                | --filter `"<repository>:.*"`          |
+| Intention                                                                        | Flag                                  |
+|----------------------------------------------------------------------------------|---------------------------------------|
+| Untag all tags that begin with hello in app repository                           | --filter `"app:^hello.*"`             |
+| Untag tags that end with world in app repository                                 | --filter `"app:\w*world\b"`           |
+| Untag tags that include hello-world in their name in app repository              | --filter `"app:hello-world"`          |
+| Untag all tags that are older than the duration in repositories ending in /cache | --filter `".*/cache:.*"`              |
+| Untag all tags that are older than the duration in app repository                | --filter `"app:.*"`                   |
+| Untag all tags that are older than the duration in all repositories              | --filter `".*:.*"`                    |
 
 #### Ago flag
 
@@ -132,7 +134,7 @@ The ago flag can be used to change the default expiration time of a tag, for exa
 ```sh
 acr purge \
     --registry <Registry Name> \
-    --filter <Repository Name>:<Regex filter> \
+    --filter <Repository Filter/Name>:<Regex Filter> \
     --ago 30d
 ```
 
@@ -155,7 +157,7 @@ To delete all the manifests that do not have any tags linked to them, the `--unt
 ```sh
 acr purge \
     --registry <Registry Name> \
-    --filter <Repository Name>:<Regex filter> \
+    --filter <Repository Filter/Name>:<Regex Filter> \
     --ago 30d \
     --untagged
 ```
@@ -167,7 +169,7 @@ To keep the latest x number of to-be-deleted tags, the `--keep` flag should be s
 ```sh
 acr purge \
     --registry <Registry Name> \
-    --filter <Repository Name>:<Regex filter> \
+    --filter <Repository Filter/Name>:<Regex Filter> \
     --ago 30d \
     --keep 3
 ```
@@ -180,7 +182,7 @@ An example of this would be:
 ```sh
 acr purge \
     --registry <Registry Name> \
-    --filter <Repository Name>:<Regex filter> \
+    --filter <Repository Filter/Name>:<Regex Filter> \
     --ago 30d \
     --dry-run
 ```
@@ -190,7 +192,7 @@ To control the number of concurrent purge tasks, the `--concurrency` flag should
 ```sh
 acr purge \
     --registry <Registry Name> \
-    --filter <Repository Name>:<Regex filter> \
+    --filter <Repository Filter/Name>:<Regex Filter> \
     --ago 30d \
     --concurrency 4
 ```
@@ -226,7 +228,7 @@ For example to run the tag list command
 az acr run \
     --registry <Registry Name> \
     --cmd "{{ .Run.Registry }}/acr:latest tag list -r {{ .Run.Registry }}
-            --filter <Repository Name>:<Regex filter>" \
+            --filter <Repository Filter/Name>:<Regex Filter>" \
     /dev/null
 ```
 
@@ -249,7 +251,7 @@ az acr task create \
     --name purgeTask \
     --registry <Registry Name> \
     --cmd "{{ .Run.Registry }}/acr:latest purge -r {{ .Run.Registry }}
-            --filter <Repository Name>:<Regex filter> --ago 7d" \
+            --filter <Repository Filter/Name>:<Regex Filter> --ago 7d" \
     --context /dev/null \
     --schedule "0 0 * * *"
 ```
