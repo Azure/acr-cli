@@ -133,7 +133,6 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 					}
 					deletedTagsCount += singleDeletedTagsCount
 					deletedManifestsCount += singleDeletedManifestsCount
-
 				}
 			}
 			// After all repos have been purged the summary is printed.
@@ -213,14 +212,9 @@ func collectTagFilters(ctx context.Context, rawFilters []string, client acrapi.B
 		if err != nil {
 			return nil, err
 		}
-		var repoNames []string
-		if repoRegex == "" {
-			repoNames = *allRepoNames.Names
-		} else {
-			repoNames, err = getMatchingRepos(ctx, *allRepoNames.Names, "^"+repoRegex+"$")
-			if err != nil {
-				return nil, err
-			}
+		repoNames, err := getMatchingRepos(ctx, *allRepoNames.Names, "^"+repoRegex+"$")
+		if err != nil {
+			return nil, err
 		}
 		for _, repoName := range repoNames {
 			if _, ok := tagFilters[repoName]; ok {
@@ -255,6 +249,12 @@ func getRepositoryAndTagRegex(filter string) (string, string, error) {
 	repoAndRegex := strings.Split(filter, ":")
 	if len(repoAndRegex) != 2 {
 		return "", "", errors.New("unable to correctly parse filter flag")
+	}
+	if repoAndRegex[0] == "" {
+		return "", "", errors.New("missing repository name/expression")
+	}
+	if repoAndRegex[1] == "" {
+		return "", "", errors.New("missing tag name/expression")
 	}
 	return repoAndRegex[0], repoAndRegex[1], nil
 }
