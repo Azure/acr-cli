@@ -559,6 +559,75 @@ func TestDryRun(t *testing.T) {
 	})
 }
 
+// TestCollectTagFilters contains all the tests regarding the collectTagFilters with retrieves matching repo names
+// and aggregates the associated tag filters
+func TestCollectTagFilters(t *testing.T) {
+	t.Run("SingleRepo", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.BaseClientAPI{}
+		mockClient.On("GetRepositories", mock.Anything, "", (*int32)(nil)).Return(ManyRepositoriesResult, nil).Once()
+		filters, err := collectTagFilters(testCtx, []string{testRepo + ":.*"}, mockClient)
+		assert.Equal(1, len(filters), "Number of found should be one")
+		assert.Equal(".*", filters[testRepo], "Filter for test repo should be .*")
+		assert.Equal(nil, err, "Error should be nil")
+		mockClient.AssertExpectations(t)
+	})
+	t.Run("AllReposWildcard", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.BaseClientAPI{}
+		mockClient.On("GetRepositories", mock.Anything, "", (*int32)(nil)).Return(ManyRepositoriesResult, nil).Once()
+		filters, err := collectTagFilters(testCtx, []string{".*:.*"}, mockClient)
+		assert.Equal(4, len(filters), "Number of found should be 4")
+		assert.Equal(".*", filters[testRepo], "Filter for test repo should be .*")
+		assert.Equal(".*", filters["bar"], "Filter for bar repo should be .*")
+		assert.Equal(nil, err, "Error should be nil")
+		mockClient.AssertExpectations(t)
+	})
+	t.Run("NoPartialMatch", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.BaseClientAPI{}
+		mockClient.On("GetRepositories", mock.Anything, "", (*int32)(nil)).Return(ManyRepositoriesResult, nil).Once()
+		filters, err := collectTagFilters(testCtx, []string{"ba:.*"}, mockClient)
+		assert.Equal(0, len(filters), "Number of found repos should be zero")
+		assert.Equal(nil, err, "Error should be nil")
+		mockClient.AssertExpectations(t)
+	})
+	t.Run("NameWithSlash", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.BaseClientAPI{}
+		mockClient.On("GetRepositories", mock.Anything, "", (*int32)(nil)).Return(ManyRepositoriesResult, nil).Once()
+		filters, err := collectTagFilters(testCtx, []string{"foo/bar:.*"}, mockClient)
+		assert.Equal(1, len(filters), "Number of found repos should be one")
+		assert.Equal(nil, err, "Error should be nil")
+		mockClient.AssertExpectations(t)
+	})
+	t.Run("NoRepos", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.BaseClientAPI{}
+		mockClient.On("GetRepositories", mock.Anything, "", (*int32)(nil)).Return(NoRepositoriesResult, nil).Once()
+		filters, err := collectTagFilters(testCtx, []string{testRepo + ":.*"}, mockClient)
+		assert.Equal(0, len(filters), "Number of found repos should be zero")
+		assert.Equal(nil, err, "Error should be nil")
+		mockClient.AssertExpectations(t)
+	})
+	t.Run("EmptyRepoRegex", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.BaseClientAPI{}
+		mockClient.On("GetRepositories", mock.Anything, "", (*int32)(nil)).Return(ManyRepositoriesResult, nil).Once()
+		_, err := collectTagFilters(testCtx, []string{":.*"}, mockClient)
+		assert.NotEqual(nil, err, "Error should not be nil")
+		mockClient.AssertExpectations(t)
+	})
+	t.Run("EmptyTagRegex", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.BaseClientAPI{}
+		mockClient.On("GetRepositories", mock.Anything, "", (*int32)(nil)).Return(ManyRepositoriesResult, nil).Once()
+		_, err := collectTagFilters(testCtx, []string{testRepo + ".*:"}, mockClient)
+		assert.NotEqual(nil, err, "Error should not be nil")
+		mockClient.AssertExpectations(t)
+	})
+}
+
 // TestGetRepositoryAndTagRegex returns the repository and the regex from a string in the form <repository>:<regex filter>
 func TestGetRepositoryAndTagRegex(t *testing.T) {
 	// First test normal functionality
@@ -766,6 +835,22 @@ var (
 				Digest:               &digest,
 			},
 		},
+	}
+	ManyRepositoriesResult = acr.Repositories{
+		Response: autorest.Response{
+			Response: &http.Response{
+				StatusCode: 200,
+			},
+		},
+		Names: &[]string{testRepo, "foo", "baz", "foo/bar"},
+	}
+	NoRepositoriesResult = acr.Repositories{
+		Response: autorest.Response{
+			Response: &http.Response{
+				StatusCode: 200,
+			},
+		},
+		Names: &[]string{},
 	}
 	InvalidDateOneTagResult = &acr.RepositoryTagsType{
 		Response: autorest.Response{

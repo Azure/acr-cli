@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/Azure/acr-cli/acr"
+	"github.com/Azure/acr-cli/acr/acrapi"
 	"github.com/Azure/acr-cli/cmd/api"
 	"github.com/Azure/acr-cli/cmd/worker"
 	"github.com/pkg/errors"
@@ -27,6 +28,9 @@ const (
 	newPurgeCmdLongMessage = `acr purge: untag old images and delete dangling manifests.`
 	purgeExampleMessage    = `  - Delete all tags that are older than 1 day in the example.azurecr.io registry inside the hello-world repository
     	acr purge -r example --filter "hello-world:.*" --ago 1d
+
+  - Delete all tags that are older than 7 days in the example.azurecr.io registry inside all repositories
+	    acr purge -r example --filter ".*:.*" --ago 7d 
 
   - Delete all tags that are older than 7 days and begin with hello in the example.azurecr.io registry inside the hello-world repository
     	acr purge -r example --filter "hello-world:^hello.*" --ago 7d 
@@ -87,30 +91,15 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 			if err != nil {
 				return err
 			}
-
-			// A map is used to keep the regex tags for every repository.
-			tagFilters := map[string][]string{}
-			for _, filter := range purgeParams.filters {
-				repoName, tagRegex, err := getRepositoryAndTagRegex(filter)
-				if err != nil {
-					return err
-				}
-				if _, ok := tagFilters[repoName]; ok {
-					tagFilters[repoName] = append(tagFilters[repoName], tagRegex)
-				} else {
-					tagFilters[repoName] = []string{tagRegex}
-				}
+			// A map is used to collect the regex tags for every repository.
+			tagFilters, err := collectTagFilters(ctx, purgeParams.filters, acrClient.AutorestClient)
+			if err != nil {
+				return err
 			}
-
 			// In order to print a summary of the deleted tags/manifests the counters get updated everytime a repo is purged.
 			deletedTagsCount := 0
 			deletedManifestsCount := 0
-			for repoName, listOfTagRegex := range tagFilters {
-				tagRegex := listOfTagRegex[0]
-				for i := 1; i < len(listOfTagRegex); i++ {
-					// To only iterate through a repo once a big regex filter is made of all the filters of a particular repo.
-					tagRegex = tagRegex + "|" + listOfTagRegex[i]
-				}
+			for repoName, tagRegex := range tagFilters {
 				if !purgeParams.dryRun {
 					poolSize := purgeParams.concurrency
 					if poolSize <= 0 {
@@ -144,7 +133,6 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 					}
 					deletedTagsCount += singleDeletedTagsCount
 					deletedManifestsCount += singleDeletedManifestsCount
-
 				}
 			}
 			// After all repos have been purged the summary is printed.
@@ -211,11 +199,62 @@ func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, poolSiz
 	return deletedTagsCount, nil
 }
 
+// collectTagFilters collects all matching repos and collects the associated tag filters
+func collectTagFilters(ctx context.Context, rawFilters []string, client acrapi.BaseClientAPI) (map[string]string, error) {
+	allRepoNames, err := client.GetRepositories(ctx, "", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	tagFilters := map[string]string{}
+	for _, filter := range rawFilters {
+		repoRegex, tagRegex, err := getRepositoryAndTagRegex(filter)
+		if err != nil {
+			return nil, err
+		}
+		repoNames, err := getMatchingRepos(ctx, *allRepoNames.Names, "^"+repoRegex+"$")
+		if err != nil {
+			return nil, err
+		}
+		for _, repoName := range repoNames {
+			if _, ok := tagFilters[repoName]; ok {
+				// To only iterate through a repo once a big regex filter is made of all the filters of a particular repo.
+				tagFilters[repoName] = tagFilters[repoName] + "|" + tagRegex
+			} else {
+				tagFilters[repoName] = tagRegex
+			}
+		}
+	}
+
+	return tagFilters, nil
+}
+
+// getMatchingRepos get all repositories in current registry, that match the provided regular expression
+func getMatchingRepos(ctx context.Context, repoNames []string, repoRegex string) ([]string, error) {
+	filter, err := regexp.Compile(repoRegex)
+	if err != nil {
+		return nil, err
+	}
+	var matchedRepos []string
+	for _, repo := range repoNames {
+		if filter.MatchString(repo) {
+			matchedRepos = append(matchedRepos, repo)
+		}
+	}
+	return matchedRepos, nil
+}
+
 // getRepositoryAndTagRegex splits the strings that are in the form <repository>:<regex filter>
 func getRepositoryAndTagRegex(filter string) (string, string, error) {
 	repoAndRegex := strings.Split(filter, ":")
 	if len(repoAndRegex) != 2 {
 		return "", "", errors.New("unable to correctly parse filter flag")
+	}
+	if repoAndRegex[0] == "" {
+		return "", "", errors.New("missing repository name/expression")
+	}
+	if repoAndRegex[1] == "" {
+		return "", "", errors.New("missing tag name/expression")
 	}
 	return repoAndRegex[0], repoAndRegex[1], nil
 }
