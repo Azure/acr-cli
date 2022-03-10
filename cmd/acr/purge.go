@@ -10,7 +10,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -19,6 +18,7 @@ import (
 	"github.com/Azure/acr-cli/acr/acrapi"
 	"github.com/Azure/acr-cli/cmd/api"
 	"github.com/Azure/acr-cli/cmd/worker"
+	"github.com/dlclark/regexp2"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )
@@ -59,15 +59,22 @@ var (
 	concurrencyDescription = fmt.Sprintf("Number of concurrent purge tasks. Range: [1 - %d]", maxPoolSize)
 )
 
+// Default settings for regexp2
+const (
+	defaultRegexpOptions             regexp2.RegexOptions = regexp2.RE2 // This option will turn on compatibility mode so that it uses the group rules in regexp
+	defaultRegexpMatchTimeoutSeconds uint64               = 1800
+)
+
 // purgeParameters defines the parameters that the purge command uses (including the registry name, username and password).
 type purgeParameters struct {
 	*rootParameters
-	ago         string
-	keep        int
-	filters     []string
-	untagged    bool
-	dryRun      bool
-	concurrency int
+	ago           string
+	keep          int
+	filters       []string
+	filterTimeout uint64
+	untagged      bool
+	dryRun        bool
+	concurrency   int
 }
 
 // newPurgeCmd defines the purge command.
@@ -92,7 +99,7 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 				return err
 			}
 			// A map is used to collect the regex tags for every repository.
-			tagFilters, err := collectTagFilters(ctx, purgeParams.filters, acrClient.AutorestClient)
+			tagFilters, err := collectTagFilters(ctx, purgeParams.filters, acrClient.AutorestClient, purgeParams.filterTimeout)
 			if err != nil {
 				return err
 			}
@@ -110,7 +117,7 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 						fmt.Printf("Specified concurrency value too large. Set to maximum value: %d \n", maxPoolSize)
 					}
 
-					singleDeletedTagsCount, err := purgeTags(ctx, acrClient, poolSize, loginURL, repoName, purgeParams.ago, tagRegex, purgeParams.keep)
+					singleDeletedTagsCount, err := purgeTags(ctx, acrClient, poolSize, loginURL, repoName, purgeParams.ago, tagRegex, purgeParams.keep, purgeParams.filterTimeout)
 					if err != nil {
 						return errors.Wrap(err, "failed to purge tags")
 					}
@@ -127,7 +134,7 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 					deletedManifestsCount += singleDeletedManifestsCount
 				} else {
 					// No tag or manifest will be deleted but the counters still will be updated.
-					singleDeletedTagsCount, singleDeletedManifestsCount, err := dryRunPurge(ctx, acrClient, loginURL, repoName, purgeParams.ago, tagRegex, purgeParams.untagged, purgeParams.keep)
+					singleDeletedTagsCount, singleDeletedManifestsCount, err := dryRunPurge(ctx, acrClient, loginURL, repoName, purgeParams.ago, tagRegex, purgeParams.untagged, purgeParams.keep, purgeParams.filterTimeout)
 					if err != nil {
 						return errors.Wrap(err, "failed to dry-run purge")
 					}
@@ -147,8 +154,9 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 	cmd.Flags().BoolVar(&purgeParams.dryRun, "dry-run", false, "If the dry-run flag is set no manifest or tag will be deleted, the output would be the same as if they were deleted")
 	cmd.Flags().StringVar(&purgeParams.ago, "ago", "", "The tags that were last updated before this duration will be deleted, the format is [number]d[string] where the first number represents an amount of days and the string is in a Go duration format (e.g. 2d3h6m selects images older than 2 days, 3 hours and 6 minutes)")
 	cmd.Flags().IntVar(&purgeParams.keep, "keep", 0, "Number of latest to-be-deleted tags to keep, use this when you want to keep at least x number of latest tags that could be deleted meeting all other filter criteria")
-	cmd.Flags().StringArrayVarP(&purgeParams.filters, "filter", "f", nil, "Specify the repository and a regular expression filter for the tag name, if a tag matches the filter and is older than the duration specified in ago it will be deleted")
+	cmd.Flags().StringArrayVarP(&purgeParams.filters, "filter", "f", nil, "Specify the repository and a regular expression filter for the tag name, if a tag matches the filter and is older than the duration specified in ago it will be deleted. Note: If backtracking is used in the regexp it's possible for the expression to run into an infinite loop. The default timeout is set to 30 minutes for evaluation of any filter expression. Use the '--filter-timeout-seconds' option to set a different value.")
 	cmd.Flags().StringArrayVarP(&purgeParams.configs, "config", "c", nil, "Authentication config paths (e.g. C://Users/docker/config.json)")
+	cmd.Flags().Uint64Var(&purgeParams.filterTimeout, "filter-timeout-seconds", defaultRegexpMatchTimeoutSeconds, "This limits the evaluation of the regex filter, and will return a timeout error if this duration is exceeded during a single evaluation. If written incorrectly a regexp filter with backtracking can result in an infinite loop.")
 	cmd.Flags().IntVar(&purgeParams.concurrency, "concurrency", defaultPoolSize, concurrencyDescription)
 	cmd.Flags().BoolP("help", "h", false, "Print usage")
 	cmd.MarkFlagRequired("filter")
@@ -157,7 +165,7 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 }
 
 // purgeTags deletes all tags that are older than the ago value and that match the tagFilter string.
-func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, poolSize int, loginURL string, repoName string, ago string, tagFilter string, keep int) (int, error) {
+func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, poolSize int, loginURL string, repoName string, ago string, tagFilter string, keep int, regexpMatchTimeoutSeconds uint64) (int, error) {
 	fmt.Printf("Deleting tags for repository: %s\n", repoName)
 	agoDuration, err := parseDuration(ago)
 	if err != nil {
@@ -167,7 +175,8 @@ func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, poolSiz
 	// Since the parseDuration function returns a negative duration, it is added to the current duration in order to be able to easily compare
 	// with the LastUpdatedTime attribute a tag has.
 	timeToCompare = timeToCompare.Add(agoDuration)
-	tagRegex, err := regexp.Compile(tagFilter)
+
+	tagRegex, err := buildRegexFilter(tagFilter, regexpMatchTimeoutSeconds)
 	if err != nil {
 		return -1, err
 	}
@@ -200,7 +209,7 @@ func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, poolSiz
 }
 
 // collectTagFilters collects all matching repos and collects the associated tag filters
-func collectTagFilters(ctx context.Context, rawFilters []string, client acrapi.BaseClientAPI) (map[string]string, error) {
+func collectTagFilters(ctx context.Context, rawFilters []string, client acrapi.BaseClientAPI, regexMatchTimeout uint64) (map[string]string, error) {
 	allRepoNames, err := client.GetRepositories(ctx, "", nil)
 	if err != nil {
 		return nil, err
@@ -212,7 +221,7 @@ func collectTagFilters(ctx context.Context, rawFilters []string, client acrapi.B
 		if err != nil {
 			return nil, err
 		}
-		repoNames, err := getMatchingRepos(ctx, *allRepoNames.Names, "^"+repoRegex+"$")
+		repoNames, err := getMatchingRepos(ctx, *allRepoNames.Names, "^"+repoRegex+"$", regexMatchTimeout)
 		if err != nil {
 			return nil, err
 		}
@@ -230,14 +239,20 @@ func collectTagFilters(ctx context.Context, rawFilters []string, client acrapi.B
 }
 
 // getMatchingRepos get all repositories in current registry, that match the provided regular expression
-func getMatchingRepos(ctx context.Context, repoNames []string, repoRegex string) ([]string, error) {
-	filter, err := regexp.Compile(repoRegex)
+func getMatchingRepos(ctx context.Context, repoNames []string, repoRegex string, regexMatchTimeout uint64) ([]string, error) {
+	filter, err := buildRegexFilter(repoRegex, regexMatchTimeout)
 	if err != nil {
 		return nil, err
 	}
 	var matchedRepos []string
 	for _, repo := range repoNames {
-		if filter.MatchString(repo) {
+		matched, err := filter.MatchString(repo)
+		if err != nil {
+			// The only error regexp2 can throw is a timeout error
+			return nil, err
+		}
+
+		if matched {
 			matchedRepos = append(matchedRepos, repo)
 		}
 	}
@@ -293,7 +308,7 @@ func parseDuration(ago string) (time.Duration, error) {
 func getTagsToDelete(ctx context.Context,
 	acrClient api.AcrCLIClientInterface,
 	repoName string,
-	filter *regexp.Regexp,
+	filter *regexp2.Regexp,
 	timeToCompare time.Time,
 	lastTag string,
 	keep int,
@@ -315,7 +330,11 @@ func getTagsToDelete(ctx context.Context,
 		tags := *resultTags.TagsAttributes
 		tagsEligibleForDeletion := []acr.TagAttributesBase{}
 		for _, tag := range tags {
-			matches = filter.MatchString(*tag.Name)
+			matches, err = filter.MatchString(*tag.Name)
+			if err != nil {
+				// The only error that regexp2 will return is a timeout error
+				return nil, "", skippedTagsCount, err
+			}
 			if !matches {
 				// If a tag does not match the regex then it not added to the list no matter the LastUpdateTime
 				continue
@@ -453,7 +472,7 @@ func getManifestsToDelete(ctx context.Context, acrClient api.AcrCLIClientInterfa
 }
 
 // dryRunPurge outputs everything that would be deleted if the purge command was executed
-func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string, ago string, filter string, untagged bool, keep int) (int, int, error) {
+func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string, ago string, filter string, untagged bool, keep int, regexMatchTimeout uint64) (int, int, error) {
 	deletedTagsCount := 0
 	deletedManifestsCount := 0
 	// In order to keep track if a manifest would get deleted a map is defined that as a  key has the manifest
@@ -466,10 +485,11 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 	}
 	timeToCompare := time.Now().UTC()
 	timeToCompare = timeToCompare.Add(agoDuration)
-	regex, err := regexp.Compile(filter)
+	regex, err := buildRegexFilter(filter, regexMatchTimeout)
 	if err != nil {
 		return -1, -1, err
 	}
+
 	lastTag := ""
 	skippedTagsCount := 0
 	// The loop to get the deleted tags follows the same logic as the one in the purgeTags function
@@ -484,11 +504,7 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 			for _, tag := range *tagsToDelete {
 				// For every tag that would be deleted first check if it exists in the map, if it doesn't add a new key
 				// with value 1 and if it does just add 1 to the existent value.
-				if _, exists := deletedTags[*tag.Digest]; exists {
-					deletedTags[*tag.Digest]++
-				} else {
-					deletedTags[*tag.Digest] = 1
-				}
+				deletedTags[*tag.Digest] += 1
 				fmt.Printf("%s/%s:%s\n", loginURL, repoName, *tag.Name)
 				deletedTagsCount++
 			}
@@ -575,11 +591,7 @@ func countTagsByManifest(ctx context.Context, acrClient api.AcrCLIClientInterfac
 		tags := *resultTags.TagsAttributes
 		for _, tag := range tags {
 			// if a digest already exists in the map then add 1 to the number of tags it has.
-			if _, exists := countMap[*tag.Digest]; exists {
-				countMap[*tag.Digest]++
-			} else {
-				countMap[*tag.Digest] = 1
-			}
+			countMap[*tag.Digest] += 1
 		}
 
 		lastTag = *tags[len(tags)-1].Name
@@ -590,6 +602,22 @@ func countTagsByManifest(ctx context.Context, acrClient api.AcrCLIClientInterfac
 		}
 	}
 	return &countMap, nil
+}
+
+// buildRegexFilter compiles a regex state machine from a regex expression
+func buildRegexFilter(expression string, regexpMatchTimeoutSeconds uint64) (*regexp2.Regexp, error) {
+	regexp, err := regexp2.Compile(expression, defaultRegexpOptions)
+	if err != nil {
+		return nil, err
+	}
+
+	// A timeout value must always be set
+	if regexpMatchTimeoutSeconds <= 0 {
+		regexpMatchTimeoutSeconds = defaultRegexpMatchTimeoutSeconds
+	}
+	regexp.MatchTimeout = time.Duration(regexpMatchTimeoutSeconds) * time.Second
+
+	return regexp, nil
 }
 
 // In order to parse the content of a mutliarch manifest string the following structs were defined.
