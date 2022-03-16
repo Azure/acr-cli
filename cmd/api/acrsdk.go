@@ -193,6 +193,21 @@ func (c *AcrCLIClient) GetAcrTags(ctx context.Context, repoName string, orderBy 
 	return &tags, nil
 }
 
+// GetAcrRepositories list the tags of a repository with their attributes.
+func (c *AcrCLIClient) GetAcrRepositories(ctx context.Context, last string, n *int32) (*acrapi.Repositories, error) {
+	if c.isExpired() {
+		if err := refreshAcrCLIClientToken(ctx, c); err != nil {
+			return nil, err
+		}
+	}
+	repos, err := c.AutorestClient.GetAcrRepositories(ctx, last, n)
+	if err != nil {
+		// tags might contain information such as status codes, so it a pointer to it is returned instead of nil.
+		return &repos, err
+	}
+	return &repos, nil
+}
+
 // DeleteAcrTag deletes the tag by reference.
 func (c *AcrCLIClient) DeleteAcrTag(ctx context.Context, repoName string, reference string) (*autorest.Response, error) {
 	if c.isExpired() {
@@ -283,4 +298,5 @@ type AcrCLIClientInterface interface {
 	GetAcrManifests(ctx context.Context, repoName string, orderBy string, last string) (*acrapi.Manifests, error)
 	DeleteManifest(ctx context.Context, repoName string, reference string) (*autorest.Response, error)
 	GetManifest(ctx context.Context, repoName string, reference string) ([]byte, error)
+	GetAcrRepositories(ctx context.Context, last string, n *int32) (*acrapi.Repositories, error)
 }

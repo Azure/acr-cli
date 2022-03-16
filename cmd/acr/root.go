@@ -40,6 +40,7 @@ To start working with the CLI, run acr --help`,
 		newLogoutCmd(out),
 		newTagCmd(out, &rootParams),
 		newManifestCmd(out, &rootParams),
+		newRepositoryCmd(out, &rootParams),
 	)
 	cmd.PersistentFlags().StringVarP(&rootParams.registryName, "registry", "r", "", "Registry name")
 	cmd.PersistentFlags().StringVarP(&rootParams.username, "username", "u", "", "Registry username")
