@@ -201,7 +201,7 @@ func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, poolSiz
 
 // collectTagFilters collects all matching repos and collects the associated tag filters
 func collectTagFilters(ctx context.Context, rawFilters []string, client acrapi.BaseClientAPI) (map[string]string, error) {
-	allRepoNames, err := client.GetRepositories(ctx, "", nil)
+	allRepoNames, err := getAllRepositoryNames(ctx, client)
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +212,7 @@ func collectTagFilters(ctx context.Context, rawFilters []string, client acrapi.B
 		if err != nil {
 			return nil, err
 		}
-		repoNames, err := getMatchingRepos(ctx, *allRepoNames.Names, "^"+repoRegex+"$")
+		repoNames, err := getMatchingRepos(ctx, allRepoNames, "^"+repoRegex+"$")
 		if err != nil {
 			return nil, err
 		}
@@ -227,6 +227,24 @@ func collectTagFilters(ctx context.Context, rawFilters []string, client acrapi.B
 	}
 
 	return tagFilters, nil
+}
+
+func getAllRepositoryNames(ctx context.Context, client acrapi.BaseClientAPI) ([]string, error) {
+	allRepoNames := make([]string, 0)
+	lastName := ""
+	var batchSize int32 = 100
+	for {
+		repos, err := client.GetRepositories(ctx, lastName, &batchSize)
+		if err != nil {
+			return nil, err
+		}
+		if repos.Names == nil || len(*repos.Names) == 0 {
+			break
+		}
+		allRepoNames = append(allRepoNames, *repos.Names...)
+		lastName = allRepoNames[len(allRepoNames)-1]
+	}
+	return allRepoNames, nil
 }
 
 // getMatchingRepos get all repositories in current registry, that match the provided regular expression
