@@ -8,7 +8,7 @@ require (
 	github.com/Azure/go-autorest/autorest/adal v0.9.16
 	github.com/Azure/go-autorest/tracing v0.6.0
 	github.com/containerd/containerd v1.4.10 // indirect
-	github.com/dlclark/regexp2 v1.4.0 // indirect
+	github.com/dlclark/regexp2 v1.4.0
 	github.com/docker/cli v0.0.0-20190506213505-d88565df0c2d
 	github.com/docker/distribution v2.7.1+incompatible // indirect
 	github.com/docker/docker v1.14.0-0.20190131205458-8a43b7bb99cd

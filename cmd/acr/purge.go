@@ -62,7 +62,7 @@ var (
 // Default settings for regexp2
 const (
 	defaultRegexpOptions             regexp2.RegexOptions = regexp2.RE2 // This option will turn on compatibility mode so that it uses the group rules in regexp
-	defaultRegexpMatchTimeoutSeconds uint64               = 1800
+	defaultRegexpMatchTimeoutSeconds uint64               = 60
 )
 
 // purgeParameters defines the parameters that the purge command uses (including the registry name, username and password).
