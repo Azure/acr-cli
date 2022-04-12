@@ -534,7 +534,7 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 			for _, tag := range *tagsToDelete {
 				// For every tag that would be deleted first check if it exists in the map, if it doesn't add a new key
 				// with value 1 and if it does just add 1 to the existent value.
-				deletedTags[*tag.Digest] += 1
+				deletedTags[*tag.Digest]++
 				fmt.Printf("%s/%s:%s\n", loginURL, repoName, *tag.Name)
 				deletedTagsCount++
 			}
@@ -621,7 +621,7 @@ func countTagsByManifest(ctx context.Context, acrClient api.AcrCLIClientInterfac
 		tags := *resultTags.TagsAttributes
 		for _, tag := range tags {
 			// if a digest already exists in the map then add 1 to the number of tags it has.
-			countMap[*tag.Digest] += 1
+			countMap[*tag.Digest]++
 		}
 
 		lastTag = *tags[len(tags)-1].Name
