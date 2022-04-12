@@ -210,7 +210,7 @@ func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, poolSiz
 
 // collectTagFilters collects all matching repos and collects the associated tag filters
 func collectTagFilters(ctx context.Context, rawFilters []string, client acrapi.BaseClientAPI, regexMatchTimeout uint64) (map[string]string, error) {
-	allRepoNames, err := client.GetRepositories(ctx, "", nil)
+	allRepoNames, err := getAllRepositoryNames(ctx, client)
 	if err != nil {
 		return nil, err
 	}
@@ -221,7 +221,7 @@ func collectTagFilters(ctx context.Context, rawFilters []string, client acrapi.B
 		if err != nil {
 			return nil, err
 		}
-		repoNames, err := getMatchingRepos(ctx, *allRepoNames.Names, "^"+repoRegex+"$", regexMatchTimeout)
+		repoNames, err := getMatchingRepos(ctx, allRepoNames, "^"+repoRegex+"$", regexMatchTimeout)
 		if err != nil {
 			return nil, err
 		}
@@ -236,6 +236,24 @@ func collectTagFilters(ctx context.Context, rawFilters []string, client acrapi.B
 	}
 
 	return tagFilters, nil
+}
+
+func getAllRepositoryNames(ctx context.Context, client acrapi.BaseClientAPI) ([]string, error) {
+	allRepoNames := make([]string, 0)
+	lastName := ""
+	var batchSize int32 = 100
+	for {
+		repos, err := client.GetRepositories(ctx, lastName, &batchSize)
+		if err != nil {
+			return nil, err
+		}
+		if repos.Names == nil || len(*repos.Names) == 0 {
+			break
+		}
+		allRepoNames = append(allRepoNames, *repos.Names...)
+		lastName = allRepoNames[len(allRepoNames)-1]
+	}
+	return allRepoNames, nil
 }
 
 // getMatchingRepos get all repositories in current registry, that match the provided regular expression
@@ -261,10 +279,22 @@ func getMatchingRepos(ctx context.Context, repoNames []string, repoRegex string,
 
 // getRepositoryAndTagRegex splits the strings that are in the form <repository>:<regex filter>
 func getRepositoryAndTagRegex(filter string) (string, string, error) {
-	repoAndRegex := strings.Split(filter, ":")
+	// This only selects colons that are not apart of a non-capture group
+	// Note: regexp2 doesn't have .Split support yet, so we just replace the colon with another delimitter \r\n
+	// We choose \r\n since it is an escape sequence that cannot be a part of repo name or a tag
+	noncaptureGroupSupport := regexp2.MustCompile("(?<!\\(\\?):", defaultRegexpOptions)
+
+	// Note: We could just find the first 1, however we want to know if there are more than 1 colon that is not part of a non-capture group
+	newlineDelimitted, err := noncaptureGroupSupport.Replace(filter, "\r\n", -1, -1)
+	if err != nil {
+		return "", "", errors.New("could not replace split filter by repo and tag")
+	}
+
+	repoAndRegex := strings.Split(newlineDelimitted, "\r\n")
 	if len(repoAndRegex) != 2 {
 		return "", "", errors.New("unable to correctly parse filter flag")
 	}
+
 	if repoAndRegex[0] == "" {
 		return "", "", errors.New("missing repository name/expression")
 	}

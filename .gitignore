@@ -1,5 +1,6 @@
 *.exe
 .vscode/
+.idea/
 /bin/
 coverage.txt
 *.test
