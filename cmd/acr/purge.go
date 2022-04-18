@@ -282,6 +282,7 @@ func getRepositoryAndTagRegex(filter string) (string, string, error) {
 	// This only selects colons that are not apart of a non-capture group
 	// Note: regexp2 doesn't have .Split support yet, so we just replace the colon with another delimitter \r\n
 	// We choose \r\n since it is an escape sequence that cannot be a part of repo name or a tag
+	// For information on how this expression was written, see https://regexr.com/6jqp3
 	noncaptureGroupSupport := regexp2.MustCompile(`(?<!\(\?[imsU-]{0,5}|\[*\^*\[\^*):(?!\]\]*)`, defaultRegexpOptions)
 
 	// Note: We could just find the first 1, however we want to know if there are more than 1 colon that is not part of a non-capture group
