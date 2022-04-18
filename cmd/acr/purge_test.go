@@ -783,7 +783,7 @@ func TestGetRepositoryAndTagRegex(t *testing.T) {
 		assert.NotEqual(nil, err, "Error should not be nil")
 	})
 	// Eighth test with character classes
-	t.Run("InvalidNonCaptureGroupAndQuantifier", func(t *testing.T) {
+	t.Run("NonCaptureGroupQuantifierAndCharacterClasses", func(t *testing.T) {
 		assert := assert.New(t)
 		testString := "[[:alpha:]](?:abc)(?:.*)?:test123[[:digit:]](?:.*)"
 		repository, tag, err := getRepositoryAndTagRegex(testString)
