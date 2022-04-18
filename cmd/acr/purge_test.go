@@ -640,7 +640,17 @@ func TestCollectTagFilters(t *testing.T) {
 		mockClient := &mocks.BaseClientAPI{}
 		mockClient.On("GetRepositories", mock.Anything, "", mock.Anything).Return(ManyRepositoriesResult, nil).Once()
 		mockClient.On("GetRepositories", mock.Anything, mock.Anything, mock.Anything).Return(NoRepositoriesResult, nil).Once()
-		filters, err := collectTagFilters(testCtx, []string{"foo/bar(?:.*):.*"}, mockClient, 60)
+		filters, err := collectTagFilters(testCtx, []string{"foo/bar(?:.*):.(?:.*)"}, mockClient, 60)
+		assert.Equal(1, len(filters), "Number of found repos should be one")
+		assert.Equal(nil, err, "Error should be nil")
+		mockClient.AssertExpectations(t)
+	})
+	t.Run("NameWithSlashAndTwoNonCaptureGroupInRepoAndCharacterClasses", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.BaseClientAPI{}
+		mockClient.On("GetRepositories", mock.Anything, "", mock.Anything).Return(ManyRepositoriesResult, nil).Once()
+		mockClient.On("GetRepositories", mock.Anything, mock.Anything, mock.Anything).Return(NoRepositoriesResult, nil).Once()
+		filters, err := collectTagFilters(testCtx, []string{"[[:alpha:]](?:abc)(?:.*)?:test123[[:digit:]](?:.*)"}, mockClient, 60)
 		assert.Equal(1, len(filters), "Number of found repos should be one")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -771,6 +781,15 @@ func TestGetRepositoryAndTagRegex(t *testing.T) {
 		assert.Equal("", repository)
 		assert.Equal("", filter)
 		assert.NotEqual(nil, err, "Error should not be nil")
+	})
+	// Eighth test with character classes
+	t.Run("InvalidNonCaptureGroupAndQuantifier", func(t *testing.T) {
+		assert := assert.New(t)
+		testString := "[[:alpha:]](?:abc)(?:.*)?:test123[[:digit:]](?:.*)"
+		repository, tag, err := getRepositoryAndTagRegex(testString)
+		assert.Equal("[[:alpha:]](?:abc)(?:.*)?", repository)
+		assert.Equal("test123[[:digit:]](?:.*)", tag)
+		assert.Equal(nil, err, "Error should be nil")
 	})
 }
 
