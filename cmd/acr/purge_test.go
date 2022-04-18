@@ -650,7 +650,7 @@ func TestCollectTagFilters(t *testing.T) {
 		mockClient := &mocks.BaseClientAPI{}
 		mockClient.On("GetRepositories", mock.Anything, "", mock.Anything).Return(ManyRepositoriesResult, nil).Once()
 		mockClient.On("GetRepositories", mock.Anything, mock.Anything, mock.Anything).Return(NoRepositoriesResult, nil).Once()
-		filters, err := collectTagFilters(testCtx, []string{"[[:alpha:]](?:abc)(?:.*)?:test123[[:digit:]](?:.*)"}, mockClient, 60)
+		filters, err := collectTagFilters(testCtx, []string{"foo/b[[:alpha:]]r(?:.*):.(?:.*)"}, mockClient, 60)
 		assert.Equal(1, len(filters), "Number of found repos should be one")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
