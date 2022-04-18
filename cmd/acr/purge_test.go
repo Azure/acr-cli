@@ -773,14 +773,14 @@ func TestGetRepositoryAndTagRegex(t *testing.T) {
 		assert.Equal("z-(?:abc)zz", filter)
 		assert.Equal(nil, err, "Error should be nil")
 	})
-	// Seventh test invalid non capture group
-	t.Run("InvalidNonCaptureGroupAndQuantifier", func(t *testing.T) {
+	// Seventh test colon character class inside capture group
+	t.Run("ColonInsideNonCaptureGroup", func(t *testing.T) {
 		assert := assert.New(t)
 		testString := "hello-(?:abc)?:z-(?:[:])zz"
 		repository, filter, err := getRepositoryAndTagRegex(testString)
-		assert.Equal("", repository)
-		assert.Equal("", filter)
-		assert.NotEqual(nil, err, "Error should not be nil")
+		assert.Equal("hello-(?:abc)?", repository)
+		assert.Equal("z-(?:[:])zz", filter)
+		assert.Equal(nil, err, "Error should be nil")
 	})
 	// Eighth test with character classes
 	t.Run("NonCaptureGroupQuantifierAndCharacterClasses", func(t *testing.T) {
@@ -790,6 +790,24 @@ func TestGetRepositoryAndTagRegex(t *testing.T) {
 		assert.Equal("[[:alpha:]](?:abc)(?:.*)?", repository)
 		assert.Equal("test123[[:digit:]](?:.*)", tag)
 		assert.Equal(nil, err, "Error should be nil")
+	})
+	// Ninth test with character classes, negated character classes, non-capture group flags, negated character classes inside character classes
+	t.Run("NonCaptureGroupQuantifierAndNegatedCharacterClassesCharacterClasses", func(t *testing.T) {
+		assert := assert.New(t)
+		testString := "[^[:alpha:]](?ims-U:abc)(?:.*)?:test123[[^:digit:]](?-imUs:.*)"
+		repository, tag, err := getRepositoryAndTagRegex(testString)
+		assert.Equal("[^[:alpha:]](?ims-U:abc)(?:.*)?", repository)
+		assert.Equal("test123[[^:digit:]](?-imUs:.*)", tag)
+		assert.Equal(nil, err, "Error should be nil")
+	})
+	// Tenth test invalid
+	t.Run("NonCaptureGroupQuantifierAndNegatedCharacterClassesCharacterClasses", func(t *testing.T) {
+		assert := assert.New(t)
+		testString := "[^[:alpha:]](?ims-U:abc)(?:.*)?:test123[[^:digit:]](?-imUs:.*):"
+		repository, tag, err := getRepositoryAndTagRegex(testString)
+		assert.Equal("", repository)
+		assert.Equal("", tag)
+		assert.NotEqual(nil, err, "Error should not be nil")
 	})
 }
 
