@@ -834,6 +834,15 @@ func TestGetRepositoryAndTagRegex(t *testing.T) {
 		assert.Equal("", tag)
 		assert.NotEqual(nil, err, "Error should not be nil")
 	})
+	// Test character class with colon (technically a tag or repo can't have a colon in the name -- but adding this for completeness)
+	t.Run("NonCaptureGroupWithFlagsCharacterClassAndColonInCharacterClass", func(t *testing.T) {
+		assert := assert.New(t)
+		testString := "(?imsU:test):[[:digit:]][tes:]"
+		repository, tag, err := getRepositoryAndTagRegex(testString)
+		assert.Equal("(?imsU:test)", repository)
+		assert.Equal("[[:digit:]][tes:]", tag)
+		assert.Equal(nil, err, "Error should be nil")
+	})
 }
 
 // TestGetLastTagFromResponse returns the last tag from response.
