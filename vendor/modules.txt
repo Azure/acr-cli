@@ -20,6 +20,9 @@ github.com/beorn7/perks/quantile
 github.com/containerd/containerd/errdefs
 # github.com/davecgh/go-spew v1.1.1
 github.com/davecgh/go-spew/spew
+# github.com/dlclark/regexp2 v1.4.0
+github.com/dlclark/regexp2
+github.com/dlclark/regexp2/syntax
 # github.com/docker/cli v0.0.0-20190506213505-d88565df0c2d
 github.com/docker/cli/cli/config
 github.com/docker/cli/cli/config/configfile
