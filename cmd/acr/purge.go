@@ -147,9 +147,13 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 				}
 			}
 			// After all repos have been purged the summary is printed.
-			fmt.Printf("\nNumber of deleted tags: %d\n", deletedTagsCount)
-			fmt.Printf("Number of deleted manifests: %d\n", deletedManifestsCount)
-
+			if purgeParams.dryRun {
+				fmt.Printf("\nNumber of tags to be deleted: %d\n", deletedTagsCount)
+				fmt.Printf("Number of manifests to be deleted: %d\n", deletedManifestsCount)
+			} else {
+				fmt.Printf("\nNumber of deleted tags: %d\n", deletedTagsCount)
+				fmt.Printf("Number of deleted manifests: %d\n", deletedManifestsCount)
+			}
 			return nil
 		},
 	}
@@ -513,7 +517,7 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 	// In order to keep track if a manifest would get deleted a map is defined that as a  key has the manifest
 	// digest and as the value the number of tags (referencing said manifests) that were deleted.
 	deletedTags := map[string]int{}
-	fmt.Printf("Deleting tags for repository: %s\n", repoName)
+	fmt.Printf("This repository would be deleted: %s\n", repoName)
 	agoDuration, err := parseDuration(ago)
 	if err != nil {
 		return -1, -1, err
@@ -549,7 +553,7 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 		}
 	}
 	if untagged {
-		fmt.Printf("Deleting manifests for repository: %s\n", repoName)
+		fmt.Printf("Manifests for this repository would be deleted: %s\n", repoName)
 		// The countMap contains a map that for every digest contains how many tags are referencing it.
 		countMap, err := countTagsByManifest(ctx, acrClient, repoName)
 		if err != nil {
