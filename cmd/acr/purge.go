@@ -103,6 +103,10 @@ func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// A clarification message for --dry-run.
+			if purgeParams.dryRun {
+				fmt.Println("DRY RUN: The following output shows what WOULD be deleted if the purge command was executed. Nothing is deleted.")
+			}
 			// In order to print a summary of the deleted tags/manifests the counters get updated everytime a repo is purged.
 			deletedTagsCount := 0
 			deletedManifestsCount := 0
