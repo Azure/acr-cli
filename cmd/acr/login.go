@@ -14,7 +14,7 @@ import (
 	"strings"
 
 	dockerAuth "github.com/Azure/acr-cli/auth/docker"
-	"github.com/docker/docker/pkg/term"
+	"github.com/moby/term"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )

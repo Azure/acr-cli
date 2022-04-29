@@ -15,12 +15,9 @@ linters:
   enable:
     - gofmt
     - goimports
-    - golint
+    - revive
     - gosec
     - govet
     - ineffassign
-    - maligned
-    - staticcheck
-    - structcheck
     - unconvert
     - varcheck
