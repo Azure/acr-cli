@@ -12,6 +12,11 @@ variables:
   ModulePath: '$(GOPATH)/src/github.com/$(build.repository.name)'
 
 steps:
+
+- task: GoTool@0
+  inputs:
+    version: '1.18.1'
+
 - script: |
     set -e
     GOOS=linux scripts/setup/dev_setup

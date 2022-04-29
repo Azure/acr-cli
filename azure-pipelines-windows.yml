@@ -13,6 +13,10 @@ variables:
 
 steps:
 
+- task: GoTool@0
+  inputs:
+    version: '1.18.1'
+
 - script: |
     (robocopy $(system.defaultWorkingDirectory) $(ModulePath) /E /XD  $(system.defaultWorkingDirectory)\work)^& IF %ERRORLEVEL% LSS 8 SET ERRORLEVEL = 0
   displayName: 'Setup'
