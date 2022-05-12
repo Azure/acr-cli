@@ -20,6 +20,16 @@ import (
 // TestPurgeTags contains all the tests regarding the purgeTags method which is called when the --dry-run flag is
 // not set.
 func TestPurgeTags(t *testing.T) {
+	t.Run("Delete tag with local in it", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(TagWithLocal, nil).Once()
+		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, "v1-c-local.test").Return(&deletedResponse, nil).Once()
+		deletedTags, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, "0m", ".*-?local[.].+", 0, 60)
+		assert.Equal(1, deletedTags, "Number of deleted elements should be 1")
+		assert.Equal(nil, err, "Error should be nil")
+		mockClient.AssertExpectations(t)
+	})
 	// Advanced filter tests
 	t.Run("Delete 2 with negative lookahead", func(t *testing.T) {
 		assert := assert.New(t)
@@ -587,6 +597,30 @@ func TestDryRun(t *testing.T) {
 // TestCollectTagFilters contains all the tests regarding the collectTagFilters with retrieves matching repo names
 // and aggregates the associated tag filters
 func TestCollectTagFilters(t *testing.T) {
+	t.Run("AllReposWildcardWithTagLocal", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.BaseClientAPI{}
+		mockClient.On("GetRepositories", mock.Anything, "", mock.Anything).Return(ManyRepositoriesResult, nil).Once()
+		mockClient.On("GetRepositories", mock.Anything, mock.Anything, mock.Anything).Return(NoRepositoriesResult, nil).Once()
+		filters, err := collectTagFilters(testCtx, []string{".+:.*-?local[.].+"}, mockClient, 60)
+		assert.Equal(4, len(filters), "Number of found should be 4")
+		assert.Equal(".*-?local[.].+", filters[testRepo], "Filter for test repo should be .*-?local[.].+")
+		assert.Equal(".*-?local[.].+", filters["bar"], "Filter for bar repo should be .*-?local[.].+")
+		assert.Equal(nil, err, "Error should be nil")
+		mockClient.AssertExpectations(t)
+	})
+	t.Run("AllReposWildcardWithTagLocal2", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.BaseClientAPI{}
+		mockClient.On("GetRepositories", mock.Anything, "", mock.Anything).Return(ManyRepositoriesResult, nil).Once()
+		mockClient.On("GetRepositories", mock.Anything, mock.Anything, mock.Anything).Return(NoRepositoriesResult, nil).Once()
+		filters, err := collectTagFilters(testCtx, []string{".+:.*-?local\\..+"}, mockClient, 60)
+		assert.Equal(4, len(filters), "Number of found should be 4")
+		assert.Equal(".*-?local\\..+", filters[testRepo], "Filter for test repo should be .*-?local\\..+")
+		assert.Equal(".*-?local\\..+", filters["bar"], "Filter for bar repo should be .*-?local\\..+")
+		assert.Equal(nil, err, "Error should be nil")
+		mockClient.AssertExpectations(t)
+	})
 	t.Run("SingleRepo", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.BaseClientAPI{}
@@ -1145,6 +1179,39 @@ var (
 			Digest:               &digest,
 		}},
 	}
+
+	tagNameWithLoad = "v1-c-local.test"
+	TagWithLocal    = &acr.RepositoryTagsType{
+		Response: autorest.Response{
+			Response: &http.Response{
+				StatusCode: 200,
+			},
+		},
+		Registry:  &testLoginURL,
+		ImageName: &testRepo,
+		TagsAttributes: &[]acr.TagAttributesBase{{
+			Name:                 &tagName1CommitA,
+			LastUpdateTime:       &lastUpdateTime,
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+			Digest:               &digest,
+		}, {
+			Name:                 &tagName1CommitB,
+			LastUpdateTime:       &lastUpdateTime1DayAgo,
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+			Digest:               &digest,
+		}, {
+			Name:                 &tagName1CommitC,
+			LastUpdateTime:       &lastUpdateTime2DaysAgo,
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+			Digest:               &multiArchDigest,
+		}, {
+			Name:                 &tagNameWithLoad,
+			LastUpdateTime:       &lastUpdateTime3DaysAgo,
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+			Digest:               &digest,
+		}},
+	}
+
 	tagName1CommitA             = "v1-a"
 	tagName1CommitB             = "v1-b"
 	tagName1CommitC             = "v1-c"
