@@ -12,7 +12,7 @@ import (
 
 	// The autorest generated SDK is used, this file is just a wrapper to it.
 	acrapi "github.com/Azure/acr-cli/acr"
-	dockerAuth "github.com/Azure/acr-cli/auth/docker"
+	oauth "github.com/Azure/acr-cli/auth/oras"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/adal"
 	"github.com/golang-jwt/jwt/v4"
@@ -105,14 +105,17 @@ func GetAcrCLIClientWithAuth(loginURL string, username string, password string, 
 	if username == "" && password == "" {
 		// If both username and password are empty then the docker config file will be used, it can be found in the default
 		// location or in a location specified by the configs string array
-		client, err := dockerAuth.NewClient(configs...)
+
+		store, err := oauth.NewStore(configs...)
 		if err != nil {
 			return nil, errors.Wrap(err, "error resolving authentication")
 		}
-		username, password, err = client.GetCredential(loginURL)
+		cred, err := store.Credential(context.Background(), loginURL)
 		if err != nil {
 			return nil, errors.Wrap(err, "error resolving authentication")
 		}
+		username = cred.Username
+		password = cred.Password
 	}
 	// If the password is empty then the authentication failed.
 	if password == "" {
