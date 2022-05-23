@@ -10,3 +10,11 @@ var (
 	// Revision is filled with the VCS revision. Filled in at linking time.
 	Revision = ""
 )
+
+func GetVersion() string {
+	return Version
+}
+
+func GetRevision() string {
+	return Revision
+}

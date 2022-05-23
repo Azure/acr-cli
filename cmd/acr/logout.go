@@ -6,7 +6,7 @@ package main
 import (
 	"io"
 
-	oauth "github.com/Azure/acr-cli/auth/oras"
+	"github.com/Azure/acr-cli/auth/oras"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -42,8 +42,7 @@ func runLogout(opts logoutOpts) error {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 
-	//client, err := dockerAuth.NewClient(opts.configPaths...)
-	store, err := oauth.NewStore()
+	store, err := oras.NewStore()
 	if err != nil {
 		return err
 	}

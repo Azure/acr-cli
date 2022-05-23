@@ -12,7 +12,7 @@ import (
 	"os"
 	"strings"
 
-	oauth "github.com/Azure/acr-cli/auth/oras"
+	"github.com/Azure/acr-cli/auth/oras"
 	"github.com/moby/term"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -73,9 +73,9 @@ func runLogin(opts loginOpts) error {
 	} else {
 		logLevel = logrus.WarnLevel
 	}
-	ctx, _ := oauth.WithLoggerLevel(context.Background(), logLevel)
+	ctx, _ := oras.WithLoggerLevel(context.Background(), logLevel)
 
-	store, err := oauth.NewStore(opts.configs...)
+	store, err := oras.NewStore(opts.configs...)
 	if err != nil {
 		return err
 	}
@@ -112,8 +112,8 @@ func runLogin(opts loginOpts) error {
 	if err != nil {
 		return err
 	}
-	cred := oauth.Credential(opts.username, opts.password)
-	remote.Client = oauth.NewClient(oauth.ClientOptions{
+	cred := oras.Credential(opts.username, opts.password)
+	remote.Client = oras.NewClient(oras.ClientOptions{
 		Credential: cred,
 		Debug:      opts.debug,
 	})
