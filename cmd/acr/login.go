@@ -67,13 +67,10 @@ func newLoginCmd(out io.Writer) *cobra.Command {
 }
 
 func runLogin(opts loginOpts) error {
-	var logLevel logrus.Level
 	if opts.debug {
-		logLevel = logrus.DebugLevel
-	} else {
-		logLevel = logrus.WarnLevel
+		logrus.SetLevel(logrus.DebugLevel)
 	}
-	ctx, _ := oras.WithLoggerLevel(context.Background(), logLevel)
+	ctx, _ := oras.WithLoggerLevel(context.Background(), logrus.GetLevel())
 
 	store, err := oras.NewStore(opts.configs...)
 	if err != nil {
