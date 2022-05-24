@@ -19,38 +19,35 @@ func NewTransport(base http.RoundTripper) *Transport {
 
 // RoundTrip calls base roundtrip while keeping track of the current request.
 func (t *Transport) RoundTrip(req *http.Request) (resp *http.Response, err error) {
-	ctx := req.Context()
-	e := Logger(ctx)
-
-	e.Debugf(" Request URL: %q", req.URL)
-	e.Debugf(" Request method: %q", req.Method)
-	e.Debugf(" Request headers:")
-	logHeader(req.Header, e)
+	logrus.Debugf(" Request URL: %q", req.URL)
+	logrus.Debugf(" Request method: %q", req.Method)
+	logrus.Debugf(" Request headers:")
+	logHeader(req.Header)
 
 	resp, err = t.RoundTripper.RoundTrip(req)
 	if err != nil {
-		e.Errorf("Error in getting response: %w", err)
+		logrus.Errorf("Error in getting response: %w", err)
 	} else if resp == nil {
-		e.Errorf("No response obtained for request %s %s", req.Method, req.URL)
+		logrus.Errorf("No response obtained for request %s %s", req.Method, req.URL)
 	} else {
-		e.Debugf(" Response Status: %q", resp.Status)
-		e.Debugf(" Response headers:")
-		logHeader(resp.Header, e)
+		logrus.Debugf(" Response Status: %q", resp.Status)
+		logrus.Debugf(" Response headers:")
+		logHeader(resp.Header)
 	}
 	return resp, err
 }
 
 // logHeader prints out the provided header keys and values, with auth header
 // scrubbed.
-func logHeader(header http.Header, e logrus.FieldLogger) {
+func logHeader(header http.Header) {
 	if len(header) > 0 {
 		for k, v := range header {
 			if strings.EqualFold(k, "Authorization") {
 				v = []string{"*****"}
 			}
-			e.Debugf("   %q: %q", k, strings.Join(v, ", "))
+			logrus.Debugf("   %q: %q", k, strings.Join(v, ", "))
 		}
 	} else {
-		e.Debugf("   Empty header")
+		logrus.Debugf("   Empty header")
 	}
 }
