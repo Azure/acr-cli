@@ -70,7 +70,6 @@ func runLogin(opts loginOpts) error {
 	if opts.debug {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
-	ctx, _ := oras.WithLoggerLevel(context.Background(), logrus.GetLevel())
 
 	store, err := oras.NewStore(opts.configs...)
 	if err != nil {
@@ -114,7 +113,7 @@ func runLogin(opts loginOpts) error {
 		Credential: cred,
 		Debug:      opts.debug,
 	})
-	if err = remote.Ping(ctx); err != nil {
+	if err = remote.Ping(context.Background()); err != nil {
 		return err
 	}
 	// Store the validated credential
