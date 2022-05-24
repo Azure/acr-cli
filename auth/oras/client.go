@@ -2,9 +2,8 @@ package oras
 
 import (
 	"context"
-	"crypto/tls"
-	"net/http"
 
+	"github.com/Azure/acr-cli/version"
 	"oras.land/oras-go/v2/registry/remote"
 	"oras.land/oras-go/v2/registry/remote/auth"
 )
@@ -18,19 +17,13 @@ type ClientOptions struct {
 
 func NewClient(opts ClientOptions) remote.Client {
 	client := &auth.Client{
-		Client: &http.Client{
-			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{
-					InsecureSkipVerify: false,
-				},
-			},
-		},
+		Cache:    auth.NewCache(),
+		ClientID: "acr-cli",
 	}
-	client.SetUserAgent("acr-cli")
+	client.SetUserAgent("acr-cli/" + version.GetVersion())
 	if opts.Debug {
 		client.Client.Transport = NewTransport(client.Client.Transport)
 	}
-
 	if opts.Credential != auth.EmptyCredential {
 		client.Credential = func(ctx context.Context, s string) (auth.Credential, error) {
 			return opts.Credential, nil
