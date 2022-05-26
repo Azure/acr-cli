@@ -88,13 +88,13 @@ func (s *Store) Store(registry string, cred auth.Credential) error {
 	return s.configs[0].GetCredentialsStore(registry).Store(authConf)
 }
 
-// Store erase a credential for a given registry.
+// Erase erases a credential for a given registry.
 func (s *Store) Erase(registry string) error {
 	return s.configs[0].GetCredentialsStore(registry).Erase(registry)
 }
 
-// Credential specifies the function for resolving the credential for the
-// given registry (i.e. host:port).
+// Credential iterates all the config files, returns the first non-empty
+// credential in a best-effort way.
 // `EmptyCredential` is a valid return value and should not be considered as
 // an error.
 // If nil, the credential is always resolved to `EmptyCredential`.

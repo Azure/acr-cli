@@ -7,18 +7,19 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// Transport is an http.RoundTripper that keeps track of the in-flight
+// DebugTransport is an http.RoundTripper that keeps track of the in-flight
 // request and add hooks to report HTTP tracing events.
-type Transport struct {
+type DebugTransport struct {
 	http.RoundTripper
 }
 
-func NewTransport(base http.RoundTripper) *Transport {
-	return &Transport{base}
+// NewDebugTransport generates a new DebugTransport.
+func NewDebugTransport(base http.RoundTripper) *DebugTransport {
+	return &DebugTransport{base}
 }
 
 // RoundTrip calls base roundtrip while keeping track of the current request.
-func (t *Transport) RoundTrip(req *http.Request) (resp *http.Response, err error) {
+func (t *DebugTransport) RoundTrip(req *http.Request) (resp *http.Response, err error) {
 	logrus.Debugf(" Request URL: %q", req.URL)
 	logrus.Debugf(" Request method: %q", req.Method)
 	logrus.Debugf(" Request headers:")

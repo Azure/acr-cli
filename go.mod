@@ -3,8 +3,8 @@ module github.com/Azure/acr-cli
 go 1.18
 
 require (
-	github.com/Azure/go-autorest/autorest v0.11.26
-	github.com/Azure/go-autorest/autorest/adal v0.9.18
+	github.com/Azure/go-autorest/autorest v0.11.27
+	github.com/Azure/go-autorest/autorest/adal v0.9.20
 	github.com/Azure/go-autorest/tracing v0.6.0
 	github.com/dlclark/regexp2 v1.4.0
 	github.com/docker/cli v20.10.16+incompatible
@@ -14,7 +14,7 @@ require (
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/cobra v1.4.0
 	github.com/stretchr/testify v1.7.1
-	oras.land/oras-go/v2 v2.0.0-20220516090534-31f7572a6976
+	oras.land/oras-go/v2 v2.0.0-20220524144344-23cb9e0960a5
 )
 
 require (
@@ -27,17 +27,17 @@ require (
 	github.com/docker/docker-credential-helpers v0.6.4 // indirect
 	github.com/google/go-cmp v0.5.8 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
-	github.com/kr/pretty v0.1.0 // indirect
+	github.com/kr/pretty v0.3.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.0.2 // indirect
-	github.com/oras-project/artifacts-spec v1.0.0-draft.1.1 // indirect
+	github.com/oras-project/artifacts-spec v1.0.0-rc.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/stretchr/objx v0.1.1 // indirect
-	golang.org/x/crypto v0.0.0-20220518034528-6f7dac969898 // indirect
-	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
-	golang.org/x/sys v0.0.0-20220517195934-5e4e11fc645e // indirect
-	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
-	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
-	gotest.tools/v3 v3.0.3 // indirect
+	golang.org/x/crypto v0.0.0-20220525230936-793ad666bf5e // indirect
+	golang.org/x/sync v0.0.0-20220513210516-0976fa681c29 // indirect
+	golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a // indirect
+	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
+	gopkg.in/yaml.v3 v3.0.0 // indirect
+	gotest.tools/v3 v3.2.0 // indirect
 )

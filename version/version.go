@@ -11,10 +11,11 @@ var (
 	Revision = ""
 )
 
-func GetVersion() string {
-	return Version
-}
-
-func GetRevision() string {
-	return Revision
+// FullVersion generates a string that contains the version and revision
+// information, if any is available.
+func FullVersion() string {
+	if Revision == "" {
+		return Version
+	}
+	return Version + "+" + Revision
 }

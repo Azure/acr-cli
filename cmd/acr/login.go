@@ -16,7 +16,6 @@ import (
 	"github.com/moby/term"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-
 	"oras.land/oras-go/v2/registry/remote"
 )
 

@@ -15,6 +15,9 @@
 package v1
 
 const (
+	// MediaTypeDescriptor specifies the media type for a content descriptor.
+	MediaTypeDescriptor = "application/vnd.cncf.oras.artifact.descriptor.v1+json"
+
 	// MediaTypeArtifactManifest specifies the media type for an ORAS artifact reference type manifest.
 	MediaTypeArtifactManifest = "application/vnd.cncf.oras.artifact.manifest.v1+json"
 )

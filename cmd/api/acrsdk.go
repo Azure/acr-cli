@@ -105,7 +105,6 @@ func GetAcrCLIClientWithAuth(loginURL string, username string, password string, 
 	if username == "" && password == "" {
 		// If both username and password are empty then the docker config file will be used, it can be found in the default
 		// location or in a location specified by the configs string array
-
 		store, err := oras.NewStore(configs...)
 		if err != nil {
 			return nil, errors.Wrap(err, "error resolving authentication")
