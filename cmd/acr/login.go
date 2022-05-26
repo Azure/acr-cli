@@ -9,14 +9,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"strings"
 
-	dockerAuth "github.com/Azure/acr-cli/auth/docker"
+	"github.com/Azure/acr-cli/auth/oras"
 	"github.com/moby/term"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"oras.land/oras-go/v2/registry/remote"
 )
 
 const (
@@ -70,7 +70,7 @@ func runLogin(opts loginOpts) error {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 
-	client, err := dockerAuth.NewClient(opts.configs...)
+	store, err := oras.NewStore(opts.configs...)
 	if err != nil {
 		return err
 	}
@@ -78,7 +78,7 @@ func runLogin(opts loginOpts) error {
 	var username string
 	var passwordBytes []byte
 	if opts.fromStdin {
-		passwordBytes, err = ioutil.ReadAll(os.Stdin)
+		passwordBytes, err = io.ReadAll(os.Stdin)
 		if err != nil {
 			return err
 		}
@@ -102,8 +102,21 @@ func runLogin(opts loginOpts) error {
 		fmt.Fprintln(os.Stderr, "WARNING! Using --password via the CLI is insecure. Use --password-stdin.")
 	}
 
-	ctx := context.Background()
-	if err := client.Login(ctx, opts.hostname, opts.username, opts.password); err != nil {
+	// Ping to ensure credential is valid
+	remote, err := remote.NewRegistry(opts.hostname)
+	if err != nil {
+		return err
+	}
+	cred := oras.Credential(opts.username, opts.password)
+	remote.Client = oras.NewClient(oras.ClientOptions{
+		Credential: cred,
+		Debug:      opts.debug,
+	})
+	if err = remote.Ping(context.Background()); err != nil {
+		return err
+	}
+	// Store the validated credential
+	if err := store.Store(opts.hostname, cred); err != nil {
 		return err
 	}
 
