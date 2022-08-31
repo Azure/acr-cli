@@ -517,7 +517,7 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 	// In order to keep track if a manifest would get deleted a map is defined that as a  key has the manifest
 	// digest and as the value the number of tags (referencing said manifests) that were deleted.
 	deletedTags := map[string]int{}
-	fmt.Printf("This repository would be deleted: %s\n", repoName)
+	fmt.Printf("Tags for this repository would be deleted: %s\n", repoName)
 	agoDuration, err := parseDuration(ago)
 	if err != nil {
 		return -1, -1, err
