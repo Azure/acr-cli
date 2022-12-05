@@ -9,6 +9,6 @@ COPY . .
 RUN make binaries && mv bin/acr /usr/bin/acr
 
 FROM mcr.microsoft.com/cbl-mariner/base/core:2.0.20221122
-RUN tdnf --refresh install ca-certificates -y
+RUN tdnf --refresh install -y ca-certificates
 COPY --from=acr-cli /usr/bin/acr /usr/bin/acr
 ENTRYPOINT [ "/usr/bin/acr" ]
