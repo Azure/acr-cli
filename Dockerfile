@@ -1,5 +1,5 @@
 FROM mcr.microsoft.com/oss/go/microsoft/golang:1.18-fips-cbl-mariner2.0 AS gobuild-base
-RUN tdnf clean all && tdnf install -y \
+RUN tdnf install -y \
 git \
 make
 
