@@ -115,13 +115,18 @@ func GetAcrCLIClientWithAuth(loginURL string, username string, password string, 
 		}
 		username = cred.Username
 		password = cred.Password
+
+		// fallback to refresh token if it is available
+		if password == "" && cred.RefreshToken != "" {
+			password = cred.RefreshToken
+		}
 	}
 	// If the password is empty then the authentication failed.
 	if password == "" {
 		return nil, errors.New("unable to resolve authentication, missing identity token or password")
 	}
 	var acrClient AcrCLIClient
-	if username == "" {
+	if username == "" || username == "00000000-0000-0000-0000-000000000000" {
 		// If the username is empty an ACR refresh token was used.
 		var err error
 		acrClient, err = newAcrCLIClientWithBearerAuth(loginURL, password)
