@@ -296,7 +296,7 @@ func TestPurgeManifests(t *testing.T) {
 	t.Run("MultiArchErrorGettingManifestTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
-		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleMultiArchWithTagsResult, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleMultiArchManifestV2WithTagsResult, nil).Once()
 		mockClient.On("GetManifest", mock.Anything, testRepo, "sha:356").Return(nil, errors.New("error getting manifest")).Once()
 		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo)
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
@@ -307,7 +307,7 @@ func TestPurgeManifests(t *testing.T) {
 	t.Run("MultiArchInvalidJsonTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
-		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleMultiArchWithTagsResult, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleMultiArchManifestV2WithTagsResult, nil).Once()
 		mockClient.On("GetManifest", mock.Anything, testRepo, "sha:356").Return([]byte("invalid manifest"), nil).Once()
 		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo)
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
@@ -380,9 +380,24 @@ func TestPurgeManifests(t *testing.T) {
 	t.Run("MultiArchDeleteTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
-		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleMultiArchWithTagsResult, nil).Once()
-		mockClient.On("GetManifest", mock.Anything, testRepo, "sha:356").Return(multiArchBytes, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleMultiArchManifestV2WithTagsResult, nil).Once()
+		mockClient.On("GetManifest", mock.Anything, testRepo, "sha:356").Return(multiArchManifestV2Bytes, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha:356").Return(doubleManifestV2WithoutTagsResult, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha:234").Return(EmptyListManifestsResult, nil).Once()
+		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha:234").Return(nil, nil).Once()
+		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo)
+		assert.Equal(1, deletedTags, "Number of deleted elements should be 1")
+		assert.Equal(nil, err, "Error should be nil")
+		mockClient.AssertExpectations(t)
+	})
+	// Twelth, same as above, but the multiarch image manifest is an OCI index,
+	// instead of a Docker Schema v2 manifest list.
+	t.Run("OCIMultiArchDeleteTest", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleMultiArchOCIWithTagsResult, nil).Once()
+		mockClient.On("GetManifest", mock.Anything, testRepo, "sha:356").Return(multiArchOCIBytes, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha:356").Return(doubleOCIWithoutTagsResult, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha:234").Return(EmptyListManifestsResult, nil).Once()
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha:234").Return(nil, nil).Once()
 		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo)
@@ -492,7 +507,7 @@ func TestDryRun(t *testing.T) {
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "", "").Return(FourTagsResult, nil).Once()
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(FourTagsResult, nil).Once()
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "", "v4").Return(EmptyListTagsResult, nil).Once()
-		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleMultiArchWithTagsResult, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleMultiArchManifestV2WithTagsResult, nil).Once()
 		mockClient.On("GetManifest", mock.Anything, testRepo, "sha:356").Return(nil, errors.New("error getting manifest")).Once()
 		deletedTags, deletedManifests, err := dryRunPurge(testCtx, mockClient, testLoginURL, testRepo, "0m", "^lat.*", true, 0, 60)
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
@@ -507,7 +522,7 @@ func TestDryRun(t *testing.T) {
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(FourTagsResult, nil).Once()
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "", "").Return(FourTagsResult, nil).Once()
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "", "v4").Return(EmptyListTagsResult, nil).Once()
-		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleMultiArchWithTagsResult, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleMultiArchManifestV2WithTagsResult, nil).Once()
 		mockClient.On("GetManifest", mock.Anything, testRepo, "sha:356").Return([]byte("invalid json"), nil).Once()
 		deletedTags, deletedManifests, err := dryRunPurge(testCtx, mockClient, testLoginURL, testRepo, "0m", "^lat.*", true, 0, 60)
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
@@ -534,8 +549,8 @@ func TestDryRun(t *testing.T) {
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "", "").Return(FourTagsResult, nil).Once()
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(FourTagsResult, nil).Once()
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "", "v4").Return(EmptyListTagsResult, nil).Once()
-		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleMultiArchWithTagsResult, nil).Once()
-		mockClient.On("GetManifest", mock.Anything, testRepo, "sha:356").Return(multiArchBytes, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleMultiArchManifestV2WithTagsResult, nil).Once()
+		mockClient.On("GetManifest", mock.Anything, testRepo, "sha:356").Return(multiArchManifestV2Bytes, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha:356").Return(nil, errors.New("error fetching manifests")).Once()
 		deletedTags, deletedManifests, err := dryRunPurge(testCtx, mockClient, testLoginURL, testRepo, "0m", "^lat.*", true, 0, 60)
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
@@ -551,8 +566,8 @@ func TestDryRun(t *testing.T) {
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "", "").Return(FourTagsResult, nil).Once()
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(FourTagsResult, nil).Once()
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "", "v4").Return(EmptyListTagsResult, nil).Once()
-		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleMultiArchWithTagsResult, nil).Once()
-		mockClient.On("GetManifest", mock.Anything, testRepo, "sha:356").Return(multiArchBytes, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleMultiArchManifestV2WithTagsResult, nil).Once()
+		mockClient.On("GetManifest", mock.Anything, testRepo, "sha:356").Return(multiArchManifestV2Bytes, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha:356").Return(doubleManifestV2WithoutTagsResult, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha:234").Return(EmptyListManifestsResult, nil).Once()
 		deletedTags, deletedManifests, err := dryRunPurge(testCtx, mockClient, testLoginURL, testRepo, "0m", "^lat.*", true, 0, 60)
@@ -1256,7 +1271,9 @@ var (
 		ManifestsAttributes: nil,
 	}
 	dockerV2MediaType              = "application/vnd.docker.distribution.manifest.v2+json"
-	manifestListMediaType          = "application/vnd.docker.distribution.manifest.list.v2+json"
+	dockerV2ListMediaType          = "application/vnd.docker.distribution.manifest.list.v2+json"
+	ociMediaType                   = "application/vnd.oci.image.manifest.v1+json"
+	ociListMediaType               = "application/vnd.oci.image.index.v1+json"
 	singleManifestV2WithTagsResult = &acr.Manifests{
 		Registry:  &testLoginURL,
 		ImageName: &testRepo,
@@ -1287,23 +1304,66 @@ var (
 			Tags:                 nil,
 		}},
 	}
-	singleMultiArchWithTagsResult = &acr.Manifests{
+	doubleOCIWithoutTagsResult = &acr.Manifests{
+		Registry:  &testLoginURL,
+		ImageName: &testRepo,
+		ManifestsAttributes: &[]acr.ManifestAttributesBase{{
+			LastUpdateTime:       &lastUpdateTime,
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+			Digest:               &digest1,
+			MediaType:            &ociMediaType,
+			Tags:                 nil,
+		}, {
+			LastUpdateTime:       &lastUpdateTime,
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+			Digest:               &digest2,
+			MediaType:            &ociMediaType,
+			Tags:                 nil,
+		}},
+	}
+	singleMultiArchManifestV2WithTagsResult = &acr.Manifests{
 		Registry:  &testLoginURL,
 		ImageName: &testRepo,
 		ManifestsAttributes: &[]acr.ManifestAttributesBase{{
 			LastUpdateTime:       &lastUpdateTime,
 			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
 			Digest:               &multiArchDigest,
-			MediaType:            &manifestListMediaType,
+			MediaType:            &dockerV2ListMediaType,
 			Tags:                 &[]string{"v3"},
 		}},
 	}
-	multiArchBytes = []byte(`{
+	singleMultiArchOCIWithTagsResult = &acr.Manifests{
+		Registry:  &testLoginURL,
+		ImageName: &testRepo,
+		ManifestsAttributes: &[]acr.ManifestAttributesBase{{
+			LastUpdateTime:       &lastUpdateTime,
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+			Digest:               &multiArchDigest,
+			MediaType:            &ociListMediaType,
+			Tags:                 &[]string{"v3"},
+		}},
+	}
+	multiArchManifestV2Bytes = []byte(`{
 		"schemaVersion": 2,
 		"mediaType": "application/vnd.docker.distribution.manifest.list.v2+json",
 		"manifests": [
 			{
 				"mediaType": "application/vnd.docker.image.manifest.v2+json",
+				"size": 7143,
+				"digest": "sha:123",
+				"platform": {
+					"architecture": "ppc64le",
+					"os": "linux"
+				}
+			}
+		]
+	}`)
+	multiArchOCIBytes = []byte(`{
+		"schemaVersion": 2,
+		"mediaType": "application/vnd.oci.image.index.v1+json",
+		"manifests": [
+			{
+				"mediaType": "application/vnd.oci.image.manifest.v1+json",
 				"size": 7143,
 				"digest": "sha:123",
 				"platform": {
