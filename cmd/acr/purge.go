@@ -49,9 +49,10 @@ const (
   - Delete all tags older than 1 day in the example.azurecr.io registry inside the hello-world repository, with 4 purge tasks running concurrently
 	acr purge -r example --filter "hello-world:.*" --ago 1d --concurrency 4
 	`
-	maxPoolSize             = 32 // The max number of parallel delete requests recommended by ACR server
-	manifestListContentType = "application/vnd.docker.distribution.manifest.list.v2+json"
-	linkHeader              = "Link"
+	maxPoolSize              = 32 // The max number of parallel delete requests recommended by ACR server
+	manifestListContentType  = "application/vnd.docker.distribution.manifest.list.v2+json"
+	manifestIndexContentType = "application/vnd.oci.image.index.v1+json"
+	linkHeader               = "Link"
 )
 
 var (
@@ -470,7 +471,7 @@ func getManifestsToDelete(ctx context.Context, acrClient api.AcrCLIClientInterfa
 	for resultManifests != nil && resultManifests.ManifestsAttributes != nil {
 		manifests := *resultManifests.ManifestsAttributes
 		for _, manifest := range manifests {
-			if *manifest.MediaType == manifestListContentType && manifest.Tags != nil {
+			if (*manifest.MediaType == manifestListContentType || *manifest.MediaType == manifestIndexContentType) && manifest.Tags != nil {
 				// If a manifest list is found and it has tags then all the dependent digests are
 				// marked to not be deleted.
 				var manifestListBytes []byte
@@ -577,7 +578,7 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 			manifests := *resultManifests.ManifestsAttributes
 			for _, manifest := range manifests {
 				// If the manifest is manifest list and would not get deleted then mark it's dependant manifests as not deletable.
-				if *manifest.MediaType == manifestListContentType && (*countMap)[*manifest.Digest] != deletedTags[*manifest.Digest] {
+				if (*manifest.MediaType == manifestListContentType || *manifest.MediaType == manifestIndexContentType) && (*countMap)[*manifest.Digest] != deletedTags[*manifest.Digest] {
 					var manifestListBytes []byte
 					manifestListBytes, err = acrClient.GetManifest(ctx, repoName, *manifest.Digest)
 					if err != nil {
