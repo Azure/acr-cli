@@ -24,12 +24,18 @@ const (
 	prefixHTTPS                      = "https://"
 	registryURL                      = ".azurecr.io"
 	manifestTagFetchCount            = 100
+	manifestORASArtifactContentType  = "application/vnd.cncf.oras.artifact.manifest.v1+json"
 	manifestOCIArtifactContentType   = "application/vnd.oci.artifact.manifest.v1+json"
 	manifestOCIImageContentType      = "application/vnd.oci.image.manifest.v1+json"
 	manifestOCIImageIndexContentType = "application/vnd.oci.image.index.v1+json"
 	manifestImageContentType         = "application/vnd.docker.distribution.manifest.v2+json"
 	manifestListContentType          = "application/vnd.docker.distribution.manifest.list.v2+json"
-	manifestAcceptHeader             = "*/*, " + manifestOCIArtifactContentType + ", " + manifestOCIImageContentType + ", " + manifestOCIImageIndexContentType + ", " + manifestImageContentType + ", " + manifestListContentType
+	manifestAcceptHeader             = "*/*, " + manifestORASArtifactContentType +
+		", " + manifestOCIArtifactContentType +
+		", " + manifestOCIImageContentType +
+		", " + manifestOCIImageIndexContentType +
+		", " + manifestImageContentType +
+		", " + manifestListContentType
 )
 
 // The AcrCLIClient is the struct that will be in charge of doing the http requests to the registry.
