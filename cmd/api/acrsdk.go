@@ -21,10 +21,15 @@ import (
 
 // Constants that are used throughout this file.
 const (
-	prefixHTTPS           = "https://"
-	registryURL           = ".azurecr.io"
-	manifestTagFetchCount = 100
-	manifestV2ContentType = "application/vnd.docker.distribution.manifest.v2+json"
+	prefixHTTPS                      = "https://"
+	registryURL                      = ".azurecr.io"
+	manifestTagFetchCount            = 100
+	manifestOCIArtifactContentType   = "application/vnd.oci.artifact.manifest.v1+json"
+	manifestOCIImageContentType      = "application/vnd.oci.image.manifest.v1+json"
+	manifestOCIImageIndexContentType = "application/vnd.oci.image.index.v1+json"
+	manifestImageContentType         = "application/vnd.docker.distribution.manifest.v2+json"
+	manifestListContentType          = "application/vnd.docker.distribution.manifest.list.v2+json"
+	manifestAcceptHeader             = "*/*, " + manifestOCIArtifactContentType + ", " + manifestOCIImageContentType + ", " + manifestOCIImageIndexContentType + ", " + manifestImageContentType + ", " + manifestListContentType
 )
 
 // The AcrCLIClient is the struct that will be in charge of doing the http requests to the registry.
@@ -251,7 +256,7 @@ func (c *AcrCLIClient) GetManifest(ctx context.Context, repoName string, referen
 		}
 	}
 	var result acrapi.SetObject
-	req, err := c.AutorestClient.GetManifestPreparer(ctx, repoName, reference, manifestV2ContentType)
+	req, err := c.AutorestClient.GetManifestPreparer(ctx, repoName, reference, manifestAcceptHeader)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetManifest", nil, "Failure preparing request")
 		return nil, err
