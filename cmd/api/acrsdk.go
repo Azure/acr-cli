@@ -16,6 +16,7 @@ import (
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/adal"
 	"github.com/golang-jwt/jwt/v4"
+	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
 
@@ -26,8 +27,8 @@ const (
 	manifestTagFetchCount            = 100
 	manifestORASArtifactContentType  = "application/vnd.cncf.oras.artifact.manifest.v1+json"
 	manifestOCIArtifactContentType   = "application/vnd.oci.artifact.manifest.v1+json"
-	manifestOCIImageContentType      = "application/vnd.oci.image.manifest.v1+json"
-	manifestOCIImageIndexContentType = "application/vnd.oci.image.index.v1+json"
+	manifestOCIImageContentType      = v1.MediaTypeImageManifest
+	manifestOCIImageIndexContentType = v1.MediaTypeImageIndex
 	manifestImageContentType         = "application/vnd.docker.distribution.manifest.v2+json"
 	manifestListContentType          = "application/vnd.docker.distribution.manifest.list.v2+json"
 	manifestAcceptHeader             = "*/*, " + manifestORASArtifactContentType +
