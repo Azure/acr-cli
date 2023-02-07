@@ -385,7 +385,7 @@ func getTagsToDelete(ctx context.Context,
 			}
 			// If a tag did match the regex filter, is older than the specified duration and can be deleted then it is returned
 			// as a tag to delete.
-			if lastUpdateTime.Before(timeToCompare) && *(*tag.ChangeableAttributes).DeleteEnabled {
+			if lastUpdateTime.Before(timeToCompare) && *(*tag.ChangeableAttributes).DeleteEnabled && *(*tag.ChangeableAttributes).WriteEnabled {
 				tagsEligibleForDeletion = append(tagsEligibleForDeletion, tag)
 			}
 		}
@@ -503,7 +503,7 @@ func getManifestsToDelete(ctx context.Context, acrClient api.AcrCLIClientInterfa
 		if _, ok := doNotDelete[*candidatesToDelete[i].Digest]; !ok {
 			// if a manifest has no tags, is not part of a manifest list and can be deleted then it is added to the
 			// manifestToDelete array.
-			if *(*candidatesToDelete[i].ChangeableAttributes).DeleteEnabled {
+			if *(*candidatesToDelete[i].ChangeableAttributes).DeleteEnabled && *(*candidatesToDelete[i].ChangeableAttributes).WriteEnabled {
 				manifestsToDelete = append(manifestsToDelete, candidatesToDelete[i])
 			}
 		}

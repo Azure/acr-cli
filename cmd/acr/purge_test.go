@@ -137,12 +137,21 @@ func TestPurgeTags(t *testing.T) {
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
 	})
-	// Ninth test, if a tag should be deleted but the delete enabled attribute is set to true it should not be deleted
+	// Ninth test, if a tag should be deleted but the delete or write enabled attribute is set to false it should not be deleted
 	// and no error should show on the CLI output.
-	t.Run("OperationNotAllowedTest", func(t *testing.T) {
+	t.Run("OperationNotAllowedTagDeleteDisabledTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(DeleteDisabledOneTagResult, nil).Once()
+		deletedTags, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, "0m", "^la.*", 0, 60)
+		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
+		assert.Equal(nil, err, "Error should be nil")
+		mockClient.AssertExpectations(t)
+	})
+	t.Run("OperationNotAllowedTagWriteDisabledTest", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(WriteDisabledOneTagResult, nil).Once()
 		deletedTags, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, "0m", "^la.*", 0, 60)
 		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
@@ -268,7 +277,7 @@ func TestPurgeManifests(t *testing.T) {
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
 	})
-	// Third test, no manifest shoud be deleted, if all the manifests have at least one tag they should not be deleted,
+	// Third test, no manifest should be deleted, if all the manifests have at least one tag they should not be deleted,
 	// so no DeleteManifest calls should be made.
 	t.Run("NoDeletionManifestTest", func(t *testing.T) {
 		assert := assert.New(t)
@@ -390,7 +399,7 @@ func TestPurgeManifests(t *testing.T) {
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
 	})
-	// Twelth, same as above, but the multiarch image manifest is an OCI index,
+	// Twelfth, same as above, but the multiarch image manifest is an OCI index,
 	// instead of a Docker Schema v2 manifest list.
 	t.Run("OCIMultiArchDeleteTest", func(t *testing.T) {
 		assert := assert.New(t)
@@ -402,6 +411,28 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha:234").Return(nil, nil).Once()
 		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo)
 		assert.Equal(1, deletedTags, "Number of deleted elements should be 1")
+		assert.Equal(nil, err, "Error should be nil")
+		mockClient.AssertExpectations(t)
+	})
+	// Thirteenth test, if a manifest should be deleted but the delete or write enabled attribute is set to false it should not be deleted
+	// and no error should show on the CLI output.
+	t.Run("OperationNotAllowedManifestDeleteDisabledTest", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(deleteDisabledOneManifestResult, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", digest).Return(EmptyListManifestsResult, nil).Once()
+		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo)
+		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
+		assert.Equal(nil, err, "Error should be nil")
+		mockClient.AssertExpectations(t)
+	})
+	t.Run("OperationNotAllowedManifestWriteDisabledTest", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(writeDisabledOneManifestResult, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", digest).Return(EmptyListManifestsResult, nil).Once()
+		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo)
+		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
 	})
@@ -995,6 +1026,8 @@ var (
 	multiArchDigest        = "sha:356"
 	deleteEnabled          = true
 	deleteDisabled         = false
+	writeEnabled           = true
+	writeDisabled          = false
 	lastUpdateTime         = time.Now().Add(-15 * time.Minute).UTC().Format(time.RFC3339Nano) //Creation time -15minutes from current time
 	lastUpdateTime1DayAgo  = time.Now().Add(-24 * time.Hour).UTC().Format(time.RFC3339Nano)   //Creation time -1d from current time
 	lastUpdateTime2DaysAgo = time.Now().Add(-48 * time.Hour).UTC().Format(time.RFC3339Nano)   //Creation time -2d from current time
@@ -1012,7 +1045,7 @@ var (
 			{
 				Name:                 &tagName,
 				LastUpdateTime:       &lastUpdateTime,
-				ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+				ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
 				Digest:               &digest,
 			},
 		},
@@ -1030,7 +1063,7 @@ var (
 			{
 				Name:                 &tagName,
 				LastUpdateTime:       &lastUpdateTime,
-				ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+				ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
 				Digest:               &digest,
 			},
 		},
@@ -1048,7 +1081,7 @@ var (
 			{
 				Name:                 &tagName,
 				LastUpdateTime:       &lastUpdateTime,
-				ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+				ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
 				Digest:               &digest,
 			},
 		},
@@ -1066,7 +1099,7 @@ var (
 			{
 				Name:                 &tagName,
 				LastUpdateTime:       &lastUpdateTime,
-				ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+				ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
 				Digest:               &digest,
 			},
 		},
@@ -1107,7 +1140,7 @@ var (
 			{
 				Name:                 &tagName,
 				LastUpdateTime:       &invalidLastUpdateTime,
-				ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+				ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
 				Digest:               &digest,
 			},
 		},
@@ -1124,7 +1157,24 @@ var (
 			{
 				Name:                 &tagName,
 				LastUpdateTime:       &lastUpdateTime,
-				ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteDisabled},
+				ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteDisabled, WriteEnabled: &writeEnabled},
+				Digest:               &digest,
+			},
+		},
+	}
+	WriteDisabledOneTagResult = &acr.RepositoryTagsType{
+		Response: autorest.Response{
+			Response: &http.Response{
+				StatusCode: 200,
+			},
+		},
+		Registry:  &testLoginURL,
+		ImageName: &testRepo,
+		TagsAttributes: &[]acr.TagAttributesBase{
+			{
+				Name:                 &tagName,
+				LastUpdateTime:       &lastUpdateTime,
+				ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeDisabled},
 				Digest:               &digest,
 			},
 		},
@@ -1144,22 +1194,22 @@ var (
 		TagsAttributes: &[]acr.TagAttributesBase{{
 			Name:                 &tagName1,
 			LastUpdateTime:       &lastUpdateTime,
-			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
 			Digest:               &digest,
 		}, {
 			Name:                 &tagName2,
 			LastUpdateTime:       &lastUpdateTime,
-			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
 			Digest:               &digest,
 		}, {
 			Name:                 &tagName3,
 			LastUpdateTime:       &lastUpdateTime,
-			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
 			Digest:               &multiArchDigest,
 		}, {
 			Name:                 &tagName4,
 			LastUpdateTime:       &lastUpdateTime,
-			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
 			Digest:               &digest,
 		}},
 	}
@@ -1175,22 +1225,22 @@ var (
 		TagsAttributes: &[]acr.TagAttributesBase{{
 			Name:                 &tagName1,
 			LastUpdateTime:       &lastUpdateTime,
-			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
 			Digest:               &digest,
 		}, {
 			Name:                 &tagName2,
 			LastUpdateTime:       &lastUpdateTime,
-			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
 			Digest:               &digest,
 		}, {
 			Name:                 &tagName3,
 			LastUpdateTime:       &lastUpdateTime,
-			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
 			Digest:               &multiArchDigest,
 		}, {
 			Name:                 &tagName4,
 			LastUpdateTime:       &lastUpdateTime,
-			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
 			Digest:               &digest,
 		}},
 	}
@@ -1207,22 +1257,22 @@ var (
 		TagsAttributes: &[]acr.TagAttributesBase{{
 			Name:                 &tagName1CommitA,
 			LastUpdateTime:       &lastUpdateTime,
-			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
 			Digest:               &digest,
 		}, {
 			Name:                 &tagName1CommitB,
 			LastUpdateTime:       &lastUpdateTime1DayAgo,
-			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
 			Digest:               &digest,
 		}, {
 			Name:                 &tagName1CommitC,
 			LastUpdateTime:       &lastUpdateTime2DaysAgo,
-			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
 			Digest:               &multiArchDigest,
 		}, {
 			Name:                 &tagNameWithLoad,
 			LastUpdateTime:       &lastUpdateTime3DaysAgo,
-			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
 			Digest:               &digest,
 		}},
 	}
@@ -1241,22 +1291,22 @@ var (
 		TagsAttributes: &[]acr.TagAttributesBase{{
 			Name:                 &tagName1CommitA,
 			LastUpdateTime:       &lastUpdateTime,
-			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
 			Digest:               &digest,
 		}, {
 			Name:                 &tagName1CommitB,
 			LastUpdateTime:       &lastUpdateTime1DayAgo,
-			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
 			Digest:               &digest,
 		}, {
 			Name:                 &tagName1CommitC,
 			LastUpdateTime:       &lastUpdateTime2DaysAgo,
-			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
 			Digest:               &multiArchDigest,
 		}, {
 			Name:                 &tagName2,
 			LastUpdateTime:       &lastUpdateTime3DaysAgo,
-			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
 			Digest:               &digest,
 		}},
 	}
@@ -1279,7 +1329,29 @@ var (
 		ImageName: &testRepo,
 		ManifestsAttributes: &[]acr.ManifestAttributesBase{{
 			LastUpdateTime:       &lastUpdateTime,
-			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
+			Digest:               &digest,
+			MediaType:            &dockerV2MediaType,
+			Tags:                 &[]string{"latest"},
+		}},
+	}
+	deleteDisabledOneManifestResult = &acr.Manifests{
+		Registry:  &testLoginURL,
+		ImageName: &testRepo,
+		ManifestsAttributes: &[]acr.ManifestAttributesBase{{
+			LastUpdateTime:       &lastUpdateTime,
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteDisabled, WriteEnabled: &writeEnabled},
+			Digest:               &digest,
+			MediaType:            &dockerV2MediaType,
+			Tags:                 &[]string{"latest"},
+		}},
+	}
+	writeDisabledOneManifestResult = &acr.Manifests{
+		Registry:  &testLoginURL,
+		ImageName: &testRepo,
+		ManifestsAttributes: &[]acr.ManifestAttributesBase{{
+			LastUpdateTime:       &lastUpdateTime,
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteDisabled, WriteEnabled: &writeDisabled},
 			Digest:               &digest,
 			MediaType:            &dockerV2MediaType,
 			Tags:                 &[]string{"latest"},
@@ -1292,13 +1364,13 @@ var (
 		ImageName: &testRepo,
 		ManifestsAttributes: &[]acr.ManifestAttributesBase{{
 			LastUpdateTime:       &lastUpdateTime,
-			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
 			Digest:               &digest1,
 			MediaType:            &dockerV2MediaType,
 			Tags:                 nil,
 		}, {
 			LastUpdateTime:       &lastUpdateTime,
-			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
 			Digest:               &digest2,
 			MediaType:            &dockerV2MediaType,
 			Tags:                 nil,
@@ -1309,13 +1381,13 @@ var (
 		ImageName: &testRepo,
 		ManifestsAttributes: &[]acr.ManifestAttributesBase{{
 			LastUpdateTime:       &lastUpdateTime,
-			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
 			Digest:               &digest1,
 			MediaType:            &ociMediaType,
 			Tags:                 nil,
 		}, {
 			LastUpdateTime:       &lastUpdateTime,
-			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
 			Digest:               &digest2,
 			MediaType:            &ociMediaType,
 			Tags:                 nil,
@@ -1326,7 +1398,7 @@ var (
 		ImageName: &testRepo,
 		ManifestsAttributes: &[]acr.ManifestAttributesBase{{
 			LastUpdateTime:       &lastUpdateTime,
-			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
 			Digest:               &multiArchDigest,
 			MediaType:            &dockerV2ListMediaType,
 			Tags:                 &[]string{"v3"},
@@ -1337,7 +1409,7 @@ var (
 		ImageName: &testRepo,
 		ManifestsAttributes: &[]acr.ManifestAttributesBase{{
 			LastUpdateTime:       &lastUpdateTime,
-			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled},
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
 			Digest:               &multiArchDigest,
 			MediaType:            &ociListMediaType,
 			Tags:                 &[]string{"v3"},
