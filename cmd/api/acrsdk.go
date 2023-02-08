@@ -16,15 +16,27 @@ import (
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/adal"
 	"github.com/golang-jwt/jwt/v4"
+	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
 
 // Constants that are used throughout this file.
 const (
-	prefixHTTPS           = "https://"
-	registryURL           = ".azurecr.io"
-	manifestTagFetchCount = 100
-	manifestV2ContentType = "application/vnd.docker.distribution.manifest.v2+json"
+	prefixHTTPS                      = "https://"
+	registryURL                      = ".azurecr.io"
+	manifestTagFetchCount            = 100
+	manifestORASArtifactContentType  = "application/vnd.cncf.oras.artifact.manifest.v1+json"
+	manifestOCIArtifactContentType   = "application/vnd.oci.artifact.manifest.v1+json"
+	manifestOCIImageContentType      = v1.MediaTypeImageManifest
+	manifestOCIImageIndexContentType = v1.MediaTypeImageIndex
+	manifestImageContentType         = "application/vnd.docker.distribution.manifest.v2+json"
+	manifestListContentType          = "application/vnd.docker.distribution.manifest.list.v2+json"
+	manifestAcceptHeader             = "*/*, " + manifestORASArtifactContentType +
+		", " + manifestOCIArtifactContentType +
+		", " + manifestOCIImageContentType +
+		", " + manifestOCIImageIndexContentType +
+		", " + manifestImageContentType +
+		", " + manifestListContentType
 )
 
 // The AcrCLIClient is the struct that will be in charge of doing the http requests to the registry.
@@ -251,7 +263,7 @@ func (c *AcrCLIClient) GetManifest(ctx context.Context, repoName string, referen
 		}
 	}
 	var result acrapi.SetObject
-	req, err := c.AutorestClient.GetManifestPreparer(ctx, repoName, reference, manifestV2ContentType)
+	req, err := c.AutorestClient.GetManifestPreparer(ctx, repoName, reference, manifestAcceptHeader)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "acr.BaseClient", "GetManifest", nil, "Failure preparing request")
 		return nil, err
