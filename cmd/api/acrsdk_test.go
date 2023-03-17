@@ -3,7 +3,14 @@
 
 package api
 
-import "testing"
+import (
+	"encoding/json"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"reflect"
+	"testing"
+)
 
 func TestLoginURLWithPrefix(t *testing.T) {
 	expectedReturn := "https://registry.azurecr.io"
@@ -56,5 +63,78 @@ func TestGetExpiration(t *testing.T) {
 	_, err = getExpiration(testToken)
 	if err == nil {
 		t.Fatal("Expected error while parsing token, got nil")
+	}
+}
+
+// func TestRefresh(t *testing.T) {
+// 	config := `{
+// 		"auths": {
+// 			"myregistry.azurecr.io": {
+// 				"auth": "MDAwMDAwMDAtMDAwMC0wMDAwLTAwMDAtMDAwMDAwMDAwMDAwOg==",
+// 				"identitytoken": "abc"
+// 			}
+// 		}
+// 	}`
+// 	dir := t.TempDir()
+// 	tmpFile := filepath.Join(dir, "testconfig.json")
+// 	f, _ := os.OpenFile(tmpFile, 0644, fs.FileMode(os.O_CREATE))
+// 	json.NewEncoder(f).Encode(config)
+// 	client, err := GetAcrCLIClientWithAuth("myregistry.azurecr.io", "00000000-0000-0000-0000-000000000000", "", []string{tmpFile})
+// 	client.
+// }
+
+func TestGetAcrCLIClientWithAuth(t *testing.T) {
+	loginURL := "myregistry.azurecr.io"
+	dockerConfigUsername := `{
+		"auths": {
+			"myregistry.azurecr.io": {
+				"auth": "test_username",
+				"identitytoken": "test_token"
+			}
+		}
+	}`
+	dockerConfigNoUsername := `{
+		"auths": {
+			"myregistry.azurecr.io": {
+				"auth": "MDAwMDAwMDAtMDAwMC0wMDAwLTAwMDAtMDAwMDAwMDAwMDAwOg==",
+				"identitytoken": "test_token"
+			}
+		}
+	}`
+	// case 2: both password & username empty, read from docker config, username not empty
+	// case 3: read from docker config, username "000"
+	// case 1: password is empty, fail
+	// case 4: empty username only
+	// case 5: nonempty username and password
+
+	tests := []struct {
+		name          string
+		username      string
+		password      string
+		configContent string
+		want          *AcrCLIClient /// ??
+		wantErr       bool
+
+		configs []string
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			tmpFile := filepath.Join(dir, "testconfig.json")
+			f, _ := os.OpenFile(tmpFile, 0644, fs.FileMode(os.O_CREATE))
+			json.NewEncoder(f).Encode(tt.configContent) // change this
+
+			got, err := GetAcrCLIClientWithAuth(loginURL, tt.username, tt.password, []string{tmpFile})
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetAcrCLIClientWithAuth() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			// check the got's username & password
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("GetAcrCLIClientWithAuth() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
