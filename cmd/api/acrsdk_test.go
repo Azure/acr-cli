@@ -8,7 +8,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"reflect"
 	"testing"
 )
 
@@ -112,10 +111,9 @@ func TestGetAcrCLIClientWithAuth(t *testing.T) {
 		username      string
 		password      string
 		configContent string
-		want          *AcrCLIClient /// ??
 		wantErr       bool
-
-		configs []string
+		wantValue1    string
+		wantValue2    string
 	}{
 		// TODO: Add test cases.
 	}
@@ -132,9 +130,7 @@ func TestGetAcrCLIClientWithAuth(t *testing.T) {
 				return
 			}
 			// check the got's username & password
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("GetAcrCLIClientWithAuth() = %v, want %v", got, tt.want)
-			}
+			if got.AutorestClient.user
 		})
 	}
 }
