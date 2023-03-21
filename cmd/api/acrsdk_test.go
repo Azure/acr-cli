@@ -4,11 +4,12 @@
 package api
 
 import (
-	"encoding/json"
-	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
+
+	"github.com/Azure/go-autorest/autorest"
 )
 
 func TestLoginURLWithPrefix(t *testing.T) {
@@ -65,72 +66,90 @@ func TestGetExpiration(t *testing.T) {
 	}
 }
 
-// func TestRefresh(t *testing.T) {
-// 	config := `{
-// 		"auths": {
-// 			"myregistry.azurecr.io": {
-// 				"auth": "MDAwMDAwMDAtMDAwMC0wMDAwLTAwMDAtMDAwMDAwMDAwMDAwOg==",
-// 				"identitytoken": "abc"
-// 			}
-// 		}
-// 	}`
-// 	dir := t.TempDir()
-// 	tmpFile := filepath.Join(dir, "testconfig.json")
-// 	f, _ := os.OpenFile(tmpFile, 0644, fs.FileMode(os.O_CREATE))
-// 	json.NewEncoder(f).Encode(config)
-// 	client, err := GetAcrCLIClientWithAuth("myregistry.azurecr.io", "00000000-0000-0000-0000-000000000000", "", []string{tmpFile})
-// 	client.
-// }
-
 func TestGetAcrCLIClientWithAuth(t *testing.T) {
 	loginURL := "myregistry.azurecr.io"
-	dockerConfigUsername := `{
-		"auths": {
-			"myregistry.azurecr.io": {
-				"auth": "test_username",
-				"identitytoken": "test_token"
-			}
-		}
-	}`
-	dockerConfigNoUsername := `{
-		"auths": {
-			"myregistry.azurecr.io": {
-				"auth": "MDAwMDAwMDAtMDAwMC0wMDAwLTAwMDAtMDAwMDAwMDAwMDAwOg==",
-				"identitytoken": "test_token"
-			}
-		}
-	}`
-	// case 2: both password & username empty, read from docker config, username not empty
-	// case 3: read from docker config, username "000"
-	// case 1: password is empty, fail
-	// case 4: empty username only
-	// case 5: nonempty username and password
-
+	dockerConfigWithUsernameAndPassword := []byte(`{"auths":{"myregistry.azurecr.io":{"auth":"aGVsbG86b3Jhcy10ZXN0"}}}`)
+	// dockerConfigNoUsername := []byte(`{"auths":{"myregistry.azurecr.io":{"auth":"MDAwMDAwMDAtMDAwMC0wMDAwLTAwMDAtMDAwMDAwMDAwMDAwOg==","identitytoken":"test refresh token"}}}`)
+	dockerConfigWithUsernameOnly := []byte(`{"auths":{"myregistry.azurecr.io":{"auth":"aGVsbG86"}}}`)
 	tests := []struct {
-		name          string
-		username      string
-		password      string
-		configContent string
-		wantErr       bool
-		wantValue1    string
-		wantValue2    string
+		name           string
+		username       string
+		password       string
+		configContent  []byte
+		wantErr        bool
+		useBasicAuth   bool
+		wantUsername   string
+		wantPassword   string
+		useBearerToken bool
 	}{
-		// TODO: Add test cases.
+		{
+			name:          "empty username and password, read from docker config with regular username and password",
+			username:      "",
+			password:      "",
+			configContent: dockerConfigWithUsernameAndPassword,
+			wantErr:       false,
+			useBasicAuth:  true,
+			wantUsername:  "hello",
+			wantPassword:  "oras-test",
+		},
+		// To be continue
+		// {
+		// 	name:          "empty username and password, read from docker config with username 00000000-0000-0000-0000-000000000000",
+		// 	username:      "",
+		// 	password:      "",
+		// 	configContent: dockerConfigNoUsername,
+		// 	wantErr:       false,
+		// },
+		{
+			name:     "password is empty, fail with an error",
+			username: "test user",
+			password: "",
+			wantErr:  true,
+		},
+		{
+			name:          "empty username and password, read from docker config with username only, fail with an error",
+			username:      "",
+			password:      "",
+			configContent: dockerConfigWithUsernameOnly,
+			wantErr:       true,
+		},
+		// To be continue
+		// {
+		// 	name:         "empty username, refresh token as password",
+		// 	username:     "",
+		// 	password:     "test refresh token",
+		// 	wantErr:      false,
+		// 	useBasicAuth: false,
+		// },
+		{
+			name:         "non-empty username and password",
+			username:     "hello",
+			password:     "oras-test",
+			wantErr:      false,
+			useBasicAuth: true,
+			wantUsername: "hello",
+			wantPassword: "oras-test",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dir := t.TempDir()
-			tmpFile := filepath.Join(dir, "testconfig.json")
-			f, _ := os.OpenFile(tmpFile, 0644, fs.FileMode(os.O_CREATE))
-			json.NewEncoder(f).Encode(tt.configContent) // change this
-
-			got, err := GetAcrCLIClientWithAuth(loginURL, tt.username, tt.password, []string{tmpFile})
+			// create test docker config file
+			configFilePath := filepath.Join(t.TempDir(), "config.json")
+			if err := os.WriteFile(configFilePath, tt.configContent, 0644); err != nil {
+				t.Errorf("cannot create test config file: %v", err)
+				return
+			}
+			got, err := GetAcrCLIClientWithAuth(loginURL, tt.username, tt.password, []string{configFilePath})
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetAcrCLIClientWithAuth() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			// check the got's username & password
-			if got.AutorestClient.user
+			if tt.useBasicAuth {
+				wantAuthorizer := autorest.NewBasicAuthorizer(tt.wantUsername, tt.wantPassword)
+				if !reflect.DeepEqual(got.AutorestClient.Authorizer, wantAuthorizer) {
+					t.Error("incorrect AutorestClient.Authorizer")
+				}
+			}
 		})
 	}
 }
