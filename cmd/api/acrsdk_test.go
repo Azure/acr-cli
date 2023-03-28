@@ -4,12 +4,14 @@
 package api
 
 import (
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/Azure/go-autorest/autorest"
@@ -53,7 +55,11 @@ func TestLoginURL(t *testing.T) {
 
 func TestGetExpiration(t *testing.T) {
 	// EmptyToken contains no authentication data
-	testToken := "eyJhbGciOiJSUzI1NiJ9.eyJleHAiOjE1NjM5MTA5ODF9."
+	testToken := strings.Join([]string{
+		base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"RS256"}`)),
+		base64.RawURLEncoding.EncodeToString([]byte(`{"exp":1563910981}`)),
+		"",
+	}, ".")
 	expectedReturn := int64(1563910981)
 	exp, err := getExpiration(testToken)
 	if err != nil {
@@ -73,7 +79,11 @@ func TestGetExpiration(t *testing.T) {
 func TestGetAcrCLIClientWithAuth(t *testing.T) {
 	var testLoginURL string
 	testTokenScope := "registry:catalog:* repository:*:*"
-	testAccessToken := "eyJhbGciOiJSUzI1NiJ9.eyJleHAiOjE1NjM5MTA5ODF9."
+	testAccessToken := strings.Join([]string{
+		base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"RS256"}`)),
+		base64.RawURLEncoding.EncodeToString([]byte(`{"exp":1563910981}`)),
+		"",
+	}, ".")
 	testRefreshToken := "test/refresh/token"
 
 	// create an authorization server
