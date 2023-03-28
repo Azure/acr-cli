@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"runtime"
@@ -79,7 +78,7 @@ type purgeParameters struct {
 }
 
 // newPurgeCmd defines the purge command.
-func newPurgeCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
+func newPurgeCmd(rootParams *rootParameters) *cobra.Command {
 	purgeParams := purgeParameters{rootParameters: rootParams}
 	cmd := &cobra.Command{
 		Use:     "purge",
@@ -230,7 +229,7 @@ func collectTagFilters(ctx context.Context, rawFilters []string, client acrapi.B
 		if err != nil {
 			return nil, err
 		}
-		repoNames, err := getMatchingRepos(ctx, allRepoNames, "^"+repoRegex+"$", regexMatchTimeout)
+		repoNames, err := getMatchingRepos(allRepoNames, "^"+repoRegex+"$", regexMatchTimeout)
 		if err != nil {
 			return nil, err
 		}
@@ -266,7 +265,7 @@ func getAllRepositoryNames(ctx context.Context, client acrapi.BaseClientAPI) ([]
 }
 
 // getMatchingRepos get all repositories in current registry, that match the provided regular expression
-func getMatchingRepos(ctx context.Context, repoNames []string, repoRegex string, regexMatchTimeout uint64) ([]string, error) {
+func getMatchingRepos(repoNames []string, repoRegex string, regexMatchTimeout uint64) ([]string, error) {
 	filter, err := buildRegexFilter(repoRegex, regexMatchTimeout)
 	if err != nil {
 		return nil, err

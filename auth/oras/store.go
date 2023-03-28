@@ -98,7 +98,7 @@ func (s *Store) Erase(registry string) error {
 // `EmptyCredential` is a valid return value and should not be considered as
 // an error.
 // If nil, the credential is always resolved to `EmptyCredential`.
-func (s *Store) Credential(ctx context.Context, registry string) (auth.Credential, error) {
+func (s *Store) Credential(_ context.Context, registry string) (auth.Credential, error) {
 	for _, c := range s.configs {
 		authConf, err := c.GetCredentialsStore(registry).Get(registry)
 		if err != nil {
