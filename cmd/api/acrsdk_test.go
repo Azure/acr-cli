@@ -53,7 +53,7 @@ func TestLoginURL(t *testing.T) {
 
 func TestGetExpiration(t *testing.T) {
 	// EmptyToken contains no authentication data
-	testToken := "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJUZXN0VG9rZW4iLCJpYXQiOjE1NjM5MDk2NTIsImV4cCI6MTU2MzkxMDk4MSwiYXVkIjoiZXhhbXBsZS5henVyZWNyLmlvIiwic3ViIjoiZXhhbXBsZUBleGFtcGxlLmNvbSJ9.Ivw5oOSwMZYGKCzlogsguIIH9UDmKXIixdlgXEfo2dk" //nolint:gosec
+	testToken := "eyJhbGciOiJSUzI1NiJ9.eyJleHAiOjE1NjM5MTA5ODF9."
 	expectedReturn := int64(1563910981)
 	exp, err := getExpiration(testToken)
 	if err != nil {
@@ -73,7 +73,7 @@ func TestGetExpiration(t *testing.T) {
 func TestGetAcrCLIClientWithAuth(t *testing.T) {
 	var testLoginURL string
 	testTokenScope := "registry:catalog:* repository:*:*"
-	testAccessToken := "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE1NDk2NTEwMzEsInN1YiI6IjEyMzQ1Njc4OTAiLCJuYW1lIjoiSm9obiBEb2UiLCJhZG1pbiI6dHJ1ZSwiaWF0IjoxNTE2MjM5MDIyfQ.JamFfuEx54E0ZqGFx8EUe745GisoP0YCTAup-8YB2Tb4nouKfZGBbHb-YRtEqi-r8uQzihJBRi1GDxUNzDxbsLB5fe8Q8uLN8IpTHmWIMGpoD7E9W5W8-hUJiu4qG6lPZMV7e0JDsik-xUPcFjv8yJQmKl84vwDFRpH0uNhBDs_H6YnIGyso1I5ITkeSiUVpdlkeOUQ1wK-k-rAU8zYUSCj_3ke0zHQcHFXRiHsmyUMZBKNmPUTZp1CSBWx90zKGBmhgt26LHl1EmmoddRbuigReOqT_HnaTcTrrudweLPXubjHMtAFym5RDzGsIae4mkClKV6iMVweM73A2NWQNkg"
+	testAccessToken := "eyJhbGciOiJSUzI1NiJ9.eyJleHAiOjE1NjM5MTA5ODF9."
 	testRefreshToken := "test/refresh/token"
 
 	// create an authorization server
@@ -194,7 +194,7 @@ func TestGetAcrCLIClientWithAuth(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// create test docker config file
 			configFilePath := filepath.Join(t.TempDir(), "config.json")
-			if err := os.WriteFile(configFilePath, tt.configContent, 0644); err != nil {
+			if err := os.WriteFile(configFilePath, tt.configContent, 0600); err != nil {
 				t.Errorf("cannot create test config file: %v", err)
 				return
 			}
