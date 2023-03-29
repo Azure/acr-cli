@@ -91,13 +91,13 @@ func TestGetAcrCLIClientWithAuth(t *testing.T) {
 		path := r.URL.Path
 		if r.Method != http.MethodPost {
 			w.WriteHeader(http.StatusNotFound)
-			panic("unexpected access")
+			t.Fatalf("unexpected request method, get %s, expect POST", r.Method)
 		}
 		switch path {
 		case "/oauth2/token":
 			if err := r.ParseForm(); err != nil {
 				w.WriteHeader(http.StatusUnauthorized)
-				panic("failed to parse form")
+				t.Fatal("unable to parse form")
 			}
 			if got := r.PostForm.Get("service"); got != testLoginURL {
 				w.WriteHeader(http.StatusUnauthorized)
@@ -114,7 +114,7 @@ func TestGetAcrCLIClientWithAuth(t *testing.T) {
 			}
 			// writes back access token
 			if _, err := fmt.Fprintf(w, `{"access_token":%q}`, testAccessToken); err != nil {
-				panic(err)
+				t.Fatalf("unable to write access token: %v", err)
 			}
 		default:
 			w.WriteHeader(http.StatusNotAcceptable)
@@ -122,6 +122,9 @@ func TestGetAcrCLIClientWithAuth(t *testing.T) {
 	}))
 	defer as.Close()
 	testLoginURL = as.URL
+
+	// As the autorest package enforces the use of https, we have to replace the
+	// transport so that the client trusts the test server.
 	sender := autorest.CreateSender()
 	sender.(*http.Client).Transport = as.Client().Transport
 
@@ -213,19 +216,20 @@ func TestGetAcrCLIClientWithAuth(t *testing.T) {
 				t.Errorf("GetAcrCLIClientWithAuth() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !tt.wantErr {
-				var wantAuthorizer autorest.Authorizer
-				if tt.useBasicAuth {
-					wantAuthorizer = autorest.NewBasicAuthorizer(tt.wantUsername, tt.wantPassword)
-				} else {
-					wantAuthorizer = autorest.NewBearerAuthorizer(&adal.Token{
-						AccessToken:  tt.wantAccessToken,
-						RefreshToken: tt.wantRefreshToken,
-					})
-				}
-				if !reflect.DeepEqual(got.AutorestClient.Authorizer, wantAuthorizer) {
-					t.Error("incorrect AutorestClient.Authorizer")
-				}
+			if tt.wantErr {
+				return
+			}
+			var wantAuthorizer autorest.Authorizer
+			if tt.useBasicAuth {
+				wantAuthorizer = autorest.NewBasicAuthorizer(tt.wantUsername, tt.wantPassword)
+			} else {
+				wantAuthorizer = autorest.NewBearerAuthorizer(&adal.Token{
+					AccessToken:  tt.wantAccessToken,
+					RefreshToken: tt.wantRefreshToken,
+				})
+			}
+			if !reflect.DeepEqual(got.AutorestClient.Authorizer, wantAuthorizer) {
+				t.Error("incorrect AutorestClient.Authorizer")
 			}
 		})
 	}
