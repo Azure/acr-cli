@@ -31,15 +31,14 @@ To start working with the CLI, run acr --help`,
 	}
 
 	flags := cmd.PersistentFlags()
-	out := cmd.OutOrStdout()
 
 	cmd.AddCommand(
-		newPurgeCmd(out, &rootParams),
-		newVersionCmd(out),
-		newLoginCmd(out),
-		newLogoutCmd(out),
-		newTagCmd(out, &rootParams),
-		newManifestCmd(out, &rootParams),
+		newPurgeCmd(&rootParams),
+		newVersionCmd(),
+		newLoginCmd(),
+		newLogoutCmd(),
+		newTagCmd(&rootParams),
+		newManifestCmd(&rootParams),
 	)
 	cmd.PersistentFlags().StringVarP(&rootParams.registryName, "registry", "r", "", "Registry name")
 	cmd.PersistentFlags().StringVarP(&rootParams.username, "username", "u", "", "Registry username")

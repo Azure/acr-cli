@@ -43,7 +43,7 @@ type loginOpts struct {
 // newLoginCmd is used when the program is used locally and not inside a container.
 // It is based on the login.go file found on https://github.com/deislabs/oras/blob/master/cmd/oras/login.go
 // This will login into any ACR, the login info will be written in a config.json file inside the .docker folder.
-func newLoginCmd(out io.Writer) *cobra.Command {
+func newLoginCmd() *cobra.Command {
 	var opts loginOpts
 	cmd := &cobra.Command{
 		Use:     "login",

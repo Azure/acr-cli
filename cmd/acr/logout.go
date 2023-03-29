@@ -4,8 +4,6 @@
 package main
 
 import (
-	"io"
-
 	"github.com/Azure/acr-cli/auth/oras"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -13,7 +11,7 @@ import (
 
 // Similar to the login.go file but this will logout out of an ACR. This will delete
 // registry credentials that are contained in a config.json file.
-func newLogoutCmd(out io.Writer) *cobra.Command {
+func newLogoutCmd() *cobra.Command {
 	var opts logoutOpts
 	cmd := &cobra.Command{
 		Use:   "logout",

@@ -6,7 +6,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
 
 	"github.com/Azure/acr-cli/cmd/api"
 	"github.com/pkg/errors"
@@ -27,7 +26,7 @@ type manifestParameters struct {
 
 // The manifest command can be used to either list manifests or delete manifests inside a repository.
 // that can be done with the manifest list and manifest delete commands respectively.
-func newManifestCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
+func newManifestCmd(rootParams *rootParameters) *cobra.Command {
 	manifestParams := manifestParameters{rootParameters: rootParams}
 	cmd := &cobra.Command{
 		Use:   "manifest",
@@ -39,8 +38,8 @@ func newManifestCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 		},
 	}
 
-	listManifestCmd := newManifestListCmd(out, &manifestParams)
-	deleteManifestCmd := newManifestDeleteCmd(out, &manifestParams)
+	listManifestCmd := newManifestListCmd(&manifestParams)
+	deleteManifestCmd := newManifestDeleteCmd(&manifestParams)
 
 	cmd.AddCommand(
 		listManifestCmd,
@@ -55,7 +54,7 @@ func newManifestCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 
 // newManifestListCmd creates the manifest list command, it does not need any aditional parameters.
 // The registry interaction is done through the listManifests method
-func newManifestListCmd(out io.Writer, manifestParams *manifestParameters) *cobra.Command {
+func newManifestListCmd(manifestParams *manifestParameters) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List manifests from a repository",
@@ -112,7 +111,7 @@ func listManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, log
 
 // newManifestDeleteCmd defines the manifest delete subcommand, it receives as an argument an array of manifest digests.
 // The delete functionality of this command is implemented in the deleteManifests function.
-func newManifestDeleteCmd(out io.Writer, manifestParams *manifestParameters) *cobra.Command {
+func newManifestDeleteCmd(manifestParams *manifestParameters) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete",
 		Short: "Delete manifest from a repository",

@@ -5,7 +5,6 @@ package main
 
 import (
 	"fmt"
-	"io"
 
 	"github.com/Azure/acr-cli/version"
 	"github.com/spf13/cobra"
@@ -17,7 +16,7 @@ Prints version information
 `
 )
 
-func newVersionCmd(out io.Writer) *cobra.Command {
+func newVersionCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "version",
 		Short: "Print version information",

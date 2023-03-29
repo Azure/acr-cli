@@ -6,7 +6,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
 
 	"github.com/Azure/acr-cli/cmd/api"
 	"github.com/pkg/errors"
@@ -27,7 +26,7 @@ type tagParameters struct {
 
 // The tag command can be used to either list tags or delete tags inside a repository.
 // that can be done with the tag list and tag delete commands respectively.
-func newTagCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
+func newTagCmd(rootParams *rootParameters) *cobra.Command {
 	tagParams := tagParameters{rootParameters: rootParams}
 	cmd := &cobra.Command{
 		Use:   "tag",
@@ -39,8 +38,8 @@ func newTagCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 		},
 	}
 
-	listTagCmd := newTagListCmd(out, &tagParams)
-	deleteTagCmd := newTagDeleteCmd(out, &tagParams)
+	listTagCmd := newTagListCmd(&tagParams)
+	deleteTagCmd := newTagDeleteCmd(&tagParams)
 
 	cmd.AddCommand(
 		listTagCmd,
@@ -55,7 +54,7 @@ func newTagCmd(out io.Writer, rootParams *rootParameters) *cobra.Command {
 
 // newTagListCmd creates tag list command, it does not need any aditional parameters.
 // The registry interaction is done through the listTags method
-func newTagListCmd(out io.Writer, tagParams *tagParameters) *cobra.Command {
+func newTagListCmd(tagParams *tagParameters) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List tags from a repository",
@@ -112,7 +111,7 @@ func listTags(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL
 
 // newTagDeleteCmd defines the tag delete subcommand, it receives as an argument an array of tag digests.
 // The delete functionality of this command is implemented in the deleteTags function.
-func newTagDeleteCmd(out io.Writer, tagParams *tagParameters) *cobra.Command {
+func newTagDeleteCmd(tagParams *tagParameters) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete",
 		Short: "Delete tags from a repository",
