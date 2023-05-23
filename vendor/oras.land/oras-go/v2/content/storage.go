@@ -20,7 +20,6 @@ import (
 	"io"
 
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
-	"oras.land/oras-go/v2/internal/ioutil"
 )
 
 // Fetcher fetches content.
@@ -42,17 +41,16 @@ type Pusher interface {
 // accessed via Descriptors.
 // The storage is designed to handle blobs of large sizes.
 type Storage interface {
-	Fetcher
+	ReadOnlyStorage
 	Pusher
+}
+
+// ReadOnlyStorage represents a read-only Storage.
+type ReadOnlyStorage interface {
+	Fetcher
 
 	// Exists returns true if the described content exists.
 	Exists(ctx context.Context, target ocispec.Descriptor) (bool, error)
-}
-
-// GraphStorage represents a CAS that supports parent node finding.
-type GraphStorage interface {
-	Storage
-	UpEdgeFinder
 }
 
 // Deleter removes content.
@@ -70,5 +68,13 @@ func FetchAll(ctx context.Context, fetcher Fetcher, desc ocispec.Descriptor) ([]
 		return nil, err
 	}
 	defer rc.Close()
-	return ioutil.ReadAll(rc, desc)
+	return ReadAll(rc, desc)
+}
+
+// FetcherFunc is the basic Fetch method defined in Fetcher.
+type FetcherFunc func(ctx context.Context, target ocispec.Descriptor) (io.ReadCloser, error)
+
+// Fetch performs Fetch operation by the FetcherFunc.
+func (fn FetcherFunc) Fetch(ctx context.Context, target ocispec.Descriptor) (io.ReadCloser, error) {
+	return fn(ctx, target)
 }

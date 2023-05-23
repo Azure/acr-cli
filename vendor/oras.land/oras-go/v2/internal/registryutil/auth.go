@@ -13,18 +13,17 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package oras
+package registryutil
 
-import "oras.land/oras-go/v2/content"
+import (
+	"context"
 
-// Target is a CAS with generic tags.
-type Target interface {
-	content.Storage
-	content.TagResolver
-}
+	"oras.land/oras-go/v2/registry"
+	"oras.land/oras-go/v2/registry/remote/auth"
+)
 
-// GraphTarget is a CAS with generic tags that supports parent node finding.
-type GraphTarget interface {
-	content.GraphStorage
-	content.TagResolver
+// WithScopeHint adds a hinted scope to the context.
+func WithScopeHint(ctx context.Context, ref registry.Reference, actions ...string) context.Context {
+	scope := auth.ScopeRepository(ref.Repository, actions...)
+	return auth.AppendScopes(ctx, scope)
 }

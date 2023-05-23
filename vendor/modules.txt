@@ -61,13 +61,10 @@ github.com/moby/term/windows
 # github.com/opencontainers/go-digest v1.0.0
 ## explicit; go 1.13
 github.com/opencontainers/go-digest
-# github.com/opencontainers/image-spec v1.0.2
-## explicit
+# github.com/opencontainers/image-spec v1.1.0-rc.3
+## explicit; go 1.18
 github.com/opencontainers/image-spec/specs-go
 github.com/opencontainers/image-spec/specs-go/v1
-# github.com/oras-project/artifacts-spec v1.0.0-rc.1
-## explicit; go 1.17
-github.com/oras-project/artifacts-spec/specs-go/v1
 # github.com/pkg/errors v0.9.1
 ## explicit
 github.com/pkg/errors
@@ -94,7 +91,7 @@ github.com/stretchr/testify/mock
 ## explicit; go 1.17
 golang.org/x/crypto/pkcs12
 golang.org/x/crypto/pkcs12/internal/rc2
-# golang.org/x/sync v0.0.0-20220513210516-0976fa681c29
+# golang.org/x/sync v0.1.0
 ## explicit
 golang.org/x/sync/errgroup
 golang.org/x/sync/semaphore
@@ -111,20 +108,22 @@ golang.org/x/sys/windows
 gopkg.in/yaml.v3
 # gotest.tools/v3 v3.2.0
 ## explicit; go 1.13
-# oras.land/oras-go/v2 v2.0.0-20220524144344-23cb9e0960a5
-## explicit; go 1.17
-oras.land/oras-go/v2
+# oras.land/oras-go/v2 v2.1.0
+## explicit; go 1.19
 oras.land/oras-go/v2/content
 oras.land/oras-go/v2/errdef
 oras.land/oras-go/v2/internal/cas
 oras.land/oras-go/v2/internal/descriptor
 oras.land/oras-go/v2/internal/docker
-oras.land/oras-go/v2/internal/graph
 oras.land/oras-go/v2/internal/httputil
 oras.land/oras-go/v2/internal/ioutil
-oras.land/oras-go/v2/internal/status
+oras.land/oras-go/v2/internal/registryutil
+oras.land/oras-go/v2/internal/slices
+oras.land/oras-go/v2/internal/spec
 oras.land/oras-go/v2/internal/syncutil
 oras.land/oras-go/v2/registry
 oras.land/oras-go/v2/registry/remote
 oras.land/oras-go/v2/registry/remote/auth
+oras.land/oras-go/v2/registry/remote/errcode
 oras.land/oras-go/v2/registry/remote/internal/errutil
+oras.land/oras-go/v2/registry/remote/retry

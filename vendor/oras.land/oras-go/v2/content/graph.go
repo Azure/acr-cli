@@ -20,66 +20,88 @@ import (
 	"encoding/json"
 
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
-	artifactspec "github.com/oras-project/artifacts-spec/specs-go/v1"
-	"oras.land/oras-go/v2/internal/descriptor"
 	"oras.land/oras-go/v2/internal/docker"
+	"oras.land/oras-go/v2/internal/spec"
 )
 
-// UpEdgeFinder finds out the parent nodes of a given node of a directed acyclic
-// graph.
+// PredecessorFinder finds out the nodes directly pointing to a given node of a
+// directed acyclic graph.
 // In other words, returns the "parents" of the current descriptor.
-// UpEdgeFinder is an extension of Storage.
-type UpEdgeFinder interface {
-	// UpEdges returns the nodes directly pointing to the current node.
-	UpEdges(ctx context.Context, node ocispec.Descriptor) ([]ocispec.Descriptor, error)
+// PredecessorFinder is an extension of Storage.
+type PredecessorFinder interface {
+	// Predecessors returns the nodes directly pointing to the current node.
+	Predecessors(ctx context.Context, node ocispec.Descriptor) ([]ocispec.Descriptor, error)
 }
 
-// DownEdges returns the nodes directly pointed by the current node.
+// GraphStorage represents a CAS that supports direct predecessor node finding.
+type GraphStorage interface {
+	Storage
+	PredecessorFinder
+}
+
+// ReadOnlyGraphStorage represents a read-only GraphStorage.
+type ReadOnlyGraphStorage interface {
+	ReadOnlyStorage
+	PredecessorFinder
+}
+
+// Successors returns the nodes directly pointed by the current node.
 // In other words, returns the "children" of the current descriptor.
-func DownEdges(ctx context.Context, fetcher Fetcher, node ocispec.Descriptor) ([]ocispec.Descriptor, error) {
+func Successors(ctx context.Context, fetcher Fetcher, node ocispec.Descriptor) ([]ocispec.Descriptor, error) {
 	switch node.MediaType {
-	case docker.MediaTypeManifest, ocispec.MediaTypeImageManifest:
+	case docker.MediaTypeManifest:
 		content, err := FetchAll(ctx, fetcher, node)
 		if err != nil {
 			return nil, err
 		}
-
-		// docker manifest and oci manifest are equivalent for down edges.
+		// OCI manifest schema can be used to marshal docker manifest
 		var manifest ocispec.Manifest
 		if err := json.Unmarshal(content, &manifest); err != nil {
 			return nil, err
 		}
 		return append([]ocispec.Descriptor{manifest.Config}, manifest.Layers...), nil
+	case ocispec.MediaTypeImageManifest:
+		content, err := FetchAll(ctx, fetcher, node)
+		if err != nil {
+			return nil, err
+		}
+		var manifest ocispec.Manifest
+		if err := json.Unmarshal(content, &manifest); err != nil {
+			return nil, err
+		}
+		var nodes []ocispec.Descriptor
+		if manifest.Subject != nil {
+			nodes = append(nodes, *manifest.Subject)
+		}
+		nodes = append(nodes, manifest.Config)
+		return append(nodes, manifest.Layers...), nil
 	case docker.MediaTypeManifestList, ocispec.MediaTypeImageIndex:
 		content, err := FetchAll(ctx, fetcher, node)
 		if err != nil {
 			return nil, err
 		}
 
-		// docker manifest list and oci index are equivalent for down edges.
+		// docker manifest list and oci index are equivalent for successors.
 		var index ocispec.Index
 		if err := json.Unmarshal(content, &index); err != nil {
 			return nil, err
 		}
 		return index.Manifests, nil
-	case artifactspec.MediaTypeArtifactManifest:
+	case spec.MediaTypeArtifactManifest:
 		content, err := FetchAll(ctx, fetcher, node)
 		if err != nil {
 			return nil, err
 		}
 
-		var manifest artifactspec.Manifest
+		var manifest spec.Artifact
 		if err := json.Unmarshal(content, &manifest); err != nil {
 			return nil, err
 		}
 		var nodes []ocispec.Descriptor
-		if descriptor.FromArtifact(manifest.Subject) != descriptor.Empty {
-			nodes = append(nodes, descriptor.ArtifactToOCI(manifest.Subject))
+		if manifest.Subject != nil {
+			nodes = append(nodes, *manifest.Subject)
 		}
-		for _, blob := range manifest.Blobs {
-			nodes = append(nodes, descriptor.ArtifactToOCI(blob))
-		}
-		return nodes, nil
+		return append(nodes, manifest.Blobs...), nil
 	}
 	return nil, nil
 }

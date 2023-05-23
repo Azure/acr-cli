@@ -30,27 +30,42 @@ import (
 // cache the fetched content.
 // The subsequent fetch call will read from the local cache.
 type Proxy struct {
-	content.Storage
-	Cache content.Storage
+	content.ReadOnlyStorage
+	Cache       content.Storage
+	StopCaching bool
 }
 
 // NewProxy creates a proxy for the `base` storage, using the `cache` storage as
 // the cache.
-func NewProxy(base, cache content.Storage) *Proxy {
+func NewProxy(base content.ReadOnlyStorage, cache content.Storage) *Proxy {
 	return &Proxy{
-		Storage: base,
-		Cache:   cache,
+		ReadOnlyStorage: base,
+		Cache:           cache,
+	}
+}
+
+// NewProxyWithLimit creates a proxy for the `base` storage, using the `cache`
+// storage with a push size limit as the cache.
+func NewProxyWithLimit(base content.ReadOnlyStorage, cache content.Storage, pushLimit int64) *Proxy {
+	limitedCache := content.LimitStorage(cache, pushLimit)
+	return &Proxy{
+		ReadOnlyStorage: base,
+		Cache:           limitedCache,
 	}
 }
 
 // Fetch fetches the content identified by the descriptor.
 func (p *Proxy) Fetch(ctx context.Context, target ocispec.Descriptor) (io.ReadCloser, error) {
+	if p.StopCaching {
+		return p.FetchCached(ctx, target)
+	}
+
 	rc, err := p.Cache.Fetch(ctx, target)
 	if err == nil {
 		return rc, nil
 	}
 
-	rc, err = p.Storage.Fetch(ctx, target)
+	rc, err = p.ReadOnlyStorage.Fetch(ctx, target)
 	if err != nil {
 		return nil, err
 	}
@@ -61,6 +76,9 @@ func (p *Proxy) Fetch(ctx context.Context, target ocispec.Descriptor) (io.ReadCl
 	go func() {
 		defer wg.Done()
 		pushErr = p.Cache.Push(ctx, target, pr)
+		if pushErr != nil {
+			pr.CloseWithError(pushErr)
+		}
 	}()
 	closer := ioutil.CloserFunc(func() error {
 		rcErr := rc.Close()
@@ -83,11 +101,25 @@ func (p *Proxy) Fetch(ctx context.Context, target ocispec.Descriptor) (io.ReadCl
 	}, nil
 }
 
+// FetchCached fetches the content identified by the descriptor.
+// If the content is not cached, it will be fetched from the remote without
+// caching.
+func (p *Proxy) FetchCached(ctx context.Context, target ocispec.Descriptor) (io.ReadCloser, error) {
+	exists, err := p.Cache.Exists(ctx, target)
+	if err != nil {
+		return nil, err
+	}
+	if exists {
+		return p.Cache.Fetch(ctx, target)
+	}
+	return p.ReadOnlyStorage.Fetch(ctx, target)
+}
+
 // Exists returns true if the described content exists.
 func (p *Proxy) Exists(ctx context.Context, target ocispec.Descriptor) (bool, error) {
 	exists, err := p.Cache.Exists(ctx, target)
 	if err == nil && exists {
 		return true, nil
 	}
-	return p.Storage.Exists(ctx, target)
+	return p.ReadOnlyStorage.Exists(ctx, target)
 }
