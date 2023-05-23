@@ -5,20 +5,30 @@ on:
     tags:
       - v*
 
+permissions:
+  contents: read
+
 jobs:
   build:
+    permissions:
+      contents: write  # for goreleaser/goreleaser-action to create a GitHub release
     runs-on: ubuntu-latest
     steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@128a63446a954579617e875aaab7d2978154e969 # v2.4.0
+        with:
+          egress-policy: audit
+
       - name: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
         
       - name: setup go environment
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@6edd4406fa81c3da01a34fa6f6343087c207a568 # v3.5.0
         with:
           go-version: '1.18.1'
 
       - name: run goreleaser
-        uses: goreleaser/goreleaser-action@v2
+        uses: goreleaser/goreleaser-action@b953231f81b8dfd023c58e0854a721e35037f28b # v2.9.1
         with:
           version: latest
           args: release --rm-dist
