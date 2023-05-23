@@ -8,7 +8,7 @@ require (
 	github.com/Azure/go-autorest/tracing v0.6.0
 	github.com/dlclark/regexp2 v1.4.0
 	github.com/docker/cli v20.10.16+incompatible
-	github.com/golang-jwt/jwt/v4 v4.4.1
+	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/google/uuid v1.3.0
 	github.com/moby/term v0.0.0-20210619224110-3f7ff695adc6
 	github.com/opencontainers/image-spec v1.1.0-rc.3
