@@ -13,18 +13,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package errdef
+package slices
 
-import "errors"
-
-// Common errors used in ORAS
-var (
-	ErrAlreadyExists      = errors.New("already exists")
-	ErrInvalidDigest      = errors.New("invalid digest")
-	ErrInvalidReference   = errors.New("invalid reference")
-	ErrMissingReference   = errors.New("missing reference")
-	ErrNotFound           = errors.New("not found")
-	ErrSizeExceedsLimit   = errors.New("size exceeds limit")
-	ErrUnsupported        = errors.New("unsupported")
-	ErrUnsupportedVersion = errors.New("unsupported version")
-)
+// Clone returns a shallow copy of the slice.
+func Clone[S ~[]E, E any](s S) S {
+	if s == nil {
+		return nil
+	}
+	return append(make(S, 0, len(s)), s...)
+}
