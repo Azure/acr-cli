@@ -10,7 +10,7 @@ WORKDIR /go/src/github.com/Azure/acr-cli
 COPY . .
 RUN make binaries && mv bin/acr /usr/bin/acr
 
-FROM mcr.microsoft.com/cbl-mariner/base/core:2.0@sha256:4a2f15c52bf23d28272b89f86cdc515bbf6961e4aecf1f20a655d518113b5e28
+FROM mcr.microsoft.com/cbl-mariner/base/core:2.0@sha256:d0818dcb483c189781ad6a80db1bc2bd5340a86c5795bfdd08665adfadd95a8c
 RUN tdnf check-update \
     && tdnf --refresh install -y \
         ca-certificates-microsoft \
