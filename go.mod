@@ -3,7 +3,7 @@ module github.com/Azure/acr-cli
 go 1.18
 
 require (
-	github.com/Azure/go-autorest/autorest v0.11.27
+	github.com/Azure/go-autorest/autorest v0.11.29
 	github.com/Azure/go-autorest/autorest/adal v0.9.23
 	github.com/Azure/go-autorest/tracing v0.6.0
 	github.com/dlclark/regexp2 v1.10.0
