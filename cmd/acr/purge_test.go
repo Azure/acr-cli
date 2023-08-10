@@ -406,6 +406,8 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleMultiArchOCIWithTagsResult, nil).Once()
 		mockClient.On("GetManifest", mock.Anything, testRepo, "sha:356").Return(multiArchOCIBytes, nil).Once()
+		mockClient.On("GetManifest", mock.Anything, testRepo, "sha:123").Return(emptyManifestBytes, nil).Once()
+		mockClient.On("GetManifest", mock.Anything, testRepo, "sha:234").Return(emptyManifestBytes, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha:356").Return(doubleOCIWithoutTagsResult, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha:234").Return(EmptyListManifestsResult, nil).Once()
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha:234").Return(nil, nil).Once()
@@ -414,7 +416,7 @@ func TestPurgeManifests(t *testing.T) {
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
 	})
-	// Thirteenth test, if a manifest should be deleted but the delete or write enabled attribute is set to false it should not be deleted
+	// Thirteenth test, if a manifest should be deleted but the delete enabled attribute is set to false it should not be deleted
 	// and no error should show on the CLI output.
 	t.Run("OperationNotAllowedManifestDeleteDisabledTest", func(t *testing.T) {
 		assert := assert.New(t)
@@ -426,11 +428,25 @@ func TestPurgeManifests(t *testing.T) {
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
 	})
+	// Fourteenth test, if a manifest should be deleted but the write enabled attribute is set to false it should not be deleted
+	// and no error should show on the CLI output.
 	t.Run("OperationNotAllowedManifestWriteDisabledTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(writeDisabledOneManifestResult, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", digest).Return(EmptyListManifestsResult, nil).Once()
+		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo)
+		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
+		assert.Equal(nil, err, "Error should be nil")
+		mockClient.AssertExpectations(t)
+	})
+	// Fifteenth test, if an OCI artifact manifest is untagged but it has subject manifests, the manifest should not be purged
+	t.Run("OCIArtificateManifestWithSubjectDeleteTest", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleManifestWithSubjectWithoutTagResult, nil).Once()
+		mockClient.On("GetManifest", mock.Anything, testRepo, "sha:789").Return(manifestWithSubjectOCIArtificate, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha:789").Return(EmptyListManifestsResult, nil).Once()
 		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo)
 		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
@@ -600,7 +616,7 @@ func TestDryRun(t *testing.T) {
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleMultiArchManifestV2WithTagsResult, nil).Once()
 		mockClient.On("GetManifest", mock.Anything, testRepo, "sha:356").Return(multiArchManifestV2Bytes, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha:356").Return(doubleManifestV2WithoutTagsResult, nil).Once()
-		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha:234").Return(EmptyListManifestsResult, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha:234").Return(EmptyListManifestsResult, nil)
 		deletedTags, deletedManifests, err := dryRunPurge(testCtx, mockClient, testLoginURL, testRepo, "0m", "^lat.*", true, 0, 60)
 		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
 		assert.Equal(1, deletedManifests, "Number of deleted elements should be 1")
@@ -1021,19 +1037,20 @@ var (
 		ImageName:      &testRepo,
 		TagsAttributes: nil,
 	}
-	tagName                = "latest"
-	digest                 = "sha:abc"
-	multiArchDigest        = "sha:356"
-	deleteEnabled          = true
-	deleteDisabled         = false
-	writeEnabled           = true
-	writeDisabled          = false
-	lastUpdateTime         = time.Now().Add(-15 * time.Minute).UTC().Format(time.RFC3339Nano) //Creation time -15minutes from current time
-	lastUpdateTime1DayAgo  = time.Now().Add(-24 * time.Hour).UTC().Format(time.RFC3339Nano)   //Creation time -1d from current time
-	lastUpdateTime2DaysAgo = time.Now().Add(-48 * time.Hour).UTC().Format(time.RFC3339Nano)   //Creation time -2d from current time
-	lastUpdateTime3DaysAgo = time.Now().Add(-72 * time.Hour).UTC().Format(time.RFC3339Nano)   //Creation time -3d from current time
-	invalidLastUpdateTime  = "date"
-	OneTagResult           = &acr.RepositoryTagsType{
+	tagName                    = "latest"
+	digest                     = "sha:abc"
+	multiArchDigest            = "sha:356"
+	manifestWithWSubjectDigest = "sha:789"
+	deleteEnabled              = true
+	deleteDisabled             = false
+	writeEnabled               = true
+	writeDisabled              = false
+	lastUpdateTime             = time.Now().Add(-15 * time.Minute).UTC().Format(time.RFC3339Nano) //Creation time -15minutes from current time
+	lastUpdateTime1DayAgo      = time.Now().Add(-24 * time.Hour).UTC().Format(time.RFC3339Nano)   //Creation time -1d from current time
+	lastUpdateTime2DaysAgo     = time.Now().Add(-48 * time.Hour).UTC().Format(time.RFC3339Nano)   //Creation time -2d from current time
+	lastUpdateTime3DaysAgo     = time.Now().Add(-72 * time.Hour).UTC().Format(time.RFC3339Nano)   //Creation time -3d from current time
+	invalidLastUpdateTime      = "date"
+	OneTagResult               = &acr.RepositoryTagsType{
 		Response: autorest.Response{
 			Response: &http.Response{
 				StatusCode: 200,
@@ -1415,6 +1432,17 @@ var (
 			Tags:                 &[]string{"v3"},
 		}},
 	}
+	singleManifestWithSubjectWithoutTagResult = &acr.Manifests{
+		Registry:  &testLoginURL,
+		ImageName: &testRepo,
+		ManifestsAttributes: &[]acr.ManifestAttributesBase{{
+			LastUpdateTime:       &lastUpdateTime,
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
+			Digest:               &manifestWithWSubjectDigest,
+			MediaType:            &ociMediaType,
+			Tags:                 nil,
+		}},
+	}
 	multiArchManifestV2Bytes = []byte(`{
 		"schemaVersion": 2,
 		"mediaType": "application/vnd.docker.distribution.manifest.list.v2+json",
@@ -1444,5 +1472,21 @@ var (
 				}
 			}
 		]
+	}`)
+	emptyManifestBytes = []byte(`{
+		"mediaType": "application/vnd.oci.image.index.v1+json"
+	}`)
+	manifestWithSubjectOCIArtificate = []byte(`{
+		"mediaType": "application/vnd.oci.artifact.manifest.v1+json",
+		"artifactType": "application/vnd.example.sbom.v1",
+		"subject": {
+			"mediaType": "application/vnd.oci.image.manifest.v1+json",
+			"size": 1234,
+			"digest": "sha256:456"
+		},
+		"annotations": {
+			"com.example.key1": "value1",
+			"com.example.key2": "value2"
+		  }
 	}`)
 )
