@@ -49,18 +49,18 @@ const (
   - Delete all tags older than 1 day in the example.azurecr.io registry inside the hello-world repository, with 4 purge tasks running concurrently
 	acr purge -r example --filter "hello-world:.*" --ago 1d --concurrency 4
 	`
-	maxPoolSize                      = 32 // The max number of parallel delete requests recommended by ACR server
-	manifestListContentType          = "application/vnd.docker.distribution.manifest.list.v2+json"
-	manifestOCIArtifactContentType   = "application/vnd.oci.artifact.manifest.v1+json"
-	manifestOCIImageContentType      = "application/vnd.oci.image.manifest.v1+json"
-	manifestOCIImageIndexContentType = "application/vnd.oci.image.index.v1+json"
-	linkHeader                       = "Link"
+	maxPoolSize               = 32 // The max number of parallel delete requests recommended by ACR server
+	MediaTypeManifestList     = "application/vnd.docker.distribution.manifest.list.v2+json"
+	MediaTypeArtifactManifest = "application/vnd.oci.artifact.manifest.v1+json"
+	MediaTypeImageManifest    = v1.MediaTypeImageManifest
+	MediaTypeImageIndex       = v1.MediaTypeImageIndex
+	linkHeader                = "Link"
 )
 
 var (
 	defaultPoolSize        = runtime.GOMAXPROCS(0)
 	concurrencyDescription = fmt.Sprintf("Number of concurrent purge tasks. Range: [1 - %d]", maxPoolSize)
-	mediaTypes             = map[string]struct{}{manifestListContentType: {}, manifestOCIArtifactContentType: {}, manifestOCIImageContentType: {}, manifestOCIImageIndexContentType: {}}
+	mediaTypes             = map[string]struct{}{MediaTypeManifestList: {}, MediaTypeArtifactManifest: {}, MediaTypeImageManifest: {}, MediaTypeImageIndex: {}}
 )
 
 // Default settings for regexp2
@@ -468,48 +468,31 @@ func getManifestsToDelete(ctx context.Context, acrClient api.AcrCLIClientInterfa
 	}
 	// This will act as a set if a key is present then it should not be deleted because it is referenced by a multiarch manifest
 	// or the manifest has subjects attached
-	doNotDelete := make(map[string]struct{})
+	doNotDelete := make(Set[string])
 	var candidatesToDelete []acr.ManifestAttributesBase
 	for resultManifests != nil && resultManifests.ManifestsAttributes != nil {
 		manifests := *resultManifests.ManifestsAttributes
 		for _, manifest := range manifests {
+			var customManifest customManifest
 			if _, ok := mediaTypes[*manifest.MediaType]; ok {
 				manifestBytes, err := acrClient.GetManifest(ctx, repoName, *manifest.Digest)
 				if err != nil {
 					return nil, err
 				}
-				var customManifest customManifest
 				err = json.Unmarshal(manifestBytes, &customManifest)
 				if err != nil {
 					return nil, err
 				}
-				if customManifest.Subject != nil {
-					// if manifest has subject, manifest is marked to not be deleted
-					doNotDelete[*manifest.Digest] = struct{}{}
-				} else if manifest.Tags == nil {
-					// If the manifest has no subject or tag, it is a candidate for deletion
-					candidatesToDelete = append(candidatesToDelete, manifest)
-				}
-				if len(customManifest.Manifests) > 0 {
-					// if manifest is a multiarchitecture manifest
-					if manifest.Tags != nil {
-						// If this multiarchitecture manifest has tag, its dependent
-						// manifests are maked to not be deleted
-						for _, dependentManifest := range customManifest.Manifests {
-							doNotDelete[dependentManifest.Digest] = struct{}{}
-						}
-					} else {
-						// If the manifest has no tag, it is a candidate for deletion
-						candidatesToDelete = append(candidatesToDelete, manifest)
-					}
-				}
-			} else {
-				if manifest.Tags == nil {
-					candidatesToDelete = append(candidatesToDelete, manifest)
-				}
+			}
+			candidatesToDelete, doNotDelete, err = filterManifests(manifest, customManifest, doNotDelete, candidatesToDelete)
+			if err != nil {
+				return nil, err
 			}
 		}
+
+		// Get the last manifest digest from the last manifest from manifests.
 		lastManifestDigest = *manifests[len(manifests)-1].Digest
+		// Use this new digest to find next batch of manifests.
 		resultManifests, err = acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
 		if err != nil {
 			return nil, err
@@ -517,7 +500,7 @@ func getManifestsToDelete(ctx context.Context, acrClient api.AcrCLIClientInterfa
 	}
 	// Remove all manifests that should not be deleted
 	for i := 0; i < len(candidatesToDelete); i++ {
-		if _, ok := doNotDelete[*candidatesToDelete[i].Digest]; !ok {
+		if !doNotDelete.Contains(*candidatesToDelete[i].Digest) {
 			// if a manifest has no tags, is not part of a manifest list and can be deleted then it is added to the
 			// manifestToDelete array.
 			if *(*candidatesToDelete[i].ChangeableAttributes).DeleteEnabled && *(*candidatesToDelete[i].ChangeableAttributes).WriteEnabled {
@@ -586,44 +569,38 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 			}
 			return -1, -1, err
 		}
-		// This will act as a set if a key is present then it should not be deleted
-		// because it is referenced by a multiarch manifest or a manifest has subject attached
-		// that will not be deleted
-		doNotDelete := make(map[string]struct{})
+		// This set will do the check: if a key is present, then the correspoinding manifest
+		// should not be deleted because it is referenced by a multiarch manifest
+		// or otherwise references a subject
+		doNotDelete := make(Set[string])
 		candidatesToDelete := []acr.ManifestAttributesBase{}
-		// Iterate over all manifests to discover multiarchitecture manifests
 		for resultManifests != nil && resultManifests.ManifestsAttributes != nil {
 			manifests := *resultManifests.ManifestsAttributes
 			for _, manifest := range manifests {
 				if (*countMap)[*manifest.Digest] != deletedTags[*manifest.Digest] {
+					var customManifest customManifest
 					if _, ok := mediaTypes[*manifest.MediaType]; ok {
 						manifestBytes, err := acrClient.GetManifest(ctx, repoName, *manifest.Digest)
 						if err != nil {
 							return -1, -1, err
 						}
-						var customManifest customManifest
 						err = json.Unmarshal(manifestBytes, &customManifest)
 						if err != nil {
 							return -1, -1, err
 						}
-						if customManifest.Subject != nil {
-							// if manifest has subject, manifest is marked to not be deleted
-							doNotDelete[*manifest.Digest] = struct{}{}
-						} else if manifest.Tags == nil {
-							// If the manifest has no subject or tag, it is a candidate for deletion
-							candidatesToDelete = append(candidatesToDelete, manifest)
-						}
-						if len(customManifest.Manifests) > 0 {
-							for _, dependentManifest := range customManifest.Manifests {
-								doNotDelete[dependentManifest.Digest] = struct{}{}
-							}
-						}
+					}
+					candidatesToDelete, doNotDelete, err = filterManifests(manifest, customManifest, doNotDelete, candidatesToDelete)
+					if err != nil {
+						return -1, -1, err
 					}
 				} else {
 					// If the manifest has the same amount of tags as the amount of tags deleted then it is a candidate for deletion.
 					candidatesToDelete = append(candidatesToDelete, manifest)
 				}
+
+				// Get the last manifest digest from the last manifest from manifests.
 				lastManifestDigest = *manifests[len(manifests)-1].Digest
+				// Use this new digest to find next batch of manifests.
 				resultManifests, err = acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
 				if err != nil {
 					return -1, -1, err
@@ -632,7 +609,7 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 		}
 		// Just print manifests that would be deleted.
 		for i := 0; i < len(candidatesToDelete); i++ {
-			if _, ok := doNotDelete[*candidatesToDelete[i].Digest]; !ok {
+			if doNotDelete.Contains(*candidatesToDelete[i].Digest) {
 				fmt.Printf("%s/%s@%s\n", loginURL, repoName, *candidatesToDelete[i].Digest)
 				deletedManifestsCount++
 			}
@@ -640,6 +617,53 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 	}
 
 	return deletedTagsCount, deletedManifestsCount, nil
+}
+
+func filterManifests(manifest acr.ManifestAttributesBase, customManifest customManifest, doNotDelete Set[string], candidatesToDelete []acr.ManifestAttributesBase) ([]acr.ManifestAttributesBase, Set[string], error) {
+	switch *manifest.MediaType {
+	case MediaTypeManifestList:
+		if manifest.Tags == nil {
+			// If the manifest has no tag, it is a candidate for deletion
+			candidatesToDelete = append(candidatesToDelete, manifest)
+		} else {
+			// If this multiarchitecture manifest has tag, its dependent
+			// manifests are maked to not be deleted
+			for _, dependentManifest := range customManifest.Manifests {
+				doNotDelete.Add(dependentManifest.Digest)
+			}
+		}
+	case MediaTypeArtifactManifest, MediaTypeImageManifest:
+		if manifest.Tags == nil {
+			if customManifest.Subject != nil {
+				// if manifest has subject, manifest is marked to not be deleted
+				doNotDelete.Add(*manifest.Digest)
+			} else {
+				// If the manifest has no tag or subject, it is a candidate for deletion
+				candidatesToDelete = append(candidatesToDelete, manifest)
+			}
+		}
+	case MediaTypeImageIndex:
+		if manifest.Tags == nil {
+			if customManifest.Subject != nil {
+				// if manifest has subject, manifest is marked to not be deleted
+				doNotDelete.Add(*manifest.Digest)
+			} else {
+				// If the manifest has no tag or subject, it is a candidate for deletion
+				candidatesToDelete = append(candidatesToDelete, manifest)
+			}
+		} else {
+			// If this multiarchitecture manifest has tag, its dependent
+			// manifests are maked to not be deleted
+			for _, dependentManifest := range customManifest.Manifests {
+				doNotDelete.Add(dependentManifest.Digest)
+			}
+		}
+	default:
+		if manifest.Tags == nil {
+			candidatesToDelete = append(candidatesToDelete, manifest)
+		}
+	}
+	return candidatesToDelete, doNotDelete, nil
 }
 
 // countTagsByManifest returns a map that for a given manifest digest contains the number of tags associated to it.
@@ -687,8 +711,9 @@ func buildRegexFilter(expression string, regexpMatchTimeoutSeconds uint64) (*reg
 	return regexp, nil
 }
 
-// In order to parse the content of a mutliarch manifest string
-// or a manifest contains subjects, the following structs were defined.
+// customManifest defines a customized struct for manifests
+// which is used to parse the content of a multiarch manifest,
+// or references a subject
 type customManifest struct {
 	Manifests     []manifest     `json:"manifests"`
 	MediaType     string         `json:"mediaType"`
