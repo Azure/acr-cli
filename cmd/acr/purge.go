@@ -473,18 +473,19 @@ func getManifestsToDelete(ctx context.Context, acrClient api.AcrCLIClientInterfa
 	for resultManifests != nil && resultManifests.ManifestsAttributes != nil {
 		manifests := *resultManifests.ManifestsAttributes
 		for _, manifest := range manifests {
-			var customManifest customManifest
+			var cm customManifest
 			if _, ok := mediaTypes[*manifest.MediaType]; ok {
-				manifestBytes, err := acrClient.GetManifest(ctx, repoName, *manifest.Digest)
+				var manifestBytes []byte
+				manifestBytes, err = acrClient.GetManifest(ctx, repoName, *manifest.Digest)
 				if err != nil {
 					return nil, err
 				}
-				err = json.Unmarshal(manifestBytes, &customManifest)
+				err = json.Unmarshal(manifestBytes, &cm)
 				if err != nil {
 					return nil, err
 				}
 			}
-			candidatesToDelete, doNotDelete, err = filterManifests(manifest, customManifest, doNotDelete, candidatesToDelete)
+			candidatesToDelete, doNotDelete, err = filterManifests(manifest, cm, doNotDelete, candidatesToDelete)
 			if err != nil {
 				return nil, err
 			}
@@ -578,18 +579,19 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 			manifests := *resultManifests.ManifestsAttributes
 			for _, manifest := range manifests {
 				if (*countMap)[*manifest.Digest] != deletedTags[*manifest.Digest] {
-					var customManifest customManifest
+					var cm customManifest
 					if _, ok := mediaTypes[*manifest.MediaType]; ok {
-						manifestBytes, err := acrClient.GetManifest(ctx, repoName, *manifest.Digest)
+						var manifestBytes []byte
+						manifestBytes, err = acrClient.GetManifest(ctx, repoName, *manifest.Digest)
 						if err != nil {
 							return -1, -1, err
 						}
-						err = json.Unmarshal(manifestBytes, &customManifest)
+						err = json.Unmarshal(manifestBytes, &cm)
 						if err != nil {
 							return -1, -1, err
 						}
 					}
-					candidatesToDelete, doNotDelete, err = filterManifests(manifest, customManifest, doNotDelete, candidatesToDelete)
+					candidatesToDelete, doNotDelete, err = filterManifests(manifest, cm, doNotDelete, candidatesToDelete)
 					if err != nil {
 						return -1, -1, err
 					}
@@ -619,7 +621,7 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 	return deletedTagsCount, deletedManifestsCount, nil
 }
 
-func filterManifests(manifest acr.ManifestAttributesBase, customManifest customManifest, doNotDelete Set[string], candidatesToDelete []acr.ManifestAttributesBase) ([]acr.ManifestAttributesBase, Set[string], error) {
+func filterManifests(manifest acr.ManifestAttributesBase, cm customManifest, doNotDelete Set[string], candidatesToDelete []acr.ManifestAttributesBase) ([]acr.ManifestAttributesBase, Set[string], error) {
 	switch *manifest.MediaType {
 	case MediaTypeManifestList:
 		if manifest.Tags == nil {
@@ -628,13 +630,13 @@ func filterManifests(manifest acr.ManifestAttributesBase, customManifest customM
 		} else {
 			// If this multiarchitecture manifest has tag, its dependent
 			// manifests are maked to not be deleted
-			for _, dependentManifest := range customManifest.Manifests {
+			for _, dependentManifest := range cm.Manifests {
 				doNotDelete.Add(dependentManifest.Digest)
 			}
 		}
 	case MediaTypeArtifactManifest, MediaTypeImageManifest:
 		if manifest.Tags == nil {
-			if customManifest.Subject != nil {
+			if cm.Subject != nil {
 				// if manifest has subject, manifest is marked to not be deleted
 				doNotDelete.Add(*manifest.Digest)
 			} else {
@@ -644,7 +646,7 @@ func filterManifests(manifest acr.ManifestAttributesBase, customManifest customM
 		}
 	case MediaTypeImageIndex:
 		if manifest.Tags == nil {
-			if customManifest.Subject != nil {
+			if cm.Subject != nil {
 				// if manifest has subject, manifest is marked to not be deleted
 				doNotDelete.Add(*manifest.Digest)
 			} else {
@@ -654,7 +656,7 @@ func filterManifests(manifest acr.ManifestAttributesBase, customManifest customM
 		} else {
 			// If this multiarchitecture manifest has tag, its dependent
 			// manifests are maked to not be deleted
-			for _, dependentManifest := range customManifest.Manifests {
+			for _, dependentManifest := range cm.Manifests {
 				doNotDelete.Add(dependentManifest.Digest)
 			}
 		}
