@@ -1042,7 +1042,7 @@ func TestGetLastTagFromResponse(t *testing.T) {
 			Response: autorest.Response{
 				Response: &http.Response{
 					StatusCode: 200,
-					Header:     http.Header{linkHeader: {"/acr/v1/&testRepo/_tags"}}},
+					Header:     http.Header{headerLink: {"/acr/v1/&testRepo/_tags"}}},
 			},
 		}
 		lastTag := getLastTagFromResponse(ResultWithNoQuery)
@@ -1149,7 +1149,7 @@ var (
 		Response: autorest.Response{
 			Response: &http.Response{
 				StatusCode: 200,
-				Header:     http.Header{linkHeader: {"</acr/v1/&testRepo/_tags?last=latest&n=3&orderby=timedesc>; rel=\"next\""}},
+				Header:     http.Header{headerLink: {"</acr/v1/&testRepo/_tags?last=latest&n=3&orderby=timedesc>; rel=\"next\""}},
 			},
 		},
 		Registry:  &testLoginURL,
@@ -1167,7 +1167,7 @@ var (
 		Response: autorest.Response{
 			Response: &http.Response{
 				StatusCode: 200,
-				Header:     http.Header{linkHeader: {"</acr/v1/&testRepo/_tags?last=123%26latest&n=3&orderby=>; rel=\"next\""}},
+				Header:     http.Header{headerLink: {"</acr/v1/&testRepo/_tags?last=123%26latest&n=3&orderby=>; rel=\"next\""}},
 			},
 		},
 		Registry:  &testLoginURL,
@@ -1185,7 +1185,7 @@ var (
 		Response: autorest.Response{
 			Response: &http.Response{
 				StatusCode: 200,
-				Header:     http.Header{linkHeader: {"</acr/v1/&testRepo/_tags?n=3&orderby=timedesc&last=123%26latest>; rel=\"next\""}},
+				Header:     http.Header{headerLink: {"</acr/v1/&testRepo/_tags?n=3&orderby=timedesc&last=123%26latest>; rel=\"next\""}},
 			},
 		},
 		Registry:  &testLoginURL,
@@ -1312,7 +1312,7 @@ var (
 		Response: autorest.Response{
 			Response: &http.Response{
 				StatusCode: 200,
-				Header:     http.Header{linkHeader: {"</acr/v1/&testRepo/_tags?last=v4&n=3&orderby=timedesc>; rel=\"next\""}},
+				Header:     http.Header{headerLink: {"</acr/v1/&testRepo/_tags?last=v4&n=3&orderby=timedesc>; rel=\"next\""}},
 			},
 		},
 		Registry:  &testLoginURL,

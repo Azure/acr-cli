@@ -17,6 +17,7 @@ import (
 	"github.com/Azure/acr-cli/acr/acrapi"
 	"github.com/Azure/acr-cli/cmd/api"
 	"github.com/Azure/acr-cli/cmd/worker"
+	"github.com/Azure/acr-cli/internal/container/set"
 	"github.com/dlclark/regexp2"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
@@ -49,18 +50,18 @@ const (
   - Delete all tags older than 1 day in the example.azurecr.io registry inside the hello-world repository, with 4 purge tasks running concurrently
 	acr purge -r example --filter "hello-world:.*" --ago 1d --concurrency 4
 	`
-	maxPoolSize               = 32 // The max number of parallel delete requests recommended by ACR server
-	MediaTypeManifestList     = "application/vnd.docker.distribution.manifest.list.v2+json"
-	MediaTypeArtifactManifest = "application/vnd.oci.artifact.manifest.v1+json"
-	MediaTypeImageManifest    = v1.MediaTypeImageManifest
-	MediaTypeImageIndex       = v1.MediaTypeImageIndex
-	linkHeader                = "Link"
+	maxPoolSize                 = 32 // The max number of parallel delete requests recommended by ACR server
+	MediaTypeDockerManifestList = "application/vnd.docker.distribution.manifest.list.v2+json"
+	MediaTypeArtifactManifest   = "application/vnd.oci.artifact.manifest.v1+json"
+	MediaTypeImageManifest      = v1.MediaTypeImageManifest
+	MediaTypeImageIndex         = v1.MediaTypeImageIndex
+	headerLink                  = "Link"
 )
 
 var (
 	defaultPoolSize        = runtime.GOMAXPROCS(0)
 	concurrencyDescription = fmt.Sprintf("Number of concurrent purge tasks. Range: [1 - %d]", maxPoolSize)
-	mediaTypes             = map[string]struct{}{MediaTypeManifestList: {}, MediaTypeArtifactManifest: {}, MediaTypeImageManifest: {}, MediaTypeImageIndex: {}}
+	mediaTypes             = map[string]struct{}{MediaTypeDockerManifestList: {}, MediaTypeArtifactManifest: {}, MediaTypeImageManifest: {}, MediaTypeImageIndex: {}}
 )
 
 // Default settings for regexp2
@@ -419,7 +420,7 @@ func getLastTagFromResponse(resultTags *acr.RepositoryTagsType) string {
 	if resultTags.Header == nil {
 		return ""
 	}
-	link := resultTags.Header.Get(linkHeader)
+	link := resultTags.Header.Get(headerLink)
 	if len(link) == 0 {
 		return ""
 	}
@@ -468,7 +469,7 @@ func getManifestsToDelete(ctx context.Context, acrClient api.AcrCLIClientInterfa
 	}
 	// This will act as a set if a key is present then it should not be deleted because it is referenced by a multiarch manifest
 	// or the manifest has subjects attached
-	doNotDelete := make(Set[string])
+	doNotDelete := set.New[string]()
 	var candidatesToDelete []acr.ManifestAttributesBase
 	for resultManifests != nil && resultManifests.ManifestsAttributes != nil {
 		manifests := *resultManifests.ManifestsAttributes
@@ -485,7 +486,7 @@ func getManifestsToDelete(ctx context.Context, acrClient api.AcrCLIClientInterfa
 					return nil, err
 				}
 			}
-			candidatesToDelete, doNotDelete, err = filterManifests(manifest, cm, doNotDelete, candidatesToDelete)
+			candidatesToDelete, doNotDelete, err = getCandidatesToDelete(manifest, cm, doNotDelete, candidatesToDelete)
 			if err != nil {
 				return nil, err
 			}
@@ -570,10 +571,10 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 			}
 			return -1, -1, err
 		}
-		// This set will do the check: if a key is present, then the correspoinding manifest
+		// This set will do the check: if a key is present, then the corresponding manifest
 		// should not be deleted because it is referenced by a multiarch manifest
 		// or otherwise references a subject
-		doNotDelete := make(Set[string])
+		doNotDelete := set.New[string]()
 		candidatesToDelete := []acr.ManifestAttributesBase{}
 		for resultManifests != nil && resultManifests.ManifestsAttributes != nil {
 			manifests := *resultManifests.ManifestsAttributes
@@ -591,7 +592,7 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 							return -1, -1, err
 						}
 					}
-					candidatesToDelete, doNotDelete, err = filterManifests(manifest, cm, doNotDelete, candidatesToDelete)
+					candidatesToDelete, doNotDelete, err = getCandidatesToDelete(manifest, cm, doNotDelete, candidatesToDelete)
 					if err != nil {
 						return -1, -1, err
 					}
@@ -621,29 +622,30 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 	return deletedTagsCount, deletedManifestsCount, nil
 }
 
-func filterManifests(manifest acr.ManifestAttributesBase, cm customManifest, doNotDelete Set[string], candidatesToDelete []acr.ManifestAttributesBase) ([]acr.ManifestAttributesBase, Set[string], error) {
+func getCandidatesToDelete(manifest acr.ManifestAttributesBase, cm customManifest, doNotDelete set.Set[string], candidatesToDelete []acr.ManifestAttributesBase) ([]acr.ManifestAttributesBase, set.Set[string], error) {
 	switch *manifest.MediaType {
-	case MediaTypeManifestList:
+	case MediaTypeDockerManifestList:
 		if manifest.Tags == nil {
 			// If the manifest has no tag, it is a candidate for deletion
 			candidatesToDelete = append(candidatesToDelete, manifest)
-		} else {
-			// If this multiarchitecture manifest has tag, its dependent
-			// manifests are maked to not be deleted
-			for _, dependentManifest := range cm.Manifests {
-				doNotDelete.Add(dependentManifest.Digest)
-			}
+			break
+		}
+		// If this multiarchitecture manifest has tag, its dependent
+		// manifests are marked to not be deleted
+		for _, dependentManifest := range cm.Manifests {
+			doNotDelete.Add(dependentManifest.Digest)
 		}
 	case MediaTypeArtifactManifest, MediaTypeImageManifest:
-		if manifest.Tags == nil {
-			if cm.Subject != nil {
-				// if manifest has subject, manifest is marked to not be deleted
-				doNotDelete.Add(*manifest.Digest)
-			} else {
-				// If the manifest has no tag or subject, it is a candidate for deletion
-				candidatesToDelete = append(candidatesToDelete, manifest)
-			}
+		if manifest.Tags != nil {
+			break
 		}
+		if cm.Subject != nil {
+			// If manifest has subject, manifest is marked to not be deleted
+			doNotDelete.Add(*manifest.Digest)
+			break
+		}
+		// If the manifest has no tag or subject, it is a candidate for deletion
+		candidatesToDelete = append(candidatesToDelete, manifest)
 	case MediaTypeImageIndex:
 		if manifest.Tags == nil {
 			if cm.Subject != nil {
@@ -655,7 +657,7 @@ func filterManifests(manifest acr.ManifestAttributesBase, cm customManifest, doN
 			}
 		} else {
 			// If this multiarchitecture manifest has tag, its dependent
-			// manifests are maked to not be deleted
+			// manifests are marked to not be deleted
 			for _, dependentManifest := range cm.Manifests {
 				doNotDelete.Add(dependentManifest.Digest)
 			}

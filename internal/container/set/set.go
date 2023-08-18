@@ -1,4 +1,4 @@
-package main
+package set
 
 // Set represents a set data structure.
 type Set[T comparable] map[T]struct{}
