@@ -61,7 +61,7 @@ const (
 var (
 	defaultPoolSize        = runtime.GOMAXPROCS(0)
 	concurrencyDescription = fmt.Sprintf("Number of concurrent purge tasks. Range: [1 - %d]", maxPoolSize)
-	mediaTypes             = map[string]struct{}{MediaTypeDockerManifestList: {}, MediaTypeArtifactManifest: {}, MediaTypeImageManifest: {}, MediaTypeImageIndex: {}}
+	manifestMediaTypes     = map[string]struct{}{MediaTypeDockerManifestList: {}, MediaTypeArtifactManifest: {}, MediaTypeImageManifest: {}, MediaTypeImageIndex: {}}
 )
 
 // Default settings for regexp2
@@ -475,7 +475,7 @@ func getManifestsToDelete(ctx context.Context, acrClient api.AcrCLIClientInterfa
 		manifests := *resultManifests.ManifestsAttributes
 		for _, manifest := range manifests {
 			var cm customManifest
-			if _, ok := mediaTypes[*manifest.MediaType]; ok {
+			if _, ok := manifestMediaTypes[*manifest.MediaType]; ok {
 				var manifestBytes []byte
 				manifestBytes, err = acrClient.GetManifest(ctx, repoName, *manifest.Digest)
 				if err != nil {
@@ -579,9 +579,9 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 		for resultManifests != nil && resultManifests.ManifestsAttributes != nil {
 			manifests := *resultManifests.ManifestsAttributes
 			for _, manifest := range manifests {
-				if (*countMap)[*manifest.Digest] != deletedTags[*manifest.Digest] {
+				if (countMap)[*manifest.Digest] != deletedTags[*manifest.Digest] {
 					var cm customManifest
-					if _, ok := mediaTypes[*manifest.MediaType]; ok {
+					if _, ok := manifestMediaTypes[*manifest.MediaType]; ok {
 						var manifestBytes []byte
 						manifestBytes, err = acrClient.GetManifest(ctx, repoName, *manifest.Digest)
 						if err != nil {
@@ -671,7 +671,7 @@ func getCandidatesToDelete(manifest acr.ManifestAttributesBase, cm customManifes
 }
 
 // countTagsByManifest returns a map that for a given manifest digest contains the number of tags associated to it.
-func countTagsByManifest(ctx context.Context, acrClient api.AcrCLIClientInterface, repoName string) (*map[string]int, error) {
+func countTagsByManifest(ctx context.Context, acrClient api.AcrCLIClientInterface, repoName string) (map[string]int, error) {
 	countMap := map[string]int{}
 	lastTag := ""
 	resultTags, err := acrClient.GetAcrTags(ctx, repoName, "", lastTag)
@@ -696,7 +696,7 @@ func countTagsByManifest(ctx context.Context, acrClient api.AcrCLIClientInterfac
 			return nil, err
 		}
 	}
-	return &countMap, nil
+	return countMap, nil
 }
 
 // buildRegexFilter compiles a regex state machine from a regex expression
