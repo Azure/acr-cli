@@ -61,7 +61,7 @@ const (
 var (
 	defaultPoolSize        = runtime.GOMAXPROCS(0)
 	concurrencyDescription = fmt.Sprintf("Number of concurrent purge tasks. Range: [1 - %d]", maxPoolSize)
-	manifestMediaTypes     = map[string]struct{}{MediaTypeDockerManifestList: {}, MediaTypeArtifactManifest: {}, MediaTypeImageManifest: {}, MediaTypeImageIndex: {}}
+	manifestMediaTypes     = set.Set[string]{MediaTypeDockerManifestList: {}, MediaTypeArtifactManifest: {}, MediaTypeImageManifest: {}, MediaTypeImageIndex: {}}
 )
 
 // Default settings for regexp2
@@ -475,14 +475,13 @@ func getManifestsToDelete(ctx context.Context, acrClient api.AcrCLIClientInterfa
 		manifests := *resultManifests.ManifestsAttributes
 		for _, manifest := range manifests {
 			var cm customManifest
-			if _, ok := manifestMediaTypes[*manifest.MediaType]; ok {
+			if manifestMediaTypes.Contains(*manifest.MediaType) {
 				var manifestBytes []byte
-				manifestBytes, err = acrClient.GetManifest(ctx, repoName, *manifest.Digest)
+				manifestBytes, err := acrClient.GetManifest(ctx, repoName, *manifest.Digest)
 				if err != nil {
 					return nil, err
 				}
-				err = json.Unmarshal(manifestBytes, &cm)
-				if err != nil {
+				if err := json.Unmarshal(manifestBytes, &cm); err != nil {
 					return nil, err
 				}
 			}
@@ -579,16 +578,15 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 		for resultManifests != nil && resultManifests.ManifestsAttributes != nil {
 			manifests := *resultManifests.ManifestsAttributes
 			for _, manifest := range manifests {
-				if (countMap)[*manifest.Digest] != deletedTags[*manifest.Digest] {
+				if countMap[*manifest.Digest] != deletedTags[*manifest.Digest] {
 					var cm customManifest
-					if _, ok := manifestMediaTypes[*manifest.MediaType]; ok {
+					if manifestMediaTypes.Contains(*manifest.MediaType) {
 						var manifestBytes []byte
-						manifestBytes, err = acrClient.GetManifest(ctx, repoName, *manifest.Digest)
+						manifestBytes, err := acrClient.GetManifest(ctx, repoName, *manifest.Digest)
 						if err != nil {
 							return -1, -1, err
 						}
-						err = json.Unmarshal(manifestBytes, &cm)
-						if err != nil {
+						if err := json.Unmarshal(manifestBytes, &cm); err != nil {
 							return -1, -1, err
 						}
 					}
@@ -624,17 +622,6 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 
 func getCandidatesToDelete(manifest acr.ManifestAttributesBase, cm customManifest, doNotDelete set.Set[string], candidatesToDelete []acr.ManifestAttributesBase) ([]acr.ManifestAttributesBase, set.Set[string], error) {
 	switch *manifest.MediaType {
-	case MediaTypeDockerManifestList:
-		if manifest.Tags == nil {
-			// If the manifest has no tag, it is a candidate for deletion
-			candidatesToDelete = append(candidatesToDelete, manifest)
-			break
-		}
-		// If this multiarchitecture manifest has tag, its dependent
-		// manifests are marked to not be deleted
-		for _, dependentManifest := range cm.Manifests {
-			doNotDelete.Add(dependentManifest.Digest)
-		}
 	case MediaTypeArtifactManifest, MediaTypeImageManifest:
 		if manifest.Tags != nil {
 			break
@@ -646,22 +633,33 @@ func getCandidatesToDelete(manifest acr.ManifestAttributesBase, cm customManifes
 		}
 		// If the manifest has no tag or subject, it is a candidate for deletion
 		candidatesToDelete = append(candidatesToDelete, manifest)
-	case MediaTypeImageIndex:
-		if manifest.Tags == nil {
-			if cm.Subject != nil {
-				// if manifest has subject, manifest is marked to not be deleted
-				doNotDelete.Add(*manifest.Digest)
-			} else {
-				// If the manifest has no tag or subject, it is a candidate for deletion
-				candidatesToDelete = append(candidatesToDelete, manifest)
-			}
-		} else {
+	case MediaTypeDockerManifestList:
+		if manifest.Tags != nil {
 			// If this multiarchitecture manifest has tag, its dependent
 			// manifests are marked to not be deleted
 			for _, dependentManifest := range cm.Manifests {
 				doNotDelete.Add(dependentManifest.Digest)
 			}
+			break
 		}
+		// If the manifest has no tag, it is a candidate for deletion
+		candidatesToDelete = append(candidatesToDelete, manifest)
+	case MediaTypeImageIndex:
+		if manifest.Tags != nil {
+			// If this multiarchitecture manifest has tag, its dependent
+			// manifests are marked to not be deleted
+			for _, dependentManifest := range cm.Manifests {
+				doNotDelete.Add(dependentManifest.Digest)
+			}
+			break
+		}
+		if cm.Subject != nil {
+			// if manifest has subject, manifest is marked to not be deleted
+			doNotDelete.Add(*manifest.Digest)
+			break
+		}
+		// If the manifest has no tag or subject, it is a candidate for deletion
+		candidatesToDelete = append(candidatesToDelete, manifest)
 	default:
 		if manifest.Tags == nil {
 			candidatesToDelete = append(candidatesToDelete, manifest)
@@ -719,10 +717,8 @@ func buildRegexFilter(expression string, regexpMatchTimeoutSeconds uint64) (*reg
 // which is used to parse the content of a multiarch manifest,
 // or references a subject
 type customManifest struct {
-	Manifests     []manifest     `json:"manifests"`
-	MediaType     string         `json:"mediaType"`
-	SchemaVersion int            `json:"schemaVersion"`
-	Subject       *v1.Descriptor `json:"subject,omitempty"`
+	Manifests []manifest     `json:"manifests"`
+	Subject   *v1.Descriptor `json:"subject,omitempty"`
 }
 
 type manifest struct {
