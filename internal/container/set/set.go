@@ -4,8 +4,12 @@ package set
 type Set[T comparable] map[T]struct{}
 
 // New returns an initialized set.
-func New[T comparable]() Set[T] {
-	return make(Set[T])
+func New[T comparable](items ...T) Set[T] {
+	s := make(Set[T])
+	for _, item := range items {
+		s[item] = struct{}{}
+	}
+	return s
 }
 
 // Add adds item into the set s.

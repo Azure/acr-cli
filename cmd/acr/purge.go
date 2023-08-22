@@ -53,15 +53,13 @@ const (
 	maxPoolSize                 = 32 // The max number of parallel delete requests recommended by ACR server
 	mediaTypeDockerManifestList = "application/vnd.docker.distribution.manifest.list.v2+json"
 	mediaTypeArtifactManifest   = "application/vnd.oci.artifact.manifest.v1+json"
-	mediaTypeImageManifest      = v1.MediaTypeImageManifest
-	mediaTypeImageIndex         = v1.MediaTypeImageIndex
 	headerLink                  = "Link"
 )
 
 var (
 	defaultPoolSize        = runtime.GOMAXPROCS(0)
 	concurrencyDescription = fmt.Sprintf("Number of concurrent purge tasks. Range: [1 - %d]", maxPoolSize)
-	manifestMediaTypes     = set.Set[string]{mediaTypeDockerManifestList: {}, mediaTypeArtifactManifest: {}, mediaTypeImageManifest: {}, mediaTypeImageIndex: {}}
+	manifestMediaTypes     = set.New[string](mediaTypeDockerManifestList, mediaTypeArtifactManifest, v1.MediaTypeImageManifest, v1.MediaTypeImageIndex)
 )
 
 // Default settings for regexp2
@@ -630,7 +628,7 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 
 func getCandidatesToDelete(manifest acr.ManifestAttributesBase, cm customManifest, doNotDelete set.Set[string], candidatesToDelete []acr.ManifestAttributesBase) ([]acr.ManifestAttributesBase, set.Set[string], error) {
 	switch *manifest.MediaType {
-	case mediaTypeArtifactManifest, mediaTypeImageManifest:
+	case mediaTypeArtifactManifest, v1.MediaTypeImageManifest:
 		if manifest.Tags != nil {
 			break
 		}
@@ -652,7 +650,7 @@ func getCandidatesToDelete(manifest acr.ManifestAttributesBase, cm customManifes
 		}
 		// If the manifest has no tag, it is a candidate for deletion
 		candidatesToDelete = append(candidatesToDelete, manifest)
-	case mediaTypeImageIndex:
+	case v1.MediaTypeImageIndex:
 		if manifest.Tags != nil {
 			// If this multiarchitecture manifest has tag, its dependent
 			// manifests are marked to not be deleted
