@@ -51,17 +51,17 @@ const (
 	acr purge -r example --filter "hello-world:.*" --ago 1d --concurrency 4
 	`
 	maxPoolSize                 = 32 // The max number of parallel delete requests recommended by ACR server
-	MediaTypeDockerManifestList = "application/vnd.docker.distribution.manifest.list.v2+json"
-	MediaTypeArtifactManifest   = "application/vnd.oci.artifact.manifest.v1+json"
-	MediaTypeImageManifest      = v1.MediaTypeImageManifest
-	MediaTypeImageIndex         = v1.MediaTypeImageIndex
+	mediaTypeDockerManifestList = "application/vnd.docker.distribution.manifest.list.v2+json"
+	mediaTypeArtifactManifest   = "application/vnd.oci.artifact.manifest.v1+json"
+	mediaTypeImageManifest      = v1.MediaTypeImageManifest
+	mediaTypeImageIndex         = v1.MediaTypeImageIndex
 	headerLink                  = "Link"
 )
 
 var (
 	defaultPoolSize        = runtime.GOMAXPROCS(0)
 	concurrencyDescription = fmt.Sprintf("Number of concurrent purge tasks. Range: [1 - %d]", maxPoolSize)
-	manifestMediaTypes     = set.Set[string]{MediaTypeDockerManifestList: {}, MediaTypeArtifactManifest: {}, MediaTypeImageManifest: {}, MediaTypeImageIndex: {}}
+	manifestMediaTypes     = set.Set[string]{mediaTypeDockerManifestList: {}, mediaTypeArtifactManifest: {}, mediaTypeImageManifest: {}, mediaTypeImageIndex: {}}
 )
 
 // Default settings for regexp2
@@ -474,20 +474,24 @@ func getManifestsToDelete(ctx context.Context, acrClient api.AcrCLIClientInterfa
 	for resultManifests != nil && resultManifests.ManifestsAttributes != nil {
 		manifests := *resultManifests.ManifestsAttributes
 		for _, manifest := range manifests {
-			var cm customManifest
 			if manifestMediaTypes.Contains(*manifest.MediaType) {
 				var manifestBytes []byte
 				manifestBytes, err = acrClient.GetManifest(ctx, repoName, *manifest.Digest)
 				if err != nil {
 					return nil, err
 				}
+				var cm customManifest
 				if err = json.Unmarshal(manifestBytes, &cm); err != nil {
 					return nil, err
 				}
-			}
-			candidatesToDelete, doNotDelete, err = getCandidatesToDelete(manifest, cm, doNotDelete, candidatesToDelete)
-			if err != nil {
-				return nil, err
+				candidatesToDelete, doNotDelete, err = getCandidatesToDelete(manifest, cm, doNotDelete, candidatesToDelete)
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				if manifest.Tags == nil {
+					candidatesToDelete = append(candidatesToDelete, manifest)
+				}
 			}
 		}
 
@@ -579,20 +583,24 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 			manifests := *resultManifests.ManifestsAttributes
 			for _, manifest := range manifests {
 				if countMap[*manifest.Digest] != deletedTags[*manifest.Digest] {
-					var cm customManifest
 					if manifestMediaTypes.Contains(*manifest.MediaType) {
 						var manifestBytes []byte
 						manifestBytes, err = acrClient.GetManifest(ctx, repoName, *manifest.Digest)
 						if err != nil {
 							return -1, -1, err
 						}
+						var cm customManifest
 						if err = json.Unmarshal(manifestBytes, &cm); err != nil {
 							return -1, -1, err
 						}
-					}
-					candidatesToDelete, doNotDelete, err = getCandidatesToDelete(manifest, cm, doNotDelete, candidatesToDelete)
-					if err != nil {
-						return -1, -1, err
+						candidatesToDelete, doNotDelete, err = getCandidatesToDelete(manifest, cm, doNotDelete, candidatesToDelete)
+						if err != nil {
+							return -1, -1, err
+						}
+					} else {
+						if manifest.Tags == nil {
+							candidatesToDelete = append(candidatesToDelete, manifest)
+						}
 					}
 				} else {
 					// If the manifest has the same amount of tags as the amount of tags deleted then it is a candidate for deletion.
@@ -622,7 +630,7 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 
 func getCandidatesToDelete(manifest acr.ManifestAttributesBase, cm customManifest, doNotDelete set.Set[string], candidatesToDelete []acr.ManifestAttributesBase) ([]acr.ManifestAttributesBase, set.Set[string], error) {
 	switch *manifest.MediaType {
-	case MediaTypeArtifactManifest, MediaTypeImageManifest:
+	case mediaTypeArtifactManifest, mediaTypeImageManifest:
 		if manifest.Tags != nil {
 			break
 		}
@@ -633,7 +641,7 @@ func getCandidatesToDelete(manifest acr.ManifestAttributesBase, cm customManifes
 		}
 		// If the manifest has no tag or subject, it is a candidate for deletion
 		candidatesToDelete = append(candidatesToDelete, manifest)
-	case MediaTypeDockerManifestList:
+	case mediaTypeDockerManifestList:
 		if manifest.Tags != nil {
 			// If this multiarchitecture manifest has tag, its dependent
 			// manifests are marked to not be deleted
@@ -644,7 +652,7 @@ func getCandidatesToDelete(manifest acr.ManifestAttributesBase, cm customManifes
 		}
 		// If the manifest has no tag, it is a candidate for deletion
 		candidatesToDelete = append(candidatesToDelete, manifest)
-	case MediaTypeImageIndex:
+	case mediaTypeImageIndex:
 		if manifest.Tags != nil {
 			// If this multiarchitecture manifest has tag, its dependent
 			// manifests are marked to not be deleted
@@ -660,10 +668,6 @@ func getCandidatesToDelete(manifest acr.ManifestAttributesBase, cm customManifes
 		}
 		// If the manifest has no tag or subject, it is a candidate for deletion
 		candidatesToDelete = append(candidatesToDelete, manifest)
-	default:
-		if manifest.Tags == nil {
-			candidatesToDelete = append(candidatesToDelete, manifest)
-		}
 	}
 	return candidatesToDelete, doNotDelete, nil
 }
