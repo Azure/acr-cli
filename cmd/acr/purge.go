@@ -481,7 +481,7 @@ func getManifestsToDelete(ctx context.Context, acrClient api.AcrCLIClientInterfa
 				if err != nil {
 					return nil, err
 				}
-				if err := json.Unmarshal(manifestBytes, &cm); err != nil {
+				if err = json.Unmarshal(manifestBytes, &cm); err != nil {
 					return nil, err
 				}
 			}
@@ -586,7 +586,7 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 						if err != nil {
 							return -1, -1, err
 						}
-						if err := json.Unmarshal(manifestBytes, &cm); err != nil {
+						if err = json.Unmarshal(manifestBytes, &cm); err != nil {
 							return -1, -1, err
 						}
 					}
