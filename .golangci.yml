@@ -10,10 +10,6 @@ linters-settings:
     check-shadowing: true
   golint:
     min-confidence: 0
-  gosec:
-    enabled: true
-    exclude:
-      - G101
 linters:
   disable-all: true
   enable:
@@ -25,3 +21,7 @@ linters:
     - ineffassign
     - unconvert
     - varcheck
+gosec:
+  enabled: true
+  exclude:
+    - G101
