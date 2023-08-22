@@ -21,7 +21,3 @@ linters:
     - ineffassign
     - unconvert
     - varcheck
-gosec:
-  enabled: true
-  exclude:
-    - G101
