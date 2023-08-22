@@ -1452,8 +1452,8 @@ var (
 			Tags:                 &[]string{"latest"},
 		}},
 	}
-	digest1                           = "sha256:63532043b5af6247377a472ad075a42bde35689918de1cf7f807714997e0e683"
-	digest2                           = "sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696"
+	digest1                           = "sha256:63532043b5af6247377a472ad075a42bde35689918de1cf7f807714997e0e683" //#nosec G101
+	digest2                           = "sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696" //#nosec G101
 	doubleManifestV2WithoutTagsResult = &acr.Manifests{
 		Registry:  &testLoginURL,
 		ImageName: &testRepo,
