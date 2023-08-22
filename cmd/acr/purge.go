@@ -477,7 +477,7 @@ func getManifestsToDelete(ctx context.Context, acrClient api.AcrCLIClientInterfa
 			var cm customManifest
 			if manifestMediaTypes.Contains(*manifest.MediaType) {
 				var manifestBytes []byte
-				manifestBytes, err := acrClient.GetManifest(ctx, repoName, *manifest.Digest)
+				manifestBytes, err = acrClient.GetManifest(ctx, repoName, *manifest.Digest)
 				if err != nil {
 					return nil, err
 				}
@@ -582,7 +582,7 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 					var cm customManifest
 					if manifestMediaTypes.Contains(*manifest.MediaType) {
 						var manifestBytes []byte
-						manifestBytes, err := acrClient.GetManifest(ctx, repoName, *manifest.Digest)
+						manifestBytes, err = acrClient.GetManifest(ctx, repoName, *manifest.Digest)
 						if err != nil {
 							return -1, -1, err
 						}
