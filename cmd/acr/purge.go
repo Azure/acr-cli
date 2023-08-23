@@ -59,7 +59,8 @@ const (
 var (
 	defaultPoolSize        = runtime.GOMAXPROCS(0)
 	concurrencyDescription = fmt.Sprintf("Number of concurrent purge tasks. Range: [1 - %d]", maxPoolSize)
-	manifestMediaTypes     = set.New[string](mediaTypeDockerManifestList, mediaTypeArtifactManifest, v1.MediaTypeImageManifest, v1.MediaTypeImageIndex)
+	// mediaTypesWithComplexStructure defines a set of manifest media types which could cause purge error if not handled properly.
+	mediaTypesWithComplexStructure = set.New[string](mediaTypeDockerManifestList, mediaTypeArtifactManifest, v1.MediaTypeImageManifest, v1.MediaTypeImageIndex)
 )
 
 // Default settings for regexp2
@@ -472,7 +473,7 @@ func getManifestsToDelete(ctx context.Context, acrClient api.AcrCLIClientInterfa
 	for resultManifests != nil && resultManifests.ManifestsAttributes != nil {
 		manifests := *resultManifests.ManifestsAttributes
 		for _, manifest := range manifests {
-			if manifestMediaTypes.Contains(*manifest.MediaType) {
+			if mediaTypesWithComplexStructure.Contains(*manifest.MediaType) {
 				var manifestBytes []byte
 				manifestBytes, err = acrClient.GetManifest(ctx, repoName, *manifest.Digest)
 				if err != nil {
@@ -581,7 +582,7 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 			manifests := *resultManifests.ManifestsAttributes
 			for _, manifest := range manifests {
 				if countMap[*manifest.Digest] != deletedTags[*manifest.Digest] {
-					if manifestMediaTypes.Contains(*manifest.MediaType) {
+					if mediaTypesWithComplexStructure.Contains(*manifest.MediaType) {
 						var manifestBytes []byte
 						manifestBytes, err = acrClient.GetManifest(ctx, repoName, *manifest.Digest)
 						if err != nil {
