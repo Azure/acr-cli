@@ -476,14 +476,14 @@ func getManifestsToDelete(ctx context.Context, acrClient api.AcrCLIClientInterfa
 			if manifest.Tags != nil {
 				// If a mianifest has Tags and its media type supports multiarch manifest, we will
 				// iterate all its dependent manifests and mark them as not to be deleted.
-				err = getDoNotDeleteListFromMultiArchManifestWithTag(manifest, doNotDelete, ctx, acrClient, repoName)
+				err = getDoNotDeleteListFromMultiArchManifestWithTag(ctx, manifest, doNotDelete, acrClient, repoName)
 				if err != nil {
 					return nil, err
 				}
 			} else {
 				// If a manifest does not have Tags and its media type supports subject, we will
 				// check if the subject exists. If so, the manifest is marked not to be deleted.
-				candidatesToDelete, err = getCandidatesToDeleteFromManifestWithSubject(manifest, doNotDelete, candidatesToDelete, ctx, acrClient, repoName)
+				candidatesToDelete, err = getCandidatesToDeleteFromManifestWithSubject(ctx, manifest, doNotDelete, candidatesToDelete, acrClient, repoName)
 				if err != nil {
 					return nil, err
 				}
@@ -581,7 +581,7 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 					// If the number of tags associated with the manifest is not equal to
 					// the number of tags to be deleted associated with the said manifest,
 					// we will need to marked the dependent manifests (if any) to not be deleted
-					err = getDoNotDeleteListFromMultiArchManifestWithTag(manifest, doNotDelete, ctx, acrClient, repoName)
+					err = getDoNotDeleteListFromMultiArchManifestWithTag(ctx, manifest, doNotDelete, acrClient, repoName)
 					if err != nil {
 						return -1, -1, err
 					}
@@ -590,7 +590,7 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 					// the number of tags to be deleted associated with the said manifest,
 					// we will need to find if the manifest has subject. If so, we will mark
 					// the manifest to not be deleted.
-					candidatesToDelete, err = getCandidatesToDeleteFromManifestWithSubject(manifest, doNotDelete, candidatesToDelete, ctx, acrClient, repoName)
+					candidatesToDelete, err = getCandidatesToDeleteFromManifestWithSubject(ctx, manifest, doNotDelete, candidatesToDelete, acrClient, repoName)
 					if err != nil {
 						return -1, -1, err
 					}
@@ -619,7 +619,7 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 
 // getDoNotDeleteListFromMultiArchManifestWithTag checks if a manifest has tags and its media type support multiarch manifests.
 // If so, the dependent manifests are marked not to be deleted
-func getDoNotDeleteListFromMultiArchManifestWithTag(manifest acr.ManifestAttributesBase, doNotDelete set.Set[string], ctx context.Context, acrClient api.AcrCLIClientInterface, repoName string) error {
+func getDoNotDeleteListFromMultiArchManifestWithTag(ctx context.Context, manifest acr.ManifestAttributesBase, doNotDelete set.Set[string], acrClient api.AcrCLIClientInterface, repoName string) error {
 	switch *manifest.MediaType {
 	case mediaTypeDockerManifestList, v1.MediaTypeImageIndex:
 		var manifestBytes []byte
@@ -647,7 +647,7 @@ func getDoNotDeleteListFromMultiArchManifestWithTag(manifest acr.ManifestAttribu
 
 // getCandidatesToDeleteFromManifestWithSubject checks if a manifest has no tag and its media type support subject.
 // If so, the manifest are marked not to be deleted.
-func getCandidatesToDeleteFromManifestWithSubject(manifest acr.ManifestAttributesBase, doNotDelete set.Set[string], candidatesToDelete []acr.ManifestAttributesBase, ctx context.Context, acrClient api.AcrCLIClientInterface, repoName string) ([]acr.ManifestAttributesBase, error) {
+func getCandidatesToDeleteFromManifestWithSubject(ctx context.Context, manifest acr.ManifestAttributesBase, doNotDelete set.Set[string], candidatesToDelete []acr.ManifestAttributesBase, acrClient api.AcrCLIClientInterface, repoName string) ([]acr.ManifestAttributesBase, error) {
 	switch *manifest.MediaType {
 	case mediaTypeArtifactManifest, v1.MediaTypeImageManifest, v1.MediaTypeImageIndex:
 		var manifestBytes []byte
