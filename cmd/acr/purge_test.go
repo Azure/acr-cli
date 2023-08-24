@@ -1115,20 +1115,20 @@ var (
 		ImageName:      &testRepo,
 		TagsAttributes: nil,
 	}
-	tagName                    = "latest"
-	digest                     = "sha256:2830cc0fcddc1bc2bd4aeab0ed5ee7087dab29a49e65151c77553e46a7ed5283" //#nosec G101
-	multiArchDigest            = "sha256:d88fb54ba4424dada7c928c6af332ed1c49065ad85eafefb6f26664695015119" //#nosec G101
-	manifestWithWSubjectDigest = "sha256:118811b833e6ca4f3c65559654ca6359410730e97c719f5090d0bfe4db0ab588" //#nosec G101
-	deleteEnabled              = true
-	deleteDisabled             = false
-	writeEnabled               = true
-	writeDisabled              = false
-	lastUpdateTime             = time.Now().Add(-15 * time.Minute).UTC().Format(time.RFC3339Nano)
-	lastUpdateTime1DayAgo      = time.Now().Add(-24 * time.Hour).UTC().Format(time.RFC3339Nano)
-	lastUpdateTime2DaysAgo     = time.Now().Add(-48 * time.Hour).UTC().Format(time.RFC3339Nano)
-	lastUpdateTime3DaysAgo     = time.Now().Add(-72 * time.Hour).UTC().Format(time.RFC3339Nano)
-	invalidLastUpdateTime      = "date"
-	OneTagResult               = &acr.RepositoryTagsType{
+	tagName                   = "latest"
+	digest                    = "sha256:2830cc0fcddc1bc2bd4aeab0ed5ee7087dab29a49e65151c77553e46a7ed5283" //#nosec G101
+	multiArchDigest           = "sha256:d88fb54ba4424dada7c928c6af332ed1c49065ad85eafefb6f26664695015119" //#nosec G101
+	manifestWithSubjectDigest = "sha256:118811b833e6ca4f3c65559654ca6359410730e97c719f5090d0bfe4db0ab588" //#nosec G101
+	deleteEnabled             = true
+	deleteDisabled            = false
+	writeEnabled              = true
+	writeDisabled             = false
+	lastUpdateTime            = time.Now().Add(-15 * time.Minute).UTC().Format(time.RFC3339Nano)
+	lastUpdateTime1DayAgo     = time.Now().Add(-24 * time.Hour).UTC().Format(time.RFC3339Nano)
+	lastUpdateTime2DaysAgo    = time.Now().Add(-48 * time.Hour).UTC().Format(time.RFC3339Nano)
+	lastUpdateTime3DaysAgo    = time.Now().Add(-72 * time.Hour).UTC().Format(time.RFC3339Nano)
+	invalidLastUpdateTime     = "date"
+	OneTagResult              = &acr.RepositoryTagsType{
 		Response: autorest.Response{
 			Response: &http.Response{
 				StatusCode: 200,
@@ -1516,7 +1516,7 @@ var (
 		ManifestsAttributes: &[]acr.ManifestAttributesBase{{
 			LastUpdateTime:       &lastUpdateTime,
 			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
-			Digest:               &manifestWithWSubjectDigest,
+			Digest:               &manifestWithSubjectDigest,
 			MediaType:            &ociMediaType,
 			Tags:                 nil,
 		}},

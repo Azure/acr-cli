@@ -7,7 +7,7 @@ type Set[T comparable] map[T]struct{}
 func New[T comparable](items ...T) Set[T] {
 	s := make(Set[T])
 	for _, item := range items {
-		s[item] = struct{}{}
+		s.Add(item)
 	}
 	return s
 }
