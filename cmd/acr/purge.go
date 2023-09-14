@@ -483,7 +483,7 @@ func getManifestsToDelete(ctx context.Context, acrClient api.AcrCLIClientInterfa
 			} else {
 				// If a manifest does not have Tags and its media type supports subject, we will
 				// check if the subject exists. If so, the manifest is marked not to be deleted.
-				candidatesToDelete, err = getCandidatesToDeleteFromManifestWithSubject(ctx, manifest, doNotDelete, candidatesToDelete, acrClient, repoName)
+				candidatesToDelete, err = getManifestWithoutSubjectToDelete(ctx, manifest, doNotDelete, candidatesToDelete, acrClient, repoName)
 				if err != nil {
 					return nil, err
 				}
@@ -589,7 +589,7 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 					// Otherwise the manifest have no tag left after purgeTags.
 					// we will need to find if the manifest has subject. If so,
 					// we will mark the manifest to not be deleted.
-					candidatesToDelete, err = getCandidatesToDeleteFromManifestWithSubject(ctx, manifest, doNotDelete, candidatesToDelete, acrClient, repoName)
+					candidatesToDelete, err = getManifestWithoutSubjectToDelete(ctx, manifest, doNotDelete, candidatesToDelete, acrClient, repoName)
 					if err != nil {
 						return -1, -1, err
 					}
@@ -642,9 +642,9 @@ func doNotDeleteDependantManifests(ctx context.Context, manifest acr.ManifestAtt
 	return nil
 }
 
-// getCandidatesToDeleteFromManifestWithSubject adds the manifest to candidatesToDelete
+// getManifestWithoutSubjectToDelete adds the manifest to candidatesToDelete
 // if the manifest does not have subject, otherwise add it to doNotDelete.
-func getCandidatesToDeleteFromManifestWithSubject(ctx context.Context, manifest acr.ManifestAttributesBase, doNotDelete set.Set[string], candidatesToDelete []acr.ManifestAttributesBase, acrClient api.AcrCLIClientInterface, repoName string) ([]acr.ManifestAttributesBase, error) {
+func getManifestWithoutSubjectToDelete(ctx context.Context, manifest acr.ManifestAttributesBase, doNotDelete set.Set[string], candidatesToDelete []acr.ManifestAttributesBase, acrClient api.AcrCLIClientInterface, repoName string) ([]acr.ManifestAttributesBase, error) {
 	switch *manifest.MediaType {
 	case mediaTypeArtifactManifest, v1.MediaTypeImageManifest, v1.MediaTypeImageIndex:
 		var manifestBytes []byte
