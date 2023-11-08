@@ -594,14 +594,13 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 						return -1, -1, err
 					}
 				}
-
-				// Get the last manifest digest from the last manifest from manifests.
-				lastManifestDigest = *manifests[len(manifests)-1].Digest
-				// Use this new digest to find next batch of manifests.
-				resultManifests, err = acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
-				if err != nil {
-					return -1, -1, err
-				}
+			}
+			// Get the last manifest digest from the last manifest from manifests.
+			lastManifestDigest = *manifests[len(manifests)-1].Digest
+			// Use this new digest to find next batch of manifests.
+			resultManifests, err = acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
+			if err != nil {
+				return -1, -1, err
 			}
 		}
 		// Just print manifests that would be deleted.
