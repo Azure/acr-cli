@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/oss/go/microsoft/golang:1.18-fips-cbl-mariner2.0@sha256:7e1335398d3c33cbd6b8b17cc5b7fd63b013dffccedc5320ba58033b2a1f5a72 AS gobuild-base
+FROM mcr.microsoft.com/oss/go/microsoft/golang:1.21-fips-cbl-mariner2.0 AS gobuild-base
 RUN tdnf check-update \
     && tdnf install -y \
         git \

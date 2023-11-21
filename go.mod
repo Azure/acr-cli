@@ -1,6 +1,6 @@
 module github.com/Azure/acr-cli
 
-go 1.18
+go 1.21
 
 require (
 	github.com/Azure/go-autorest/autorest v0.11.29
