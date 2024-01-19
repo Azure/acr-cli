@@ -47,37 +47,11 @@ import (
 	"oras.land/oras-go/v2/registry/remote/internal/errutil"
 )
 
-const (
-	// headerDockerContentDigest is the "Docker-Content-Digest" header.
-	// If present on the response, it contains the canonical digest of the
-	// uploaded blob.
-	//
-	// References:
-	//   - https://docs.docker.com/registry/spec/api/#digest-header
-	//   - https://github.com/opencontainers/distribution-spec/blob/v1.1.0-rc3/spec.md#pull
-	headerDockerContentDigest = "Docker-Content-Digest"
-
-	// headerOCIFiltersApplied is the "OCI-Filters-Applied" header.
-	// If present on the response, it contains a comma-separated list of the
-	// applied filters.
-	//
-	// Reference:
-	//   - https://github.com/opencontainers/distribution-spec/blob/v1.1.0-rc3/spec.md#listing-referrers
-	headerOCIFiltersApplied = "OCI-Filters-Applied"
-
-	// headerOCISubject is the "OCI-Subject" header.
-	// If present on the response, it contains the digest of the subject,
-	// indicating that Referrers API is supported by the registry.
-	headerOCISubject = "OCI-Subject"
-)
-
-// filterTypeArtifactType is the "artifactType" filter applied on the list of
-// referrers.
-//
-// References:
-//   - Latest spec: https://github.com/opencontainers/distribution-spec/blob/v1.1.0-rc3/spec.md#listing-referrers
-//   - Compatible spec: https://github.com/opencontainers/distribution-spec/blob/v1.1.0-rc1/spec.md#listing-referrers
-const filterTypeArtifactType = "artifactType"
+// dockerContentDigestHeader - The Docker-Content-Digest header, if present
+// on the response, returns the canonical digest of the uploaded blob.
+// See https://docs.docker.com/registry/spec/api/#digest-header
+// See https://github.com/opencontainers/distribution-spec/blob/v1.1.0-rc1/spec.md#pull
+const dockerContentDigestHeader = "Docker-Content-Digest"
 
 // Client is an interface for a HTTP client.
 type Client interface {
@@ -119,7 +93,7 @@ type Repository struct {
 	// ReferrerListPageSize specifies the page size when invoking the Referrers
 	// API.
 	// If zero, the page size is determined by the remote registry.
-	// Reference: https://github.com/opencontainers/distribution-spec/blob/v1.1.0-rc3/spec.md#listing-referrers
+	// Reference: https://github.com/opencontainers/distribution-spec/blob/v1.1.0-rc1/spec.md#listing-referrers
 	ReferrerListPageSize int
 
 	// MaxMetadataBytes specifies a limit on how many response bytes are allowed
@@ -128,26 +102,7 @@ type Repository struct {
 	// If less than or equal to zero, a default (currently 4MiB) is used.
 	MaxMetadataBytes int64
 
-	// SkipReferrersGC specifies whether to delete the dangling referrers
-	// index when referrers tag schema is utilized.
-	//  - If false, the old referrers index will be deleted after the new one
-	//    is successfully uploaded.
-	//  - If true, the old referrers index is kept.
-	// By default, it is disabled (set to false). See also:
-	//  - https://github.com/opencontainers/distribution-spec/blob/v1.1.0-rc3/spec.md#referrers-tag-schema
-	//  - https://github.com/opencontainers/distribution-spec/blob/v1.1.0-rc3/spec.md#pushing-manifests-with-subject
-	//  - https://github.com/opencontainers/distribution-spec/blob/v1.1.0-rc3/spec.md#deleting-manifests
-	SkipReferrersGC bool
-
-	// HandleWarning handles the warning returned by the remote server.
-	// Callers SHOULD deduplicate warnings from multiple associated responses.
-	//
-	// References:
-	//   - https://github.com/opencontainers/distribution-spec/blob/v1.1.0-rc3/spec.md#warnings
-	//   - https://www.rfc-editor.org/rfc/rfc7234#section-5.5
-	HandleWarning func(warning Warning)
-
-	// NOTE: Must keep fields in sync with clone().
+	// NOTE: Must keep fields in sync with newRepositoryWithOptions function.
 
 	// referrersState represents that if the repository supports Referrers API.
 	// default: referrersStateUnknown
@@ -186,24 +141,15 @@ func newRepositoryWithOptions(ref registry.Reference, opts *RepositoryOptions) (
 	if err := ref.ValidateRepository(); err != nil {
 		return nil, err
 	}
-	repo := (*Repository)(opts).clone()
-	repo.Reference = ref
-	return repo, nil
-}
-
-// clone makes a copy of the Repository being careful not to copy non-copyable fields (sync.Mutex and syncutil.Pool types)
-func (r *Repository) clone() *Repository {
 	return &Repository{
-		Client:               r.Client,
-		Reference:            r.Reference,
-		PlainHTTP:            r.PlainHTTP,
-		ManifestMediaTypes:   slices.Clone(r.ManifestMediaTypes),
-		TagListPageSize:      r.TagListPageSize,
-		ReferrerListPageSize: r.ReferrerListPageSize,
-		MaxMetadataBytes:     r.MaxMetadataBytes,
-		SkipReferrersGC:      r.SkipReferrersGC,
-		HandleWarning:        r.HandleWarning,
-	}
+		Client:               opts.Client,
+		Reference:            ref,
+		PlainHTTP:            opts.PlainHTTP,
+		ManifestMediaTypes:   slices.Clone(opts.ManifestMediaTypes),
+		TagListPageSize:      opts.TagListPageSize,
+		ReferrerListPageSize: opts.ReferrerListPageSize,
+		MaxMetadataBytes:     opts.MaxMetadataBytes,
+	}, nil
 }
 
 // SetReferrersCapability indicates the Referrers API capability of the remote
@@ -213,9 +159,9 @@ func (r *Repository) clone() *Repository {
 // SetReferrersCapability returns ErrReferrersCapabilityAlreadySet if the
 // Referrers API capability has been already set.
 //   - When the capability is set to true, the Referrers() function will always
-//     request the Referrers API. Reference: https://github.com/opencontainers/distribution-spec/blob/v1.1.0-rc3/spec.md#listing-referrers
+//     request the Referrers API. Reference: https://github.com/opencontainers/distribution-spec/blob/v1.1.0-rc1/spec.md#listing-referrers
 //   - When the capability is set to false, the Referrers() function will always
-//     request the Referrers Tag. Reference: https://github.com/opencontainers/distribution-spec/blob/v1.1.0-rc3/spec.md#referrers-tag-schema
+//     request the Referrers Tag. Reference: https://github.com/opencontainers/distribution-spec/blob/v1.1.0-rc1/spec.md#referrers-tag-schema
 //   - When the capability is not set, the Referrers() function will automatically
 //     determine which API to use.
 func (r *Repository) SetReferrersCapability(capable bool) error {
@@ -248,21 +194,6 @@ func (r *Repository) client() Client {
 		return auth.DefaultClient
 	}
 	return r.Client
-}
-
-// do sends an HTTP request and returns an HTTP response using the HTTP client
-// returned by r.client().
-func (r *Repository) do(req *http.Request) (*http.Response, error) {
-	if r.HandleWarning == nil {
-		return r.client().Do(req)
-	}
-
-	resp, err := r.client().Do(req)
-	if err != nil {
-		return nil, err
-	}
-	handleWarningHeaders(resp.Header.Values(headerWarning), r.HandleWarning)
-	return resp, nil
 }
 
 // blobStore detects the blob store for the given descriptor.
@@ -389,7 +320,7 @@ func (r *Repository) ParseReference(reference string) (registry.Reference, error
 // of the Tags list.
 //
 // References:
-//   - https://github.com/opencontainers/distribution-spec/blob/v1.1.0-rc3/spec.md#content-discovery
+//   - https://github.com/opencontainers/distribution-spec/blob/v1.1.0-rc1/spec.md#content-discovery
 //   - https://docs.docker.com/registry/spec/api/#tags
 func (r *Repository) Tags(ctx context.Context, last string, fn func(tags []string) error) error {
 	ctx = registryutil.WithScopeHint(ctx, r.Reference, auth.ActionPull)
@@ -422,7 +353,7 @@ func (r *Repository) tags(ctx context.Context, last string, fn func(tags []strin
 		}
 		req.URL.RawQuery = q.Encode()
 	}
-	resp, err := r.do(req)
+	resp, err := r.client().Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -448,7 +379,7 @@ func (r *Repository) tags(ctx context.Context, last string, fn func(tags []strin
 // Predecessors returns the descriptors of image or artifact manifests directly
 // referencing the given manifest descriptor.
 // Predecessors internally leverages Referrers.
-// Reference: https://github.com/opencontainers/distribution-spec/blob/v1.1.0-rc3/spec.md#listing-referrers
+// Reference: https://github.com/opencontainers/distribution-spec/blob/v1.1.0-rc1/spec.md#listing-referrers
 func (r *Repository) Predecessors(ctx context.Context, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
 	var res []ocispec.Descriptor
 	if err := r.Referrers(ctx, desc, "", func(referrers []ocispec.Descriptor) error {
@@ -467,7 +398,7 @@ func (r *Repository) Predecessors(ctx context.Context, desc ocispec.Descriptor) 
 // If artifactType is not empty, only referrers of the same artifact type are
 // fed to fn.
 //
-// Reference: https://github.com/opencontainers/distribution-spec/blob/v1.1.0-rc3/spec.md#listing-referrers
+// Reference: https://github.com/opencontainers/distribution-spec/blob/v1.1.0-rc1/spec.md#listing-referrers
 func (r *Repository) Referrers(ctx context.Context, desc ocispec.Descriptor, artifactType string, fn func(referrers []ocispec.Descriptor) error) error {
 	state := r.loadReferrersState()
 	if state == referrersStateUnsupported {
@@ -539,7 +470,7 @@ func (r *Repository) referrersPageByAPI(ctx context.Context, artifactType string
 		req.URL.RawQuery = q.Encode()
 	}
 
-	resp, err := r.do(req)
+	resp, err := r.client().Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -554,19 +485,10 @@ func (r *Repository) referrersPageByAPI(ctx context.Context, artifactType string
 	if err := json.NewDecoder(lr).Decode(&index); err != nil {
 		return "", fmt.Errorf("%s %q: failed to decode response: %w", resp.Request.Method, resp.Request.URL, err)
 	}
-
 	referrers := index.Manifests
-	if artifactType != "" {
-		// check both filters header and filters annotations for compatibility
-		// latest spec for filters header: https://github.com/opencontainers/distribution-spec/blob/v1.1.0-rc3/spec.md#listing-referrers
-		// older spec for filters annotations: https://github.com/opencontainers/distribution-spec/blob/v1.1.0-rc1/spec.md#listing-referrers
-		filtersHeader := resp.Header.Get(headerOCIFiltersApplied)
-		filtersAnnotation := index.Annotations[spec.AnnotationReferrersFiltersApplied]
-		if !isReferrersFilterApplied(filtersHeader, filterTypeArtifactType) &&
-			!isReferrersFilterApplied(filtersAnnotation, filterTypeArtifactType) {
-			// perform client side filtering if the filter is not applied on the server side
-			referrers = filterReferrers(referrers, artifactType)
-		}
+	if artifactType != "" && !isReferrersFilterApplied(index.Annotations, "artifactType") {
+		// perform client side filtering if the filter is not applied on the server side
+		referrers = filterReferrers(referrers, artifactType)
 	}
 	if len(referrers) > 0 {
 		if err := fn(referrers); err != nil {
@@ -580,7 +502,7 @@ func (r *Repository) referrersPageByAPI(ctx context.Context, artifactType string
 // referencing the given manifest descriptor by requesting referrers tag.
 // fn is called for the referrers result. If artifactType is not empty,
 // only referrers of the same artifact type are fed to fn.
-// reference: https://github.com/opencontainers/distribution-spec/blob/v1.1.0-rc3/spec.md#backwards-compatibility
+// reference: https://github.com/opencontainers/distribution-spec/blob/v1.1.0-rc1/spec.md#backwards-compatibility
 func (r *Repository) referrersByTagSchema(ctx context.Context, desc ocispec.Descriptor, artifactType string, fn func(referrers []ocispec.Descriptor) error) error {
 	referrersTag := buildReferrersTag(desc)
 	_, referrers, err := r.referrersFromIndex(ctx, referrersTag)
@@ -650,7 +572,7 @@ func (r *Repository) pingReferrers(ctx context.Context) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	resp, err := r.do(req)
+	resp, err := r.client().Do(req)
 	if err != nil {
 		return false, err
 	}
@@ -688,7 +610,7 @@ func (r *Repository) delete(ctx context.Context, target ocispec.Descriptor, isMa
 		return err
 	}
 
-	resp, err := r.do(req)
+	resp, err := r.client().Do(req)
 	if err != nil {
 		return err
 	}
@@ -720,7 +642,7 @@ func (s *blobStore) Fetch(ctx context.Context, target ocispec.Descriptor) (rc io
 		return nil, err
 	}
 
-	resp, err := s.repo.do(req)
+	resp, err := s.repo.client().Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -767,7 +689,7 @@ func (s *blobStore) Mount(ctx context.Context, desc ocispec.Descriptor, fromRepo
 	if err != nil {
 		return err
 	}
-	resp, err := s.repo.do(req)
+	resp, err := s.repo.client().Do(req)
 	if err != nil {
 		return err
 	}
@@ -793,7 +715,7 @@ func (s *blobStore) Mount(ctx context.Context, desc ocispec.Descriptor, fromRepo
 	// push it. If the caller has provided a getContent function, we
 	// can use that, otherwise pull the content from the source repository.
 	//
-	// [spec]: https://github.com/opencontainers/distribution-spec/blob/v1.1.0-rc3/spec.md#mounting-a-blob-from-another-repository
+	// [spec]: https://github.com/opencontainers/distribution-spec/blob/main/spec.md#mounting-a-blob-from-another-repository
 
 	var r io.ReadCloser
 	if getContent != nil {
@@ -811,10 +733,10 @@ func (s *blobStore) Mount(ctx context.Context, desc ocispec.Descriptor, fromRepo
 // sibling returns a blob store for another repository in the same
 // registry.
 func (s *blobStore) sibling(otherRepoName string) *blobStore {
-	otherRepo := s.repo.clone()
+	otherRepo := *s.repo
 	otherRepo.Reference.Repository = otherRepoName
 	return &blobStore{
-		repo: otherRepo,
+		repo: &otherRepo,
 	}
 }
 
@@ -824,11 +746,10 @@ func (s *blobStore) sibling(otherRepoName string) *blobStore {
 // Push is done by conventional 2-step monolithic upload instead of a single
 // `POST` request for better overall performance. It also allows early fail on
 // authentication errors.
-//
 // References:
-//   - https://docs.docker.com/registry/spec/api/#pushing-an-image
-//   - https://docs.docker.com/registry/spec/api/#initiate-blob-upload
-//   - https://github.com/opencontainers/distribution-spec/blob/v1.1.0-rc3/spec.md#pushing-a-blob-monolithically
+// - https://docs.docker.com/registry/spec/api/#pushing-an-image
+// - https://docs.docker.com/registry/spec/api/#initiate-blob-upload
+// - https://github.com/opencontainers/distribution-spec/blob/v1.1.0-rc1/spec.md#pushing-a-blob-monolithically
 func (s *blobStore) Push(ctx context.Context, expected ocispec.Descriptor, content io.Reader) error {
 	// start an upload
 	// pushing usually requires both pull and push actions.
@@ -840,7 +761,7 @@ func (s *blobStore) Push(ctx context.Context, expected ocispec.Descriptor, conte
 		return err
 	}
 
-	resp, err := s.repo.do(req)
+	resp, err := s.repo.client().Do(req)
 	if err != nil {
 		return err
 	}
@@ -895,7 +816,7 @@ func (s *blobStore) completePushAfterInitialPost(ctx context.Context, req *http.
 	if auth := resp.Request.Header.Get("Authorization"); auth != "" {
 		req.Header.Set("Authorization", auth)
 	}
-	resp, err = s.repo.do(req)
+	resp, err = s.repo.client().Do(req)
 	if err != nil {
 		return err
 	}
@@ -941,7 +862,7 @@ func (s *blobStore) Resolve(ctx context.Context, reference string) (ocispec.Desc
 		return ocispec.Descriptor{}, err
 	}
 
-	resp, err := s.repo.do(req)
+	resp, err := s.repo.client().Do(req)
 	if err != nil {
 		return ocispec.Descriptor{}, err
 	}
@@ -976,7 +897,7 @@ func (s *blobStore) FetchReference(ctx context.Context, reference string) (desc 
 		return ocispec.Descriptor{}, nil, err
 	}
 
-	resp, err := s.repo.do(req)
+	resp, err := s.repo.client().Do(req)
 	if err != nil {
 		return ocispec.Descriptor{}, nil, err
 	}
@@ -1052,7 +973,7 @@ func (s *manifestStore) Fetch(ctx context.Context, target ocispec.Descriptor) (r
 	}
 	req.Header.Set("Accept", target.MediaType)
 
-	resp, err := s.repo.do(req)
+	resp, err := s.repo.client().Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -1111,8 +1032,7 @@ func (s *manifestStore) Delete(ctx context.Context, target ocispec.Descriptor) e
 // deleteWithIndexing removes the manifest content identified by the descriptor,
 // and indexes referrers for the manifest when needed.
 func (s *manifestStore) deleteWithIndexing(ctx context.Context, target ocispec.Descriptor) error {
-	switch target.MediaType {
-	case spec.MediaTypeArtifactManifest, ocispec.MediaTypeImageManifest, ocispec.MediaTypeImageIndex:
+	if target.MediaType == spec.MediaTypeArtifactManifest || target.MediaType == ocispec.MediaTypeImageManifest {
 		if state := s.repo.loadReferrersState(); state == referrersStateSupported {
 			// referrers API is available, no client-side indexing needed
 			return s.repo.delete(ctx, target, true)
@@ -1121,7 +1041,6 @@ func (s *manifestStore) deleteWithIndexing(ctx context.Context, target ocispec.D
 		if err := limitSize(target, s.repo.MaxMetadataBytes); err != nil {
 			return err
 		}
-		ctx = registryutil.WithScopeHint(ctx, s.repo.Reference, auth.ActionPull, auth.ActionDelete)
 		manifestJSON, err := content.FetchAll(ctx, s, target)
 		if err != nil {
 			return err
@@ -1134,12 +1053,9 @@ func (s *manifestStore) deleteWithIndexing(ctx context.Context, target ocispec.D
 	return s.repo.delete(ctx, target, true)
 }
 
-// indexReferrersForDelete indexes referrers for manifests with a subject field
-// on manifest delete.
-//
-// References:
-//   - Latest spec: https://github.com/opencontainers/distribution-spec/blob/v1.1.0-rc3/spec.md#deleting-manifests
-//   - Compatible spec: https://github.com/opencontainers/distribution-spec/blob/v1.1.0-rc1/spec.md#deleting-manifests
+// indexReferrersForDelete indexes referrers for image or artifact manifest with
+// the subject field on manifest delete.
+// Reference: https://github.com/opencontainers/distribution-spec/blob/v1.1.0-rc1/spec.md#deleting-manifests
 func (s *manifestStore) indexReferrersForDelete(ctx context.Context, desc ocispec.Descriptor, manifestJSON []byte) error {
 	var manifest struct {
 		Subject *ocispec.Descriptor `json:"subject"`
@@ -1179,7 +1095,7 @@ func (s *manifestStore) Resolve(ctx context.Context, reference string) (ocispec.
 	}
 	req.Header.Set("Accept", manifestAcceptHeader(s.repo.ManifestMediaTypes))
 
-	resp, err := s.repo.do(req)
+	resp, err := s.repo.client().Do(req)
 	if err != nil {
 		return ocispec.Descriptor{}, err
 	}
@@ -1211,7 +1127,7 @@ func (s *manifestStore) FetchReference(ctx context.Context, reference string) (d
 	}
 	req.Header.Set("Accept", manifestAcceptHeader(s.repo.ManifestMediaTypes))
 
-	resp, err := s.repo.do(req)
+	resp, err := s.repo.client().Do(req)
 	if err != nil {
 		return ocispec.Descriptor{}, nil, err
 	}
@@ -1309,7 +1225,7 @@ func (s *manifestStore) push(ctx context.Context, expected ocispec.Descriptor, c
 			return err
 		}
 	}
-	resp, err := s.repo.do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
@@ -1318,26 +1234,14 @@ func (s *manifestStore) push(ctx context.Context, expected ocispec.Descriptor, c
 	if resp.StatusCode != http.StatusCreated {
 		return errutil.ParseErrorResponse(resp)
 	}
-	s.checkOCISubjectHeader(resp)
 	return verifyContentDigest(resp, expected.Digest)
-}
-
-// checkOCISubjectHeader checks the "OCI-Subject" header in the response and
-// sets referrers capability accordingly.
-// Reference: https://github.com/opencontainers/distribution-spec/blob/v1.1.0-rc3/spec.md#pushing-manifests-with-subject
-func (s *manifestStore) checkOCISubjectHeader(resp *http.Response) {
-	// Referrers capability is not set to false when the subject header is not
-	// present, as the server may still conform to an older version of the spec
-	if subjectHeader := resp.Header.Get(headerOCISubject); subjectHeader != "" {
-		s.repo.SetReferrersCapability(true)
-	}
 }
 
 // pushWithIndexing pushes the manifest content matching the expected descriptor,
 // and indexes referrers for the manifest when needed.
 func (s *manifestStore) pushWithIndexing(ctx context.Context, expected ocispec.Descriptor, r io.Reader, reference string) error {
 	switch expected.MediaType {
-	case spec.MediaTypeArtifactManifest, ocispec.MediaTypeImageManifest, ocispec.MediaTypeImageIndex:
+	case spec.MediaTypeArtifactManifest, ocispec.MediaTypeImageManifest:
 		if state := s.repo.loadReferrersState(); state == referrersStateSupported {
 			// referrers API is available, no client-side indexing needed
 			return s.push(ctx, expected, r, reference)
@@ -1353,22 +1257,15 @@ func (s *manifestStore) pushWithIndexing(ctx context.Context, expected ocispec.D
 		if err := s.push(ctx, expected, bytes.NewReader(manifestJSON), reference); err != nil {
 			return err
 		}
-		// check referrers API availability again after push
-		if state := s.repo.loadReferrersState(); state == referrersStateSupported {
-			return nil
-		}
 		return s.indexReferrersForPush(ctx, expected, manifestJSON)
 	default:
 		return s.push(ctx, expected, r, reference)
 	}
 }
 
-// indexReferrersForPush indexes referrers for manifests with a subject field
-// on manifest push.
-//
-// References:
-//   - Latest spec: https://github.com/opencontainers/distribution-spec/blob/v1.1.0-rc3/spec.md#pushing-manifests-with-subject
-//   - Compatible spec: https://github.com/opencontainers/distribution-spec/blob/v1.1.0-rc1/spec.md#pushing-manifests-with-subject
+// indexReferrersForPush indexes referrers for image or artifact manifest with
+// the subject field on manifest push.
+// Reference: https://github.com/opencontainers/distribution-spec/blob/v1.1.0-rc1/spec.md#pushing-manifests-with-subject
 func (s *manifestStore) indexReferrersForPush(ctx context.Context, desc ocispec.Descriptor, manifestJSON []byte) error {
 	var subject ocispec.Descriptor
 	switch desc.MediaType {
@@ -1394,22 +1291,7 @@ func (s *manifestStore) indexReferrersForPush(ctx context.Context, desc ocispec.
 			return nil
 		}
 		subject = *manifest.Subject
-		desc.ArtifactType = manifest.ArtifactType
-		if desc.ArtifactType == "" {
-			desc.ArtifactType = manifest.Config.MediaType
-		}
-		desc.Annotations = manifest.Annotations
-	case ocispec.MediaTypeImageIndex:
-		var manifest ocispec.Index
-		if err := json.Unmarshal(manifestJSON, &manifest); err != nil {
-			return fmt.Errorf("failed to decode manifest: %s: %s: %w", desc.Digest, desc.MediaType, err)
-		}
-		if manifest.Subject == nil {
-			// no subject, no indexing needed
-			return nil
-		}
-		subject = *manifest.Subject
-		desc.ArtifactType = manifest.ArtifactType
+		desc.ArtifactType = manifest.Config.MediaType
 		desc.Annotations = manifest.Annotations
 	default:
 		return nil
@@ -1429,30 +1311,31 @@ func (s *manifestStore) indexReferrersForPush(ctx context.Context, desc ocispec.
 // updateReferrersIndex updates the referrers index for desc referencing subject
 // on manifest push and manifest delete.
 // References:
-//   - https://github.com/opencontainers/distribution-spec/blob/v1.1.0-rc3/spec.md#pushing-manifests-with-subject
-//   - https://github.com/opencontainers/distribution-spec/blob/v1.1.0-rc3/spec.md#deleting-manifests
+//   - https://github.com/opencontainers/distribution-spec/blob/v1.1.0-rc1/spec.md#pushing-manifests-with-subject
+//   - https://github.com/opencontainers/distribution-spec/blob/v1.1.0-rc1/spec.md#deleting-manifests
 func (s *manifestStore) updateReferrersIndex(ctx context.Context, subject ocispec.Descriptor, change referrerChange) (err error) {
 	referrersTag := buildReferrersTag(subject)
 
-	var oldIndexDesc *ocispec.Descriptor
-	var oldReferrers []ocispec.Descriptor
+	var skipDelete bool
+	var oldIndexDesc ocispec.Descriptor
+	var referrers []ocispec.Descriptor
 	prepare := func() error {
 		// 1. pull the original referrers list using the referrers tag schema
-		indexDesc, referrers, err := s.repo.referrersFromIndex(ctx, referrersTag)
+		var err error
+		oldIndexDesc, referrers, err = s.repo.referrersFromIndex(ctx, referrersTag)
 		if err != nil {
 			if errors.Is(err, errdef.ErrNotFound) {
-				// valid case: no old referrers index
+				// no old index found, skip delete
+				skipDelete = true
 				return nil
 			}
 			return err
 		}
-		oldIndexDesc = &indexDesc
-		oldReferrers = referrers
 		return nil
 	}
 	update := func(referrerChanges []referrerChange) error {
 		// 2. apply the referrer changes on the referrers list
-		updatedReferrers, err := applyReferrerChanges(oldReferrers, referrerChanges)
+		updatedReferrers, err := applyReferrerChanges(referrers, referrerChanges)
 		if err != nil {
 			if err == errNoReferrerUpdate {
 				return nil
@@ -1461,12 +1344,7 @@ func (s *manifestStore) updateReferrersIndex(ctx context.Context, subject ocispe
 		}
 
 		// 3. push the updated referrers list using referrers tag schema
-		if len(updatedReferrers) > 0 || s.repo.SkipReferrersGC {
-			// push a new index in either case:
-			// 1. the referrers list has been updated with a non-zero size
-			// 2. OR the updated referrers list is empty but referrers GC
-			//    is skipped, in this case an empty index should still be pushed
-			//    as the old index won't get deleted
+		if len(updatedReferrers) > 0 {
 			newIndexDesc, newIndex, err := generateIndex(updatedReferrers)
 			if err != nil {
 				return fmt.Errorf("failed to generate referrers index for referrers tag %s: %w", referrersTag, err)
@@ -1476,15 +1354,14 @@ func (s *manifestStore) updateReferrersIndex(ctx context.Context, subject ocispe
 			}
 		}
 
-		// 4. delete the dangling original referrers index, if applicable
-		if s.repo.SkipReferrersGC || oldIndexDesc == nil {
-			return nil
-		}
-		if err := s.repo.delete(ctx, *oldIndexDesc, true); err != nil {
-			return &ReferrersError{
-				Op:      opDeleteReferrersIndex,
-				Err:     fmt.Errorf("failed to delete dangling referrers index %s for referrers tag %s: %w", oldIndexDesc.Digest.String(), referrersTag, err),
-				Subject: subject,
+		// 4. delete the dangling original referrers index
+		if !skipDelete {
+			if err := s.repo.delete(ctx, oldIndexDesc, true); err != nil {
+				return &ReferrersError{
+					Op:      opDeleteReferrersIndex,
+					Err:     fmt.Errorf("failed to delete dangling referrers index %s for referrers tag %s: %w", oldIndexDesc.Digest.String(), referrersTag, err),
+					Subject: subject,
+				}
 			}
 		}
 		return nil
@@ -1531,13 +1408,13 @@ func (s *manifestStore) generateDescriptor(resp *http.Response, ref registry.Ref
 
 	// 4. Validate Server Digest (if present)
 	var serverHeaderDigest digest.Digest
-	if serverHeaderDigestStr := resp.Header.Get(headerDockerContentDigest); serverHeaderDigestStr != "" {
+	if serverHeaderDigestStr := resp.Header.Get(dockerContentDigestHeader); serverHeaderDigestStr != "" {
 		if serverHeaderDigest, err = digest.Parse(serverHeaderDigestStr); err != nil {
 			return ocispec.Descriptor{}, fmt.Errorf(
 				"%s %q: invalid response header value: `%s: %s`; %w",
 				resp.Request.Method,
 				resp.Request.URL,
-				headerDockerContentDigest,
+				dockerContentDigestHeader,
 				serverHeaderDigestStr,
 				err,
 			)
@@ -1554,7 +1431,7 @@ func (s *manifestStore) generateDescriptor(resp *http.Response, ref registry.Ref
 				// immediate fail
 				return ocispec.Descriptor{}, fmt.Errorf(
 					"HTTP %s request missing required header %q",
-					httpMethod, headerDockerContentDigest,
+					httpMethod, dockerContentDigestHeader,
 				)
 			}
 			// Otherwise, just trust the client-supplied digest
@@ -1576,7 +1453,7 @@ func (s *manifestStore) generateDescriptor(resp *http.Response, ref registry.Ref
 		return ocispec.Descriptor{}, fmt.Errorf(
 			"%s %q: invalid response; digest mismatch in %s: received %q when expecting %q",
 			resp.Request.Method, resp.Request.URL,
-			headerDockerContentDigest, contentDigest,
+			dockerContentDigestHeader, contentDigest,
 			refDigest,
 		)
 	}
@@ -1608,7 +1485,7 @@ func calculateDigestFromResponse(resp *http.Response, maxMetadataBytes int64) (d
 // OCI distribution-spec states the Docker-Content-Digest header is optional.
 // Reference: https://github.com/opencontainers/distribution-spec/blob/v1.0.1/spec.md#legacy-docker-support-http-headers
 func verifyContentDigest(resp *http.Response, expected digest.Digest) error {
-	digestStr := resp.Header.Get(headerDockerContentDigest)
+	digestStr := resp.Header.Get(dockerContentDigestHeader)
 
 	if len(digestStr) == 0 {
 		return nil
@@ -1619,7 +1496,7 @@ func verifyContentDigest(resp *http.Response, expected digest.Digest) error {
 		return fmt.Errorf(
 			"%s %q: invalid response header: `%s: %s`",
 			resp.Request.Method, resp.Request.URL,
-			headerDockerContentDigest, digestStr,
+			dockerContentDigestHeader, digestStr,
 		)
 	}
 
@@ -1627,7 +1504,7 @@ func verifyContentDigest(resp *http.Response, expected digest.Digest) error {
 		return fmt.Errorf(
 			"%s %q: invalid response; digest mismatch in %s: received %q when expecting %q",
 			resp.Request.Method, resp.Request.URL,
-			headerDockerContentDigest, contentDigest,
+			dockerContentDigestHeader, contentDigest,
 			expected,
 		)
 	}
