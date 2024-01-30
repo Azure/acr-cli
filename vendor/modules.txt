@@ -61,7 +61,7 @@ github.com/moby/term/windows
 # github.com/opencontainers/go-digest v1.0.0
 ## explicit; go 1.13
 github.com/opencontainers/go-digest
-# github.com/opencontainers/image-spec v1.1.0-rc5
+# github.com/opencontainers/image-spec v1.1.0-rc6
 ## explicit; go 1.18
 github.com/opencontainers/image-spec/specs-go
 github.com/opencontainers/image-spec/specs-go/v1
@@ -91,8 +91,8 @@ github.com/stretchr/testify/mock
 ## explicit; go 1.18
 golang.org/x/crypto/pkcs12
 golang.org/x/crypto/pkcs12/internal/rc2
-# golang.org/x/sync v0.4.0
-## explicit; go 1.17
+# golang.org/x/sync v0.6.0
+## explicit; go 1.18
 golang.org/x/sync/errgroup
 golang.org/x/sync/semaphore
 # golang.org/x/sys v0.15.0
@@ -107,7 +107,7 @@ golang.org/x/sys/windows
 gopkg.in/yaml.v3
 # gotest.tools/v3 v3.2.0
 ## explicit; go 1.13
-# oras.land/oras-go/v2 v2.3.1
+# oras.land/oras-go/v2 v2.4.0
 ## explicit; go 1.20
 oras.land/oras-go/v2/content
 oras.land/oras-go/v2/errdef
@@ -116,7 +116,6 @@ oras.land/oras-go/v2/internal/descriptor
 oras.land/oras-go/v2/internal/docker
 oras.land/oras-go/v2/internal/httputil
 oras.land/oras-go/v2/internal/ioutil
-oras.land/oras-go/v2/internal/registryutil
 oras.land/oras-go/v2/internal/slices
 oras.land/oras-go/v2/internal/spec
 oras.land/oras-go/v2/internal/syncutil
