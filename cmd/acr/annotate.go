@@ -5,9 +5,13 @@ package main
 
 import (
 	// "context"
+	"context"
 	"fmt"
+	"net/http"
 
-	// "github.com/Azure/acr-cli/cmd/api"
+	"github.com/Azure/acr-cli/acr"
+	"github.com/Azure/acr-cli/cmd/api"
+	"github.com/dlclark/regexp2"
 	"github.com/spf13/cobra"
 )
 
@@ -86,4 +90,45 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 	cmd.MarkFlagRequired("artifact-type")
 	cmd.MarkFlagRequired("annotation")
 	return cmd
+}
+
+// annotateTags annotates all tags that match the tagFilter string.
+
+// getTagsToAnnotate gets all tags that should be annotated according to the filter flag. This will at most return 100 flags.
+// Returns a pointer to a slice that contains the tags that will be annotated and an error in case it occurred.
+func getTagsToAnnotate(ctx context.Context,
+	acrClient api.AcrCLIClientInterface,
+	repoName string,
+	filter *regexp2.Regexp, lastTag string) (*[]acr.TagAttributesBase, error) {
+
+	var matches bool
+	resultTags, err := acrClient.GetAcrTags(ctx, repoName, "timedesc", lastTag)
+	if err != nil {
+		if resultTags != nil && resultTags.Response.Response != nil && resultTags.StatusCode == http.StatusNotFound {
+			fmt.Printf("%s repository not found\n", repoName)
+			return nil, nil
+		}
+		return nil, err
+	}
+	// newLastTag := ""
+	if resultTags != nil && resultTags.TagsAttributes != nil && len(*resultTags.TagsAttributes) > 0 {
+		tags := *resultTags.TagsAttributes
+		tagsToAnnotate := []acr.TagAttributesBase{}
+		for _, tag := range tags {
+			matches, err = filter.MatchString(*tag.Name)
+			if err != nil {
+				// The only error that regexp2 will return is a timeout error
+				return nil, err
+			}
+			if !matches {
+				// If a tag does not match the regex then it's not added to the list
+				continue
+			}
+			tagsToAnnotate = append(tagsToAnnotate, tag)
+		}
+
+		// newLastTag = getLastTagFromResponse(resultTags)
+		return &tagsToAnnotate, nil
+	}
+	return nil, nil
 }
