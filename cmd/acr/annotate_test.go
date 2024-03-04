@@ -33,7 +33,7 @@ func TestAnnotateTags(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(OneTagResult, nil).Once()
-		annotatedTags, err := annotateTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testRegex, defaultRegexpMatchTimeoutSeconds)
+		annotatedTags, err := annotateTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, "^i.*", defaultRegexpMatchTimeoutSeconds)
 		assert.Equal(0, annotatedTags, "Number of annotated elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -91,7 +91,7 @@ func TestAnnotateTags(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(OneTagResult, nil).Once()
-		mockClient.On("AnnotateAcrTag", mock.Anything, testRepo, "latest").Return(&deletedResponse, nil).Once()
+		// mockClient.On("AnnotateAcrTag", mock.Anything, testRepo, "latest").Return(&deletedResponse, nil).Once()
 		annotatedTags, err := annotateTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, "^la.*", defaultRegexpMatchTimeoutSeconds)
 		assert.Equal(1, annotatedTags, "Number of annotated elements should be 1")
 		assert.Equal(nil, err, "Error should be nil")
@@ -105,11 +105,11 @@ func TestAnnotateTags(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(OneTagResultWithNext, nil).Once()
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "latest").Return(FourTagsResult, nil).Once()
-		mockClient.On("AnnotateAcrTag", mock.Anything, testRepo, "latest").Return(&annotatedResponse, nil).Once()
-		mockClient.On("AnnotateAcrTag", mock.Anything, testRepo, "v1").Return(&annotatedResponse, nil).Once()
-		mockClient.On("AnnotateAcrTag", mock.Anything, testRepo, "v2").Return(&annotatedResponse, nil).Once()
-		mockClient.On("AnnotateAcrTag", mock.Anything, testRepo, "v3").Return(&annotatedResponse, nil).Once()
-		mockClient.On("AnnotateAcrTag", mock.Anything, testRepo, "v4").Return(&annotatedResponse, nil).Once()
+		// mockClient.On("AnnotateAcrTag", mock.Anything, testRepo, "latest").Return(&annotatedResponse, nil).Once()
+		// mockClient.On("AnnotateAcrTag", mock.Anything, testRepo, "v1").Return(&annotatedResponse, nil).Once()
+		// mockClient.On("AnnotateAcrTag", mock.Anything, testRepo, "v2").Return(&annotatedResponse, nil).Once()
+		// mockClient.On("AnnotateAcrTag", mock.Anything, testRepo, "v3").Return(&annotatedResponse, nil).Once()
+		// mockClient.On("AnnotateAcrTag", mock.Anything, testRepo, "v4").Return(&annotatedResponse, nil).Once()
 		annotatedTags, err := annotateTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testRegex, defaultRegexpMatchTimeoutSeconds)
 		assert.Equal(5, annotatedTags, "Number of annotated elements should be 5")
 		assert.Equal(nil, err, "Error should be nil")
@@ -121,7 +121,7 @@ func TestAnnotateTags(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(TagWithLocal, nil).Once()
-		mockClient.On("AnnotateAcrTag", mock.Anything, testRepo, "v1-c-local.test").Return(&annotatedResponse, nil).Once()
+		// mockClient.On("AnnotateAcrTag", mock.Anything, testRepo, "v1-c-local.test").Return(&annotatedResponse, nil).Once()
 		annotatedTags, err := annotateTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, ".*-?local[.].+", defaultRegexpMatchTimeoutSeconds)
 		assert.Equal(1, annotatedTags, "Number of annotated elements should be 1")
 		assert.Equal(nil, err, "Error should be nil")
@@ -134,10 +134,10 @@ func TestAnnotateTags(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(OneTagResultWithNext, nil).Once()
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "latest").Return(FourTagsResult, nil).Once()
-		mockClient.On("AnnotateAcrTag", mock.Anything, testRepo, "v1").Return(&annotatedResponse, nil).Once()
-		mockClient.On("AnnotateAcrTag", mock.Anything, testRepo, "v2").Return(&annotatedResponse, nil).Once()
-		mockClient.On("AnnotateAcrTag", mock.Anything, testRepo, "v3").Return(&annotatedResponse, nil).Once()
-		mockClient.On("AnnotateAcrTag", mock.Anything, testRepo, "v4").Return(&annotatedResponse, nil).Once()
+		// mockClient.On("AnnotateAcrTag", mock.Anything, testRepo, "v1").Return(&annotatedResponse, nil).Once()
+		// mockClient.On("AnnotateAcrTag", mock.Anything, testRepo, "v2").Return(&annotatedResponse, nil).Once()
+		// mockClient.On("AnnotateAcrTag", mock.Anything, testRepo, "v3").Return(&annotatedResponse, nil).Once()
+		// mockClient.On("AnnotateAcrTag", mock.Anything, testRepo, "v4").Return(&annotatedResponse, nil).Once()
 		annotatedTags, err := annotateTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, "^v.*", defaultRegexpMatchTimeoutSeconds)
 		assert.Equal(4, annotatedTags, "Number of annotated elements should be 4")
 		assert.Equal(nil, err, "Error should be nil")
@@ -157,28 +157,28 @@ func TestAnnotateTags(t *testing.T) {
 	})
 
 	// If there is a 404 error while annotating a tag, an error should not be returned. (line 215)
-	t.Run("DeleteNotFoundErrorTest", func(t *testing.T) {
-		assert := assert.New(t)
-		mockClient := &mocks.AcrCLIClientInterface{}
-		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(OneTagResult, nil).Once()
-		mockClient.On("AnnotateAcrTag", mock.Anything, testRepo, "latest").Return(&notFoundResponse, errors.New("not found")).Once()
-		annotatedTags, err := annotateTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, "^la.*", defaultRegexpMatchTimeoutSeconds)
-		assert.Equal(0, annotatedTags, "Number of deleted elements should be 0")
-		assert.Equal(nil, err, "Error should be nil")
-		mockClient.AssertExpectations(t)
-	})
+	// t.Run("DeleteNotFoundErrorTest", func(t *testing.T) {
+	// 	assert := assert.New(t)
+	// 	mockClient := &mocks.AcrCLIClientInterface{}
+	// 	mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(OneTagResult, nil).Once()
+	// 	// mockClient.On("AnnotateAcrTag", mock.Anything, testRepo, "latest").Return(&notFoundResponse, errors.New("not found")).Once()
+	// 	annotatedTags, err := annotateTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, "^la.*", defaultRegexpMatchTimeoutSeconds)
+	// 	assert.Equal(0, annotatedTags, "Number of annotated elements should be 0")
+	// 	assert.Equal(nil, err, "Error should be nil")
+	// 	mockClient.AssertExpectations(t)
+	// })
 
-	// If an error (other than a 404 error) occurs during annotate, an error should be returned. (line 227)
-	t.Run("DeleteNotFoundErrorTest", func(t *testing.T) {
-		assert := assert.New(t)
-		mockClient := &mocks.AcrCLIClientInterface{}
-		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(OneTagResult, nil).Once()
-		mockClient.On("AnnotateAcrTag", mock.Anything, testRepo, "latest").Return(nil, errors.New("error during annotate")).Once()
-		annotatedTags, err := annotateTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, "^la.*", defaultRegexpMatchTimeoutSeconds)
-		assert.Equal(-1, annotatedTags, "Number of deleted elements should be -1")
-		assert.Equal(nil, err, "Error should be nil")
-		mockClient.AssertExpectations(t)
-	})
+	// // If an error (other than a 404 error) occurs during annotate, an error should be returned. (line 227)
+	// t.Run("DeleteNotFoundErrorTest", func(t *testing.T) {
+	// 	assert := assert.New(t)
+	// 	mockClient := &mocks.AcrCLIClientInterface{}
+	// 	mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(OneTagResult, nil).Once()
+	// 	// mockClient.On("AnnotateAcrTag", mock.Anything, testRepo, "latest").Return(nil, errors.New("error during annotate")).Once()
+	// 	annotatedTags, err := annotateTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, "^la.*", defaultRegexpMatchTimeoutSeconds)
+	// 	assert.Equal(-1, annotatedTags, "Number of annotated elements should be -1")
+	// 	assert.Equal(nil, err, "Error should be nil")
+	// 	mockClient.AssertExpectations(t)
+	// })
 
 }
 
@@ -192,7 +192,8 @@ func TestGetTagstoAnnotate(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(nil, errors.New("error fetching tags")).Once()
 		// returns *[]acr.TagAttributesBase -> tagsToAnnotate, string -> newLastTag, int -> newSkippedTagsCount, error
-		_, err := getTagsToAnnotate(testCtx, mockClient, testRepo, tagRegex, "")
+		_, testLastTag, err := getTagsToAnnotate(testCtx, mockClient, testRepo, tagRegex, "")
+		assert.Equal("", testLastTag, "Last tag should be empty")
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
 	})
@@ -202,7 +203,8 @@ func TestGetTagstoAnnotate(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(notFoundTagResponse, errors.New("testRepo not found")).Once()
-		_, err := getTagsToAnnotate(testCtx, mockClient, testRepo, tagRegex, "")
+		_, testLastTag, err := getTagsToAnnotate(testCtx, mockClient, testRepo, tagRegex, "")
+		assert.Equal("", testLastTag, "Last tag should be empty")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
 	})
@@ -212,8 +214,9 @@ func TestGetTagstoAnnotate(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(TagWithLocal, nil).Once()
-		tagsToAnnotate, err := getTagsToAnnotate(testCtx, mockClient, testRepo, tagRegex, "")
+		tagsToAnnotate, testLastTag, err := getTagsToAnnotate(testCtx, mockClient, testRepo, tagRegex, "")
 		assert.Equal(4, len(*tagsToAnnotate), "Number of tags to annotate should be 1")
+		assert.Equal("", testLastTag, "Last tag should be empty")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
 	})

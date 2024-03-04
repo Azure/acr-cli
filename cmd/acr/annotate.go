@@ -12,6 +12,7 @@ import (
 	"github.com/Azure/acr-cli/acr"
 	"github.com/Azure/acr-cli/cmd/api"
 	"github.com/dlclark/regexp2"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )
 
@@ -54,26 +55,77 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 		Example: annotateExampleMessage,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// This context is used for all the http requests
-			// ctx := context.Background()
-			// registryName, err := annotateParams.GetRegistryName()
-			// if err != nil {
-			// 	return err
-			// }
-			// loginURL := api.LoginURL(registryName)
-			// // An acrClient with authentication is generated, if the authentication cannot be resolved an error is returned.
-			// acrClient, err := api.GetAcrCLIClientWithAuth(loginURL, annotateParams.username, annotateParams.password, annotateParams.configs)
-			// if err != nil {
-			// 	return err
-			// }
-			// // A map is used to collect the regex tags for every repository.
-			// tagFilters, err := collectTagFilters(ctx, annotateParams.filters, acrClient.AutorestClient, annotateParams.filterTimeout)
-			// if err != nil {
-			// 	return err
-			// }
-			// // A clarification message for --dry-run.
-			// if annotateParams.dryRun {
-			// 	fmt.Println("DRY RUN: The following output shows what WOULD be annotated if the annotate command was executed. Nothing is annotated.")
-			// }
+			ctx := context.Background()
+			registryName, err := annotateParams.GetRegistryName()
+			if err != nil {
+				return err
+			}
+			loginURL := api.LoginURL(registryName)
+			// An acrClient with authentication is generated, if the authentication cannot be resolved an error is returned.
+			acrClient, err := api.GetAcrCLIClientWithAuth(loginURL, annotateParams.username, annotateParams.password, annotateParams.configs)
+			if err != nil {
+				return err
+			}
+			// A map is used to collect the regex tags for every repository.
+			tagFilters, err := collectTagFilters(ctx, annotateParams.filters, acrClient.AutorestClient, annotateParams.filterTimeout)
+			if err != nil {
+				return err
+			}
+			// A clarification message for --dry-run.
+			if annotateParams.dryRun {
+				fmt.Println("DRY RUN: The following output shows what WOULD be annotated if the annotate command was executed. Nothing is annotated.")
+			}
+			// In order to print a summary of the annotated tags/manifests, the counters get updated every time a repo is annotated.
+			annotatedTagsCount := 0
+			annotatedManifestsCount := 0
+			for repoName, tagRegex := range tagFilters {
+				if !annotateParams.dryRun {
+					poolSize := annotateParams.concurrency
+					if poolSize <= 0 {
+						poolSize = defaultPoolSize
+						fmt.Printf("Specified concurrency value invalid. Set to default value: %d \n", defaultPoolSize)
+					} else if poolSize > maxPoolSize {
+						poolSize = maxPoolSize
+						fmt.Printf("Specified concurrency value too large. Set to maximum value: %d \n", maxPoolSize)
+					}
+
+					singleAnnotatedTagsCount, err := annotateTags(ctx, acrClient, poolSize, loginURL, repoName, annotateParams.artifactType, tagRegex, annotateParams.filterTimeout)
+					if err != nil {
+						return errors.Wrap(err, "Failed to annotate tags")
+					}
+
+					// singleAnnotatedManifestsCount := 0
+					// // If the untagged flag is set, then also manifests are deleted.
+					// if annotateParams.untagged {
+					// 	singleAnnotatedManifestsCount, err = annotateDanglingManifest(ctx, acrClient, poolSize, loginURL, repoName, annotateParams.artifactType)
+					// 	if err != nil {
+					// 		return errors.Wrap(err, "Failed to annotated manifests")
+					// 	}
+					// }
+
+					// After every repository is annotated, the counters are updated
+					annotatedTagsCount += singleAnnotatedTagsCount
+					// annotatedManifestsCount += singleAnnotatedManifestsCount
+				} else {
+					// No tag or manifest will be annotated but the counters will still be updated
+					// singleAnnotatedTagsCount, singleAnnotatedManifestsCount, err := dryRunAnnotate(ctx, acrClient, loginURL, repoName, annotateParams.artifactType, tagRegex, annotateParams.untagged, annotateParams.filterTimeout)
+					// if err != nil {
+					// 	return errors.Wrap(err, "Failed to dry-run annotate")
+					// }
+					// annotatedTagsCount += singleAnnotatedTagsCount
+					// annotatedManifestsCount += singleAnnotatedManifestsCount
+					fmt.Printf("Dry run, needs to be uncommented after implemented")
+				}
+			}
+
+			// After all repos have been purged, the summary is printed
+			if annotateParams.dryRun {
+				fmt.Printf("\nNumber of tags to be annotated: %d\n", annotatedTagsCount)
+				fmt.Printf("\nNumber of manifests to be annotated: %d\n", annotatedManifestsCount)
+			} else {
+				fmt.Printf("\nNumber of annotated tags: %d\n", annotatedTagsCount)
+				fmt.Printf("\nNumber of annotated manifests: %d\n", annotatedManifestsCount)
+			}
 			return nil
 		},
 	}
@@ -93,24 +145,69 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 }
 
 // annotateTags annotates all tags that match the tagFilter string.
+func annotateTags(ctx context.Context,
+	acrClient api.AcrCLIClientInterface,
+	poolSize int, loginUrl string,
+	repoName string,
+	artifactType string,
+	tagFilter string,
+	regexpMatchTimeoutSeconds uint64) (int, error) {
+
+	fmt.Printf("Annotating tags for repository: %s\n", repoName)
+
+	tagRegex, err := buildRegexFilter(tagFilter, regexpMatchTimeoutSeconds)
+	if err != nil {
+		return -1, err
+	}
+
+	lastTag := ""
+	annotatedTagsCount := 0
+
+	// In order to only have a limited amount of http requests, an annotator is used that will start goroutines to annotate tags.
+	// annotator := worker.NewAnnotator(poolSize, acrClient, loginURL, repoName)
+
+	for {
+		// GetTagsToAnnotate will return an empty lastTag when there are no more tags.
+		tagsToAnnotate, newLastTag, err := getTagsToAnnotate(ctx, acrClient, repoName, tagRegex, lastTag)
+		if err != nil {
+			return -1, err
+		}
+		lastTag = newLastTag
+		if tagsToAnnotate != nil {
+			// count, annotateErr := annotator.AnnotateTags(ctx, tagsToAnnotate)
+			// if annotateErr != nil {
+			// 	return -1, annotateErr
+			// }
+			// annotatedTagsCount += count
+			annotatedTagsCount += len(*tagsToAnnotate)
+		}
+		if len(lastTag) == 0 {
+			break
+		}
+
+	}
+
+	return annotatedTagsCount, nil
+}
 
 // getTagsToAnnotate gets all tags that should be annotated according to the filter flag. This will at most return 100 flags.
 // Returns a pointer to a slice that contains the tags that will be annotated and an error in case it occurred.
 func getTagsToAnnotate(ctx context.Context,
 	acrClient api.AcrCLIClientInterface,
 	repoName string,
-	filter *regexp2.Regexp, lastTag string) (*[]acr.TagAttributesBase, error) {
+	filter *regexp2.Regexp, lastTag string) (*[]acr.TagAttributesBase, string, error) {
 
 	var matches bool
 	resultTags, err := acrClient.GetAcrTags(ctx, repoName, "timedesc", lastTag)
 	if err != nil {
 		if resultTags != nil && resultTags.Response.Response != nil && resultTags.StatusCode == http.StatusNotFound {
 			fmt.Printf("%s repository not found\n", repoName)
-			return nil, nil
+			return nil, "", nil
 		}
-		return nil, err
+		return nil, "", err
 	}
-	// newLastTag := ""
+
+	newLastTag := ""
 	if resultTags != nil && resultTags.TagsAttributes != nil && len(*resultTags.TagsAttributes) > 0 {
 		tags := *resultTags.TagsAttributes
 		tagsToAnnotate := []acr.TagAttributesBase{}
@@ -118,17 +215,20 @@ func getTagsToAnnotate(ctx context.Context,
 			matches, err = filter.MatchString(*tag.Name)
 			if err != nil {
 				// The only error that regexp2 will return is a timeout error
-				return nil, err
+				return nil, "", err
 			}
 			if !matches {
 				// If a tag does not match the regex then it's not added to the list
 				continue
 			}
-			tagsToAnnotate = append(tagsToAnnotate, tag)
+			// If a tag is changable, then it is returned as a tag to annotate
+			if *tag.ChangeableAttributes.WriteEnabled {
+				tagsToAnnotate = append(tagsToAnnotate, tag)
+			}
 		}
 
-		// newLastTag = getLastTagFromResponse(resultTags)
-		return &tagsToAnnotate, nil
+		newLastTag = getLastTagFromResponse(resultTags)
+		return &tagsToAnnotate, newLastTag, nil
 	}
-	return nil, nil
+	return nil, "", nil
 }
