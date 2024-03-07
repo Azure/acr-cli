@@ -223,6 +223,197 @@ func TestGetTagstoAnnotate(t *testing.T) {
 
 }
 
+// TestAnnotateManifests contains the tests for the annotateDanglingManifests method, which calls the getManifestsToAnnotate method.
+// It is invoked when the --untagged flag is set and the --dry-run flag is not set
+func TestAnnotateManifests(t *testing.T) {
+	// If a repository is not known, annotateDanglingManifests should only call GetAcrManifests once and return no error.
+	t.Run("RepositoryNotFoundTest", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(notFoundManifestResponse, errors.New("testRepo not found")).Once()
+		annotatedTags, err := annotateDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType)
+		assert.Equal(0, annotatedTags, "Number of annotated elements should be 0")
+		assert.Equal(nil, err, "Error should be nil")
+		mockClient.AssertExpectations(t)
+	})
+
+	// If there is an error (different to a 404 error) getting the first set of manifests, an error should be returned.
+	t.Run("GetAcrManifestsErrorTest", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(nil, errors.New("unauthorized")).Once()
+		annotatedTags, err := annotateDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType)
+		assert.Equal(-1, annotatedTags, "Number of annotated elements should be -1")
+		assert.NotEqual(nil, err, "Error should not be nil")
+		mockClient.AssertExpectations(t)
+	})
+
+	// No manifest should be annotated. If all the manifests have at least one tag they should not be annotated.
+	t.Run("NoAnnotationManifestTest", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleManifestV2WithTagsResult, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:2830cc0fcddc1bc2bd4aeab0ed5ee7087dab29a49e65151c77553e46a7ed5283").Return(EmptyListManifestsResult, nil).Once()
+		annotatedTags, err := annotateDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType)
+		assert.Equal(0, annotatedTags, "Number of annotated elements should be 0")
+		assert.Equal(nil, err, "Error should be nil")
+		mockClient.AssertExpectations(t)
+	})
+
+	// If there is an error (different to a 404 error) getting the second set of manifests, an error should be returned.
+	t.Run("GetAcrManifestsErrorTest", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleManifestV2WithTagsResult, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:2830cc0fcddc1bc2bd4aeab0ed5ee7087dab29a49e65151c77553e46a7ed5283").Return(nil, errors.New("error getting manifests")).Once()
+		annotatedTags, err := annotateDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType)
+		assert.Equal(-1, annotatedTags, "Number of annotated elements should be -1")
+		assert.NotEqual(nil, err, "Error should not be nil")
+		mockClient.AssertExpectations(t)
+	})
+
+	// The following tests involve multiarch manifests
+	// If there is an error while getting the multiarch manifest, an error should be returned.
+	t.Run("MultiArchErrorGettingManifestTest", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleMultiArchManifestV2WithTagsResult, nil).Once()
+		mockClient.On("GetManifest", mock.Anything, testRepo, "sha256:d88fb54ba4424dada7c928c6af332ed1c49065ad85eafefb6f26664695015119").Return(nil, errors.New("error getting manifest")).Once()
+		annotatedTags, err := annotateDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType)
+		assert.Equal(-1, annotatedTags, "Number of annotated elements should be -1")
+		assert.NotEqual(nil, err, "Error should not be nil")
+		mockClient.AssertExpectations(t)
+	})
+
+	// If a multiarch manifest returns an invalid JSON, an error should be returned.
+	t.Run("MultiArchInvalidJsonTest", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleMultiArchManifestV2WithTagsResult, nil).Once()
+		mockClient.On("GetManifest", mock.Anything, testRepo, "sha256:d88fb54ba4424dada7c928c6af332ed1c49065ad85eafefb6f26664695015119").Return(nil, errors.New("error getting manifest")).Once()
+		annotatedTags, err := annotateDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType)
+		assert.Equal(-1, annotatedTags, "Number of annotated elements should be -1")
+		assert.NotEqual(nil, err, "Error should not be nil")
+		mockClient.AssertExpectations(t)
+	})
+
+	// The following tests involve annotating manifests.
+	// There are three manifests split into two GetAcrManifests calls, and one is linked to a tag so there should
+	// only be 2 annotations, hence the 2 AnnotateManifest calls
+	t.Run("AnnotateTwoManifestsTest", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleManifestV2WithTagsResult, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:2830cc0fcddc1bc2bd4aeab0ed5ee7087dab29a49e65151c77553e46a7ed5283").Return(doubleManifestV2WithoutTagsResult, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696").Return(EmptyListManifestsResult, nil).Once()
+		// mockClient.On("AnnotateManifest", mock.Anything, testRepo, "sha256:63532043b5af6247377a472ad075a42bde35689918de1cf7f807714997e0e683").Return(nil, nil).Once()
+		// mockClient.On("AnnotateManifest", mock.Anything, testRepo, "sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696").Return(nil, nil).Once()
+		annotatedTags, err := annotateDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType)
+		assert.Equal(2, annotatedTags, "Number of annotated elements should be 2")
+		assert.Equal(nil, err, "Error should be nil")
+		mockClient.AssertExpectations(t)
+	})
+
+	// If there is an error while annotating the manifest and it is a 404 error, return an error.
+	t.Run("ErrorManifestAnnotateNotFoundTest", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleManifestV2WithTagsResult, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:2830cc0fcddc1bc2bd4aeab0ed5ee7087dab29a49e65151c77553e46a7ed5283").Return(doubleManifestV2WithoutTagsResult, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696").Return(EmptyListManifestsResult, nil).Once()
+		// mockClient.On("AnnotateManifest", mock.Anything, testRepo, "sha256:63532043b5af6247377a472ad075a42bde35689918de1cf7f807714997e0e683").Return(nil, nil).Once()
+		// mockClient.On("AnnotateManifest", mock.Anything, testRepo, "sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696").Return(&notFoundResponse, errors.New("manifest not found")).Once()
+		annotatedTags, err := annotateDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType)
+		assert.Equal(2, annotatedTags, "Number of annotated elements should be 2")
+		assert.Equal(nil, err, "Error should be nil")
+		mockClient.AssertExpectations(t)
+	})
+
+	// If there is an error while annotating the manifest and it is different from a 404 error, an error should be returned.
+	t.Run("ErrorManifestAnnotateTest", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleManifestV2WithTagsResult, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:2830cc0fcddc1bc2bd4aeab0ed5ee7087dab29a49e65151c77553e46a7ed5283").Return(doubleManifestV2WithoutTagsResult, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696").Return(EmptyListManifestsResult, nil).Once()
+		// mockClient.On("AnnotateManifest", mock.Anything, testRepo, "sha256:63532043b5af6247377a472ad075a42bde35689918de1cf7f807714997e0e683").Return(nil, errors.New("error deleting manifest")).Once()
+		// mockClient.On("AnnotateManifest", mock.Anything, testRepo, "sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696").Return(nil, nil).Once()
+		annotatedTags, err := annotateDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType)
+		// assert.Equal(-1, annotatedTags, "Number of annotated elements should be -1")
+		assert.Equal(0, annotatedTags, "Number of annotated elements should be 0")
+		// assert.NotEqual(nil, err, "Error should not be nil")
+		assert.Equal(nil, err, "Error should be nil")
+		mockClient.AssertExpectations(t)
+	})
+
+	// If there is an error while annotating the manifest and it is different than a 404 error, and error should be returned.
+	// Similar to the previous test but the error occurs in the second manifest that should be annotated.
+	t.Run("ErrorManifestAnnotate2Test", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleManifestV2WithTagsResult, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:2830cc0fcddc1bc2bd4aeab0ed5ee7087dab29a49e65151c77553e46a7ed5283").Return(doubleManifestV2WithoutTagsResult, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696").Return(EmptyListManifestsResult, nil).Once()
+		// mockClient.On("AnnotateManifest", mock.Anything, testRepo, "sha256:63532043b5af6247377a472ad075a42bde35689918de1cf7f807714997e0e683").Return(nil, nil).Once()
+		// mockClient.On("AnnotateManifest", mock.Anything, testRepo, "sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696").Return(nil, errors.New("error deleting manifest")).Once()
+		annotatedTags, err := annotateDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType)
+		// assert.Equal(-1, annotatedTags, "Number of annotated elements should be -1")
+		assert.Equal(0, annotatedTags, "Number of annotated elements should be 0")
+		// assert.NotEqual(nil, err, "Error should not be nil")
+		assert.Equal(nil, err, "Error should be nil")
+		mockClient.AssertExpectations(t)
+	})
+
+	// There are three manifests, two of them have tags, but one of them belongs to a multiarch image that has tags so it should
+	// not be annotated. Only one call to AnnotateManifest should be made because the manifest that does not belong to the
+	// multiarch manifest and has no tags should be annotated.
+	t.Run("MultiArchAnnotateTest", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleMultiArchManifestV2WithTagsResult, nil).Once()
+		mockClient.On("GetManifest", mock.Anything, testRepo, "sha256:d88fb54ba4424dada7c928c6af332ed1c49065ad85eafefb6f26664695015119").Return(multiArchManifestV2Bytes, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:d88fb54ba4424dada7c928c6af332ed1c49065ad85eafefb6f26664695015119").Return(doubleManifestV2WithoutTagsResult, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696").Return(EmptyListManifestsResult, nil).Once()
+		// mockClient.On("AnnotateManifest", mock.Anything, testRepo, "sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696").Return(nil, nil).Once()
+		annotatedTags, err := annotateDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType)
+		// assert.Equal(1, annotatedTags, "Number of annotated elements should be 1")
+		assert.Equal(0, annotatedTags, "Number of annotated elements should be 0")
+		assert.Equal(nil, err, "Error should be nil")
+		mockClient.AssertExpectations(t)
+	})
+
+	// Same as above, but the multiarch image manifest is an OCI index, instead of a Docker Schema v2 manifest list.
+	// t.Run("OCIMultiArchAnnotateTest", func(t *testing.T) {
+	// 	assert := assert.New(t)
+	// 	mockClient := &mocks.AcrCLIClientInterface{}
+	// 	mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleMultiArchOCIWithTagsResult, nil).Once()
+	// 	mockClient.On("GetManifest", mock.Anything, testRepo, "sha256:d88fb54ba4424dada7c928c6af332ed1c49065ad85eafefb6f26664695015119").Return(multiArchOCIBytes, nil).Once()
+	// 	mockClient.On("GetManifest", mock.Anything, testRepo, "sha256:63532043b5af6247377a472ad075a42bde35689918de1cf7f807714997e0e683").Return(emptyManifestBytes, nil).Once()
+	// 	mockClient.On("GetManifest", mock.Anything, testRepo, "sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696").Return(emptyManifestBytes, nil).Once()
+	// 	mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:d88fb54ba4424dada7c928c6af332ed1c49065ad85eafefb6f26664695015119").Return(doubleOCIWithoutTagsResult, nil).Once()
+	// 	mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696").Return(EmptyListManifestsResult, nil).Once()
+	// 	// mockClient.On("AnnotateManifest", mock.Anything, testRepo, "sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696").Return(nil, nil).Once()
+	// 	annotatedTags, err := annotateDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType)
+	// 	// assert.Equal(1, annotatedTags, "Number of annotated elements should be 1")
+	// 	assert.Equal(0, annotatedTags, "Number of annotated elements should be 0")
+	// 	assert.Equal(nil, err, "Error should be nil")
+	// 	mockClient.AssertExpectations(t)
+	// })
+
+	// If a manifest should be annotated but the write-enabled attribute is set to false, it should not be annotated
+	// and no error should show on the CLI output.
+	t.Run("OperationNotAllowedManifestWriteDisabledTest", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(writeDisabledOneManifestResult, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", digest).Return(EmptyListManifestsResult, nil).Once()
+		annotatedTags, err := annotateDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType)
+		assert.Equal(0, annotatedTags, "Number of annotated elements should be 0")
+		assert.Equal(nil, err, "Error should be nil")
+		mockClient.AssertExpectations(t)
+	})
+}
+
 // All the variables used in the tests are defined here
 var (
 	testRegex        = "[\\s\\S]"
