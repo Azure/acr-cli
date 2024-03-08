@@ -284,7 +284,7 @@ func getManifestsToAnnotate(ctx context.Context, acrClient api.AcrCLIClientInter
 				if err != nil {
 					return nil, err
 				}
-			} else {
+			} else if *(*manifest.ChangeableAttributes).WriteEnabled {
 				manifestsToAnnotate = append(manifestsToAnnotate, manifest)
 			}
 		}
@@ -336,4 +336,100 @@ func doNotAnnotateDependantManifests(ctx context.Context, manifest acr.ManifestA
 		}
 	}
 	return nil
+}
+
+// dryRunAnnotate outputs everything that would be annotated if the annotate command was executed
+func dryRunAnnotate(ctx context.Context,
+	acrClient api.AcrCLIClientInterface,
+	loginURL string,
+	repoName string,
+	artifactType string,
+	filter string,
+	untagged bool,
+	regexMatchTimeout uint64) (int, int, error) {
+
+	annotatedTagsCount := 0
+	annotatedManifestsCount := 0
+
+	// In order to keep track if a manifest would get annotated, a map is defined that as a key has the manifest
+	// digest and as the value, the number of tags (referencing said manifest) that were annotated.
+	annotatedTags := map[string]int{}
+	fmt.Printf("Tags for this repository would be deleted: %s\n", repoName)
+
+	regex, err := buildRegexFilter(filter, regexMatchTimeout)
+	if err != nil {
+		return -1, -1, err
+	}
+
+	lastTag := ""
+	// The loop to get the annotated tags follows the same logic as the one in the annotateTags function
+	for {
+		tagsToAnnotate, newLastTag, err := getTagsToAnnotate(ctx, acrClient, repoName, regex, lastTag)
+		if err != nil {
+			return -1, -1, err
+		}
+		lastTag = newLastTag
+		if tagsToAnnotate != nil {
+			for _, tag := range *tagsToAnnotate {
+				// For every tag that would be annotated, first check if it exists in the map. If it doesn't, add a new key
+				// with value 1 and if it does, just add 1 to the existent value.
+				annotatedTags[*tag.Digest]++
+				fmt.Printf("%s/%s:%s\n", loginURL, repoName, *tag.Name)
+				annotatedTagsCount++
+			}
+		}
+		if len(lastTag) == 0 {
+			break
+		}
+	}
+	if untagged {
+		fmt.Printf("Manifests for this repository would be annotated: %s\n", repoName)
+		// The tagsCount contains a map that for every digest contains how many tags are referencing it.
+		tagsCount, err := countTagsByManifest(ctx, acrClient, repoName)
+		if err != nil {
+			return -1, -1, err
+		}
+		lastManifestDigest := ""
+		resultManifests, err := acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
+		if err != nil {
+			if resultManifests != nil && resultManifests.Response.Response != nil && resultManifests.StatusCode == http.StatusNotFound {
+				fmt.Printf("%s repository not found\n", repoName)
+				return 0, 0, nil
+			}
+			return -1, -1, err
+		}
+		// This set will do the check: if a key is present, then the corresponding manifest should not be annotated because
+		// it is referenced by a multiarch manifest.
+		doNotAnnotate := set.New[string]()
+		candidatesToAnnotate := []acr.ManifestAttributesBase{}
+		for resultManifests != nil && resultManifests.ManifestsAttributes != nil {
+			manifests := *resultManifests.ManifestsAttributes
+			for _, manifest := range manifests {
+				if tagsCount[*manifest.Digest] != annotatedTags[*manifest.Digest] {
+					// If the number of tags asdsociated with the manifest is not equal to the number of tags
+					// to be annotated, the said manifest will still have tags remaining and we will consider if it has any
+					// dependant manifests.
+					err := doNotAnnotateDependantManifests(ctx, manifest, doNotAnnotate, acrClient, repoName)
+					if err != nil {
+						return -1, -1, err
+					}
+				}
+			}
+			// Get the last manifest digest from the last manifest from manifests
+			lastManifestDigest = *manifests[len(manifests)-1].Digest
+			// Use this new digest to find next batch of manifests
+			resultManifests, err = acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
+			if err != nil {
+				return -1, -1, err
+			}
+		}
+		// Just print manifests that would be annotated
+		for _, manifest := range candidatesToAnnotate {
+			if !doNotAnnotate.Contains(*manifest.Digest) {
+				fmt.Printf("%s/%s@%s\n", loginURL, repoName, *manifest.Digest)
+				annotatedManifestsCount++
+			}
+		}
+	}
+	return annotatedTagsCount, annotatedManifestsCount, nil
 }
