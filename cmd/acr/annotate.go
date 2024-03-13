@@ -42,7 +42,7 @@ type annotateParameters struct {
 	filters       []string
 	filterTimeout uint64
 	artifactType  string
-	annotation    string
+	annotations   []string
 	untagged      bool
 	dryRun        bool
 	concurrency   int
@@ -92,7 +92,7 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 						fmt.Printf("Specified concurrency value too large. Set to maximum value: %d \n", maxPoolSize)
 					}
 
-					singleAnnotatedTagsCount, err := annotateTags(ctx, acrClient, poolSize, loginURL, repoName, annotateParams.artifactType, tagRegex, annotateParams.filterTimeout)
+					singleAnnotatedTagsCount, err := annotateTags(ctx, acrClient, poolSize, loginURL, repoName, annotateParams.artifactType, annotateParams.annotations, tagRegex, annotateParams.filterTimeout)
 					if err != nil {
 						return errors.Wrap(err, "Failed to annotate tags")
 					}
@@ -100,7 +100,7 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 					singleAnnotatedManifestsCount := 0
 					// If the untagged flag is set, then also manifests are deleted.
 					if annotateParams.untagged {
-						singleAnnotatedManifestsCount, err = annotateDanglingManifests(ctx, acrClient, poolSize, loginURL, repoName, annotateParams.artifactType)
+						singleAnnotatedManifestsCount, err = annotateDanglingManifests(ctx, acrClient, poolSize, loginURL, repoName, annotateParams.artifactType, annotateParams.annotations)
 						if err != nil {
 							return errors.Wrap(err, "Failed to annotated manifests")
 						}
@@ -136,14 +136,14 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 	cmd.Flags().StringArrayVarP(&annotateParams.filters, "filter", "f", nil, "Specify the repository and a regular expression filter for the tag name. If a tag matches the filter, it will be annotated. Note: If backtracking is used in the regexp it's possible for the expression to run into an infinite loop. The default timeout is set to 1 minute for evaluation of any filter expression. Use the '--filter-timeout-seconds' option to set a different value")
 	cmd.Flags().Uint64Var(&annotateParams.filterTimeout, "filter-timeout-seconds", defaultRegexpMatchTimeoutSeconds, "This limits the evaluation of the regex filter, and will return a timeout error if this duration is exceeded during a single evaluation. If written incorrectly a regexp filter with backtracking can result in an infinite loop")
 	cmd.Flags().StringVar(&annotateParams.artifactType, "artifact-type", "", "The configurable artifact type for an organization")
-	cmd.Flags().StringVar(&annotateParams.annotation, "annotation", "", "The configurable annotation key value that can be specified one or more times")
+	cmd.Flags().StringSliceVarP(&annotateParams.annotations, "annotations", "a", []string{}, "The configurable annotation key value that can be specified one or more times")
 	cmd.Flags().BoolVar(&annotateParams.untagged, "untagged", false, "If the untagged flag is set, all the manifests that do not have any tags associated to them will also be annotated, except if they belong to a manifest list that contains at least one tag")
 	cmd.Flags().BoolVar(&annotateParams.dryRun, "dry-run", false, "If the dry-run flag is set, no manifest or tag will be annotated. The output would be the same as if they were annotated")
 	cmd.Flags().IntVar(&annotateParams.concurrency, "concurrency", defaultPoolSize, annotatedConcurrencyDescription)
 	cmd.Flags().BoolP("help", "h", false, "Print usage")
 	cmd.MarkFlagRequired("filter")
 	cmd.MarkFlagRequired("artifact-type")
-	cmd.MarkFlagRequired("annotation")
+	cmd.MarkFlagRequired("annotations")
 	return cmd
 }
 
@@ -153,6 +153,7 @@ func annotateTags(ctx context.Context,
 	poolSize int, loginUrl string,
 	repoName string,
 	artifactType string,
+	annotations []string,
 	tagFilter string,
 	regexpMatchTimeoutSeconds uint64) (int, error) {
 
@@ -238,7 +239,7 @@ func getTagsToAnnotate(ctx context.Context,
 
 // annotateDanglingManifests annotates all manifests that do not have any tags associated with them except the ones
 // that are referenced by a multiarch manifest
-func annotateDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, poolSize int, loginURL string, repoName string, artifactType string) (int, error) {
+func annotateDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, poolSize int, loginURL string, repoName string, artifactType string, annotations []string) (int, error) {
 	// Contrary to getTagsToAnnotate, getManifestsToAnnotate gets all the manifests at once.
 	// This was done because if there is a manifest that has no tag but is referenced by a multiarch manifest that has tags then it
 	// should not be annotated.
