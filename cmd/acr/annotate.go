@@ -111,12 +111,12 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 					annotatedManifestsCount += singleAnnotatedManifestsCount
 				} else {
 					// No tag or manifest will be annotated but the counters will still be updated
-					// singleAnnotatedTagsCount, singleAnnotatedManifestsCount, err := dryRunAnnotate(ctx, acrClient, loginURL, repoName, annotateParams.artifactType, tagRegex, annotateParams.untagged, annotateParams.filterTimeout)
-					// if err != nil {
-					// 	return errors.Wrap(err, "Failed to dry-run annotate")
-					// }
-					// annotatedTagsCount += singleAnnotatedTagsCount
-					// annotatedManifestsCount += singleAnnotatedManifestsCount
+					singleAnnotatedTagsCount, singleAnnotatedManifestsCount, err := dryRunAnnotate(ctx, acrClient, loginURL, repoName, annotateParams.artifactType, tagRegex, annotateParams.untagged, annotateParams.filterTimeout)
+					if err != nil {
+						return errors.Wrap(err, "Failed to dry-run annotate")
+					}
+					annotatedTagsCount += singleAnnotatedTagsCount
+					annotatedManifestsCount += singleAnnotatedManifestsCount
 					fmt.Printf("Dry run, needs to be uncommented after implemented")
 				}
 			}
