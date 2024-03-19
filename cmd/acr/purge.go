@@ -176,8 +176,8 @@ func newPurgeCmd(rootParams *rootParameters) *cobra.Command {
 
 // purgeTags deletes all tags that are older than the ago value and that match the tagFilter string.
 func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, poolSize int, loginURL string, repoName string, ago string, tagFilter string, keep int, regexpMatchTimeoutSeconds uint64) (int, error) {
-	fmt.Printf("Deleting tags for repository: %s\n", repoName)
-	agoDuration, err := parseDuration(ago)
+	fmt.Printf("Deleting tags for repository: %s\n", repoName) // repoName = "bar"
+	agoDuration, err := parseDuration(ago)                     // agoDuration = 0
 	if err != nil {
 		return -1, err
 	}
@@ -198,6 +198,11 @@ func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, poolSiz
 	// GetTagsToDelete will return an empty lastTag when there are no more tags.
 	for {
 		tagsToDelete, newLastTag, newSkippedTagsCount, err := getTagsToDelete(ctx, acrClient, repoName, tagRegex, timeToCompare, lastTag, keep, skippedTagsCount)
+		// tagsToDelete only has 1
+		//		type acr.TagAttributesBase, Name: *"v1-c-local.test"
+		// newLastTag = ""
+		// newSkippedTagsCount = 0
+		// err = nil
 		if err != nil {
 			return -1, err
 		}
@@ -205,6 +210,7 @@ func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, poolSiz
 		skippedTagsCount = newSkippedTagsCount
 		if tagsToDelete != nil {
 			count, purgeErr := purger.PurgeTags(ctx, tagsToDelete)
+			// Deleted foo.azurecr.io/bar:v1-c-local.test
 			if purgeErr != nil {
 				return -1, purgeErr
 			}
@@ -358,6 +364,11 @@ func getTagsToDelete(ctx context.Context,
 	var matches bool
 	var lastUpdateTime time.Time
 	resultTags, err := acrClient.GetAcrTags(ctx, repoName, "timedesc", lastTag)
+	// resultTags = acr.RepositoryTagsType
+	//		Response: autorest.Response -> net/http.Response, StatusCode: 200
+	//		Registry: foo.azurecr.io
+	//		ImageName: bar
+	//		TagsAttributes: []acr.TagAttributesBase, len 4
 	if err != nil {
 		if resultTags != nil && resultTags.Response.Response != nil && resultTags.StatusCode == http.StatusNotFound {
 			fmt.Printf("%s repository not found\n", repoName)
