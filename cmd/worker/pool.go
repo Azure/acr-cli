@@ -46,3 +46,30 @@ func (p *pool) start(ctx context.Context, job purgeJob, acrClient api.AcrCLIClie
 		}
 	}()
 }
+
+// starts a goroutine to process annotateJob.
+func (p *pool) startAnnotate(ctx context.Context, job annotateJob, acrClient api.AcrCLIClientInterface, errChan chan error, wg *sync.WaitGroup, succ *int64) {
+	select {
+	case <-ctx.Done():
+		// Return when context is canceled
+		return
+	case p.sem <- struct{}{}: // Acquire a semaphore
+	}
+
+	wg.Add(1)
+	go func() {
+		// Release a semaphore
+		defer func() {
+			<-p.sem
+		}()
+		defer wg.Done()
+
+		err := job.processAnnotate(ctx, acrClient)
+		// If error occurs, put error in errChan, otherwise increase the success count
+		if err != nil {
+			errChan <- err
+		} else {
+			atomic.AddInt64(succ, 1)
+		}
+	}()
+}

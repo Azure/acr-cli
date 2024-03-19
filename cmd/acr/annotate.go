@@ -69,6 +69,14 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 			if err != nil {
 				return err
 			}
+
+			orasClient, err := api.GetORASClientWithAuth(loginURL, annotateParams.username, annotateParams.password, annotateParams.configs)
+			if err != nil {
+				return err
+			} else {
+				fmt.Println("oras auth ok?")
+			}
+			orasClient.Annotate(context.Background(), "asdf", "asdf", annotateParams.artifactType, map[string]string{})
 			// A map is used to collect the regex tags for every repository.
 			tagFilters, err := collectTagFilters(ctx, annotateParams.filters, acrClient.AutorestClient, annotateParams.filterTimeout)
 			if err != nil {
