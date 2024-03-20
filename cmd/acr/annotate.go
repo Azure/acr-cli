@@ -69,6 +69,14 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 			if err != nil {
 				return err
 			}
+
+			orasClient, err := api.GetORASClientWithAuth(loginURL, annotateParams.username, annotateParams.password, annotateParams.configs)
+			if err != nil {
+				return err
+			} else {
+				fmt.Println("oras auth ok?")
+			}
+			orasClient.Annotate(context.Background(), "asdf", "asdf", annotateParams.artifactType, map[string]string{})
 			// A map is used to collect the regex tags for every repository.
 			tagFilters, err := collectTagFilters(ctx, annotateParams.filters, acrClient.AutorestClient, annotateParams.filterTimeout)
 			if err != nil {
@@ -168,7 +176,8 @@ func annotateTags(ctx context.Context,
 	annotatedTagsCount := 0
 
 	// In order to only have a limited amount of http requests, an annotator is used that will start goroutines to annotate tags.
-	// annotator := worker.NewAnnotator(poolSize, acrClient, loginURL, repoName)
+	// pass orasClient instead of acrClient
+	annotator := worker.NewAnnotator(poolSize, acrClient, loginURL, repoName, artifactType, annotations)
 
 	for {
 		// GetTagsToAnnotate will return an empty lastTag when there are no more tags.

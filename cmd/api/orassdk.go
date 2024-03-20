@@ -6,14 +6,9 @@ package api
 import (
 	"context"
 	"fmt"
-	"net/http"
 
-	"github.com/pkg/errors"
 	orasauth "github.com/Azure/acr-cli/auth/oras"
-	"oras.land/oras-go/v2/errdef"
 	"oras.land/oras-go/v2/registry/remote"
-	"oras.land/oras-go/v2/registry/remote/auth"
-	"oras.land/oras-go/v2/registry/remote/retry"
 )
 
 // The ORASClient wraps the oras-go sdk and is used for interacting with artifacts in a registry.
@@ -23,19 +18,24 @@ type ORASClient struct {
 }
 
 func (o *ORASClient) Annotate(ctx context.Context, repoName string, reference string, artifactType string, annotationsArg map[string]string) error {
-	// do the equivalent of
-	// // prepare manifest
+	// dst, err := o.GetTarget(reference)
+    // if err != nil {
+    //     return err
+    // }
+	
+	// // do the equivalent of
+	// // // prepare manifest
 	// store, err := file.New("")
 	// if err != nil {
-	//	return err
+	// 	return err
 	// }
-	//defer store.Close()
+	// defer store.Close()
 	// graphCopyOptions := oras.DefaultCopyGraphOptions
 	// packOpts := oras.PackManifestOptions{
-	//	Subject:             &subject,
-	//	ManifestAnnotations: annotations[option.AnnotationManifest],
-	//
-	//}
+	// 	Subject:             &subject,
+	// 	ManifestAnnotations: annotations[option.AnnotationManifest],
+	
+	// }
 	// oras attach --artifact-type <type> ref --annotation k=v
 	// oras.PackManifest(ctx, store, oras.PackManifestVersion1_1_RC4, opts.artifactType, packOpts)
 	// graphCopyOptions.FindSuccessors = func(ctx context.Context, fetcher content.Fetcher, node ocispec.Descriptor) ([]ocispec.Descriptor, error) {
@@ -53,18 +53,19 @@ func (o *ORASClient) Annotate(ctx context.Context, repoName string, reference st
 	// 	return content.Successors(ctx, fetcher, node)
 	// }
 	// oras.CopyGraph(ctx, store, dst, root, graphCopyOptions)
+	fmt.Sprintf("Annotating reference: %s", reference)
 	return nil
 }
 
 // getTarget gets an oras remote.Repository object that refers to the target of our annotation request
-func getTarget(reference string) (repo *remote.Repository, err error) {
-	// repo, err = remote.NewRepository(reference)
-	// if err != nil {
-	// 	if errors.Unwrap(err) == errdef.ErrInvalidReference {
-	// 		return nil, fmt.Errorf("%q: %v", reference, err)
-	// 	}
-	// 	return nil, err
-	// }
+func (o *ORASClient) getTarget(reference string) (repo *remote.Repository, err error) {
+	repo, err = remote.NewRepository(reference)
+	if err != nil {
+		// if errors.Unwrap(err) == errdef.ErrInvalidReference {
+		// 	return nil, fmt.Errorf("%q: %v", reference, err)
+		// }
+		return nil, err
+	}
 	// registry := repo.Reference.Registry
 	// //repo.PlainHTTP = opts.isPlainHttp(registry)
 	// //repo.HandleWarning = opts.handleWarning(registry, logger)
@@ -72,60 +73,31 @@ func getTarget(reference string) (repo *remote.Repository, err error) {
 	// // if repo.Client, err = opts.authClient(registry, common.Debug); err != nil {
 	// // 	return nil, err
 	// // }
-	// repo.SkipReferrersGC = true
-	// repo.SetReferrersCapability(true)
-	// return repo, nil
-	return nil, nil
+	repo.SkipReferrersGC = true
+	repo.Client = o.client // remote repo reference w/ client set on top
+	repo.SetReferrersCapability(true)
+	return repo, nil
 }
 
-
-func (o *ORASClient) GetORASClientWithAuth(loginURL string, username string, password string, configs []string) (*ORASClient, error) {
-// 	opts := orasauth.ClientOptions{}
-// 	client := orasauth.NewClient(opts)
-// }
-	if username == "" && password == "" {
+func GetORASClientWithAuth(loginURL string, username string, password string, configs []string) (*ORASClient, error) {
+	// 	opts := orasauth.ClientOptions{}
+	// 	client := orasauth.NewClient(opts)
+	// }
+	clientOpts := orasauth.ClientOptions{}
+	if username != "" && password != "" {
+		clientOpts.Credential = orasauth.Credential(username, password)
+	} else {
 		store, err := oras.NewStore(configs...)
 		if err != nil {
-			return nil, errors.Wrap(err, "error resolving authentication")
+			return nil, err
 		}
-		cred, err := store.Credential(context.Background(), loginURL)
-		if err != nil {
-			return nil, errors.Wrap(err, "error resolving authentication")
-		}
-		username = cred.Username
-		password = cred.Password
-
-		// fallback to refresh token if it is available
-		if password == "" && cred.RefreshToken != "" {
-			password = cred.RefreshToken
-		}
+		clientOpts.CredentialStore = store
 	}
-	// If the password is empty then the authentication failed.
-	if password == "" {
-		return nil, errors.New("unable to resolve authentication, missing identity token or password")
-	}
-	if username == "" || username == "00000000-0000-0000-0000-000000000000" {
-		// // If the username is empty an ACR refresh token was used.
-		// var err error
-		// acrClient, err = newAcrCLIClientWithBearerAuth(loginURL, password)
-		// if err != nil {
-		// 	return nil, errors.Wrap(err, "error resolving authentication")
-		// }
-		// return &acrClient, nil
-		return nil, nil
-	}
-
-	// if we made it here we are logging in with username and password
-	cred := orasauth.Credential(username, password)
-	c := orasauth.NewClient(oras.ClientOptions{
-		Credential: cred,
-		Debug:      opts.debug,
-	})
+	c := orasauth.NewClient(clientOpts)
 	orasClient := ORASClient{
 		client: c,
 	}
 	return &orasClient, nil
-
 }
 
 // ORASClientInterface defines the required methods that the acr-cli will need to use with ORAS.
