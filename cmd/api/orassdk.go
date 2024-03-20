@@ -87,7 +87,7 @@ func GetORASClientWithAuth(loginURL string, username string, password string, co
 	if username != "" && password != "" {
 		clientOpts.Credential = orasauth.Credential(username, password)
 	} else {
-		store, err := oras.NewStore(configs...)
+		store, err := orasauth.NewStore(configs...)
 		if err != nil {
 			return nil, err
 		}

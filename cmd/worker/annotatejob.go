@@ -16,7 +16,7 @@ import (
 )
 
 type annotateJob interface {
-	processAnnotate(context.Context, api.AcrCLIClientInterface) error
+	processAnnotate(context.Context, api.ORASClientInterface) error
 }
 
 type annotateJobBase struct {
@@ -68,26 +68,26 @@ func newAnnotateTagJob(loginURL string, repoName string, artifactType string, an
 }
 
 // process calls acrClient to annotate a manifest.
-func (job *annotateManifestJob) processAnnotate(ctx context.Context, acrClient api.AcrCLIClientInterface) error {
-	resp, err := acrClient.DeleteManifest(ctx, job.repoName, job.digest)
+func (job *annotateManifestJob) processAnnotate(ctx context.Context, orasClient api.ORASClientInterface) error {
+	err := orasClient.Annotate(ctx, job.repoName, job.digest, job.artifactType, job.annotations)
 	if err == nil {
 		fmt.Printf("Deleted %s/%s@%s\n", job.loginURL, job.repoName, job.digest)
 		return nil
 	}
 
-	if resp != nil && resp.Response != nil && resp.StatusCode == http.StatusNotFound {
-		// If the manifest is not found it can be assumed to have been deleted.
-		fmt.Printf("Skipped %s/%s@%s, HTTP status: %d\n", job.loginURL, job.repoName, job.digest, resp.StatusCode)
-		return nil
-	}
+	// if resp != nil && resp.Response != nil && resp.StatusCode == http.StatusNotFound {
+	// 	// If the manifest is not found it can be assumed to have been deleted.
+	// 	fmt.Printf("Skipped %s/%s@%s, HTTP status: %d\n", job.loginURL, job.repoName, job.digest, resp.StatusCode)
+	// 	return nil
+	// }
 
 	return err
 	// return nil
 }
 
 // process calls acrClient to annotate a tag.
-func (job *annotateTagJob) processAnnotate(ctx context.Context, acrClient api.AcrCLIClientInterface) error {
-	resp, err := acrClient.DeleteAcrTag(ctx, job.repoName, job.tag)
+func (job *annotateTagJob) processAnnotate(ctx context.Context, orasClient api.ORASClientInterface) error {
+	resp, err := orasClient.Annotate(ctx, job.repoName, job.tag)
 	if err == nil {
 		fmt.Printf("Deleted %s/%s:%s\n", job.loginURL, job.repoName, job.tag)
 		return nil

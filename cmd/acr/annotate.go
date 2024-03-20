@@ -100,7 +100,7 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 						fmt.Printf("Specified concurrency value too large. Set to maximum value: %d \n", maxPoolSize)
 					}
 
-					singleAnnotatedTagsCount, err := annotateTags(ctx, acrClient, poolSize, loginURL, repoName, annotateParams.artifactType, annotateParams.annotations, tagRegex, annotateParams.filterTimeout)
+					singleAnnotatedTagsCount, err := annotateTags(ctx, acrClient, orasClient, poolSize, loginURL, repoName, annotateParams.artifactType, annotateParams.annotations, tagRegex, annotateParams.filterTimeout)
 					if err != nil {
 						return errors.Wrap(err, "Failed to annotate tags")
 					}
@@ -158,6 +158,7 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 // annotateTags annotates all tags that match the tagFilter string.
 func annotateTags(ctx context.Context,
 	acrClient api.AcrCLIClientInterface,
+	orasClient oras.ORASClientInterface,
 	poolSize int, loginUrl string,
 	repoName string,
 	artifactType string,
@@ -177,7 +178,7 @@ func annotateTags(ctx context.Context,
 
 	// In order to only have a limited amount of http requests, an annotator is used that will start goroutines to annotate tags.
 	// pass orasClient instead of acrClient
-	annotator := worker.NewAnnotator(poolSize, acrClient, loginURL, repoName, artifactType, annotations)
+	annotator := worker.NewAnnotator(poolSize, orasClient, loginURL, repoName, artifactType, annotations)
 
 	for {
 		// GetTagsToAnnotate will return an empty lastTag when there are no more tags.
@@ -187,11 +188,11 @@ func annotateTags(ctx context.Context,
 		}
 		lastTag = newLastTag
 		if tagsToAnnotate != nil {
-			// count, annotateErr := annotator.AnnotateTags(ctx, tagsToAnnotate)
-			// if annotateErr != nil {
-			// 	return -1, annotateErr
-			// }
-			// annotatedTagsCount += count
+			count, annotateErr := annotator.AnnotateTags(ctx, tagsToAnnotate)
+			if annotateErr != nil {
+				return -1, annotateErr
+			}
+			annotatedTagsCount += count
 			annotatedTagsCount += len(*tagsToAnnotate)
 		}
 		if len(lastTag) == 0 {

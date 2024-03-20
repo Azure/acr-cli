@@ -6,12 +6,13 @@ import (
 
 	"github.com/Azure/acr-cli/acr"
 	"github.com/Azure/acr-cli/cmd/api"
+	// "oras.land/oras-go/v2/registry/remote"
 )
 
 // Annotator annotates tags or manifests concurrently.
 type Annotator struct {
 	pool         *pool
-	acrClient    api.AcrCLIClientInterface
+	orasClient	 api.ORASClientInterface
 	loginURL     string
 	repoName     string
 	artifactType string
@@ -19,10 +20,11 @@ type Annotator struct {
 }
 
 // NewAnnotator creates a new Annotator.
-func NewAnnotator(poolSize int, acrClient api.AcrCLIClientInterface, loginURL string, repoName string, artifactType string, annotations []string) *Annotator {
+func NewAnnotator(poolSize int, orasClient api.ORASClientInterface, loginURL string, repoName string, artifactType string, annotations []string) *Annotator {
 	return &Annotator{
 		pool:         newPool(poolSize),
-		acrClient:    acrClient,
+		// acrClient:    acrClient,
+		orasClient:	  orasClient,
 		loginURL:     loginURL,
 		repoName:     repoName,
 		artifactType: artifactType,
@@ -44,7 +46,7 @@ func (a *Annotator) process(ctx context.Context, jobs *[]annotateJob) (int, erro
 	go func() {
 		defer wg.Done()
 		for _, job := range *jobs {
-			a.pool.startAnnotate(ctx, job, a.acrClient, errChan, &wg, &succ)
+			a.pool.startAnnotate(ctx, job, a.orasClient, errChan, &wg, &succ)
 		}
 	}()
 

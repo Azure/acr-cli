@@ -13,6 +13,8 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
+// TODO: add mockOrasClient to anywhere that annotateTags is called
+
 // TestAnnotateTags contains all the tests regarding the annotateTags method which is called when the --dry-run flag
 // is not set.
 func TestAnnotateTags(t *testing.T) {
@@ -21,8 +23,9 @@ func TestAnnotateTags(t *testing.T) {
 	t.Run("EmptyRepositoryTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
+		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(EmptyListTagsResult, nil).Once()
-		annotatedTags, err := annotateTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], testRegex, defaultRegexpMatchTimeoutSeconds)
+		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], testRegex, defaultRegexpMatchTimeoutSeconds)
 		assert.Equal(0, annotatedTags, "Number of annotated elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)

@@ -48,7 +48,7 @@ func (p *pool) start(ctx context.Context, job purgeJob, acrClient api.AcrCLIClie
 }
 
 // starts a goroutine to process annotateJob.
-func (p *pool) startAnnotate(ctx context.Context, job annotateJob, acrClient api.AcrCLIClientInterface, errChan chan error, wg *sync.WaitGroup, succ *int64) {
+func (p *pool) startAnnotate(ctx context.Context, job annotateJob, orasClient api.ORASClientInterface, errChan chan error, wg *sync.WaitGroup, succ *int64) {
 	select {
 	case <-ctx.Done():
 		// Return when context is canceled
@@ -64,7 +64,7 @@ func (p *pool) startAnnotate(ctx context.Context, job annotateJob, acrClient api
 		}()
 		defer wg.Done()
 
-		err := job.processAnnotate(ctx, acrClient)
+		err := job.processAnnotate(ctx, orasClient)
 		// If error occurs, put error in errChan, otherwise increase the success count
 		if err != nil {
 			errChan <- err
