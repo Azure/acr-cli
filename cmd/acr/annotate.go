@@ -12,6 +12,7 @@ import (
 
 	"github.com/Azure/acr-cli/acr"
 	"github.com/Azure/acr-cli/cmd/api"
+	"github.com/Azure/acr-cli/cmd/worker"
 	"github.com/Azure/acr-cli/internal/container/set"
 	"github.com/dlclark/regexp2"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
@@ -158,8 +159,9 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 // annotateTags annotates all tags that match the tagFilter string.
 func annotateTags(ctx context.Context,
 	acrClient api.AcrCLIClientInterface,
-	orasClient oras.ORASClientInterface,
-	poolSize int, loginUrl string,
+	orasClient api.ORASClientInterface,
+	poolSize int,
+	loginURL string,
 	repoName string,
 	artifactType string,
 	annotations []string,

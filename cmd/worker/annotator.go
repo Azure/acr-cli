@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"strings"
 	"sync"
 
 	"github.com/Azure/acr-cli/acr"
@@ -12,23 +13,24 @@ import (
 // Annotator annotates tags or manifests concurrently.
 type Annotator struct {
 	pool         *pool
-	orasClient	 api.ORASClientInterface
+	orasClient   api.ORASClientInterface
 	loginURL     string
 	repoName     string
 	artifactType string
-	annotations  []string
+	annotations  map[string]string
 }
 
 // NewAnnotator creates a new Annotator.
 func NewAnnotator(poolSize int, orasClient api.ORASClientInterface, loginURL string, repoName string, artifactType string, annotations []string) *Annotator {
+	annotationsMap := convertListToMap(annotations)
 	return &Annotator{
-		pool:         newPool(poolSize),
+		pool: newPool(poolSize),
 		// acrClient:    acrClient,
-		orasClient:	  orasClient,
+		orasClient:   orasClient,
 		loginURL:     loginURL,
 		repoName:     repoName,
 		artifactType: artifactType,
-		annotations:  annotations,
+		annotations:  annotationsMap,
 	}
 }
 
@@ -86,4 +88,17 @@ func (a *Annotator) AnnotateManifests(ctx context.Context, manifests *[]acr.Mani
 	}
 
 	return a.process(ctx, &jobs)
+}
+
+// convertListToMap takes a list of annotations and converts it into a map, where the keys are the contents before the = and the values
+// are the contents after the =. This is done so ORAS can be used to annotate.
+func convertListToMap(annotations []string) map[string]string {
+	// EOL annotation: "vnd.microsoft.artifact.end-of-life.date=2024-03-21"
+	annotationMap := map[string]string{}
+	for _, annotation := range annotations {
+		arr := strings.Split(annotation, "=")
+		annotationMap[arr[0]] = arr[1]
+	}
+
+	return annotationMap
 }

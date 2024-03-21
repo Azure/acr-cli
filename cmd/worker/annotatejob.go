@@ -6,7 +6,6 @@ package worker
 import (
 	"context"
 	"fmt"
-	"net/http"
 
 	// "fmt"
 	// "net/http"
@@ -24,7 +23,7 @@ type annotateJobBase struct {
 	repoName     string
 	timeCreated  time.Time
 	artifactType string
-	annotations  []string
+	annotations  map[string]string
 }
 
 type annotateManifestJob struct {
@@ -37,7 +36,7 @@ type annotateTagJob struct {
 	tag string
 }
 
-func newAnnotateManifestJob(loginURL string, repoName string, artifactType string, annotations []string, digest string) *annotateManifestJob {
+func newAnnotateManifestJob(loginURL string, repoName string, artifactType string, annotations map[string]string, digest string) *annotateManifestJob {
 	base := annotateJobBase{
 		loginURL:     loginURL,
 		repoName:     repoName,
@@ -52,7 +51,7 @@ func newAnnotateManifestJob(loginURL string, repoName string, artifactType strin
 	}
 }
 
-func newAnnotateTagJob(loginURL string, repoName string, artifactType string, annotations []string, tag string) *annotateTagJob {
+func newAnnotateTagJob(loginURL string, repoName string, artifactType string, annotations map[string]string, tag string) *annotateTagJob {
 	base := annotateJobBase{
 		loginURL:     loginURL,
 		repoName:     repoName,
@@ -87,17 +86,17 @@ func (job *annotateManifestJob) processAnnotate(ctx context.Context, orasClient 
 
 // process calls acrClient to annotate a tag.
 func (job *annotateTagJob) processAnnotate(ctx context.Context, orasClient api.ORASClientInterface) error {
-	resp, err := orasClient.Annotate(ctx, job.repoName, job.tag)
+	err := orasClient.Annotate(ctx, job.repoName, job.tag, job.artifactType, job.annotations)
 	if err == nil {
 		fmt.Printf("Deleted %s/%s:%s\n", job.loginURL, job.repoName, job.tag)
 		return nil
 	}
 
-	if resp != nil && resp.Response != nil && resp.StatusCode == http.StatusNotFound {
-		// If the tag is not found it can be assumed to have been deleted.
-		fmt.Printf("Skipped %s/%s:%s, HTTP status: %d\n", job.loginURL, job.repoName, job.tag, resp.StatusCode)
-		return nil
-	}
+	// if resp != nil && resp.Response != nil && resp.StatusCode == http.StatusNotFound {
+	// 	// If the tag is not found it can be assumed to have been deleted.
+	// 	fmt.Printf("Skipped %s/%s:%s, HTTP status: %d\n", job.loginURL, job.repoName, job.tag, resp.StatusCode)
+	// 	return nil
+	// }
 
 	return err
 }
