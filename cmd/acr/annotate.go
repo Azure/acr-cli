@@ -109,7 +109,7 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 					singleAnnotatedManifestsCount := 0
 					// If the untagged flag is set, then also manifests are deleted.
 					if annotateParams.untagged {
-						singleAnnotatedManifestsCount, err = annotateDanglingManifests(ctx, acrClient, poolSize, loginURL, repoName, annotateParams.artifactType, annotateParams.annotations)
+						singleAnnotatedManifestsCount, err = annotateDanglingManifests(ctx, acrClient, orasClient, poolSize, loginURL, repoName, annotateParams.artifactType, annotateParams.annotations)
 						if err != nil {
 							return errors.Wrap(err, "Failed to annotated manifests")
 						}
@@ -195,7 +195,7 @@ func annotateTags(ctx context.Context,
 				return -1, annotateErr
 			}
 			annotatedTagsCount += count
-			annotatedTagsCount += len(*tagsToAnnotate)
+			// annotatedTagsCount += len(*tagsToAnnotate)
 		}
 		if len(lastTag) == 0 {
 			break
@@ -251,7 +251,8 @@ func getTagsToAnnotate(ctx context.Context,
 
 // annotateDanglingManifests annotates all manifests that do not have any tags associated with them except the ones
 // that are referenced by a multiarch manifest
-func annotateDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, poolSize int, loginURL string, repoName string, artifactType string, annotations []string) (int, error) {
+func annotateDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, orasClient api.ORASClientInterface, poolSize int, loginURL string, repoName string, artifactType string, annotations []string) (int, error) {
+	fmt.Printf("Annotating manifests for repository: %s\n", repoName)
 	// Contrary to getTagsToAnnotate, getManifestsToAnnotate gets all the manifests at once.
 	// This was done because if there is a manifest that has no tag but is referenced by a multiarch manifest that has tags then it
 	// should not be annotated.
@@ -261,14 +262,14 @@ func annotateDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientIn
 	}
 
 	// In order to only have a limited amount of http requests, an annotator is used that will start goroutines to annotate manifests.
-	// annotator := worker.NewAnnotator(poolSize, acrClient, loginURL, repoName)
-	// annotatedManifestsCount, annotateErr := annotator.AnnotateManifests(ctx, manifestsToAnnotate)
-	// if annotateErr != nil {
-	// 	return -1, annotateErr
-	// }
+	annotator := worker.NewAnnotator(poolSize, orasClient, loginURL, repoName, artifactType, annotations)
+	annotatedManifestsCount, annotateErr := annotator.AnnotateManifests(ctx, manifestsToAnnotate)
+	if annotateErr != nil {
+		return annotatedManifestsCount, annotateErr
+	}
 
-	// return annotatedManifestsCount, nil
-	return len(*manifestsToAnnotate), nil
+	return annotatedManifestsCount, nil
+	// return len(*manifestsToAnnotate), nil
 }
 
 // getManifestsToAnnotate gets all the manifests that should be annotated under the scenario that they do not have any tag
@@ -286,7 +287,7 @@ func getManifestsToAnnotate(ctx context.Context, acrClient api.AcrCLIClientInter
 	}
 	// This will act as a set. If a key is present then it should not be annotated because it is referenced by a multiarch manifest.
 	doNotAnnotate := set.New[string]()
-	// var manifestsToAnnotate []acr.ManifestAttributesBase
+	var candidatesToAnnotate []acr.ManifestAttributesBase
 	for resultManifests != nil && resultManifests.ManifestsAttributes != nil {
 		manifests := *resultManifests.ManifestsAttributes
 		for _, manifest := range manifests {
@@ -297,9 +298,12 @@ func getManifestsToAnnotate(ctx context.Context, acrClient api.AcrCLIClientInter
 				if err != nil {
 					return nil, err
 				}
-			} else if *(*manifest.ChangeableAttributes).WriteEnabled {
-				manifestsToAnnotate = append(manifestsToAnnotate, manifest)
+			} else {
+				candidatesToAnnotate = append(candidatesToAnnotate, manifest)
 			}
+			// } else if *(*manifest.ChangeableAttributes).WriteEnabled {
+			// 	manifestsToAnnotate = append(manifestsToAnnotate, manifest)
+			// }
 		}
 
 		// Get the last manifest digest from the last manifest from manifests
@@ -321,6 +325,17 @@ func getManifestsToAnnotate(ctx context.Context, acrClient api.AcrCLIClientInter
 	// 		}
 	// 	}
 	// }
+
+	// Remove all manifests that should not be annotated
+	for i := 0; i < len(candidatesToAnnotate); i++ {
+		if !doNotAnnotate.Contains(*candidatesToAnnotate[i].Digest) {
+			// if a manifest has no tags, is not part of a manifest list and can be deleted then it is added to the
+			// manifestToDelete array.
+			if *(*candidatesToAnnotate[i].ChangeableAttributes).WriteEnabled {
+				manifestsToAnnotate = append(manifestsToAnnotate, candidatesToAnnotate[i])
+			}
+		}
+	}
 
 	return &manifestsToAnnotate, nil
 }
@@ -367,7 +382,7 @@ func dryRunAnnotate(ctx context.Context,
 	// In order to keep track if a manifest would get annotated, a map is defined that as a key has the manifest
 	// digest and as the value, the number of tags (referencing said manifest) that were annotated.
 	annotatedTags := map[string]int{}
-	fmt.Printf("Tags for this repository would be deleted: %s\n", repoName)
+	fmt.Printf("Tags for this repository would be annotated: %s\n", repoName)
 
 	regex, err := buildRegexFilter(filter, regexMatchTimeout)
 	if err != nil {
@@ -425,6 +440,8 @@ func dryRunAnnotate(ctx context.Context,
 					err := doNotAnnotateDependantManifests(ctx, manifest, doNotAnnotate, acrClient, repoName)
 					if err != nil {
 						return -1, -1, err
+					} else {
+						candidatesToAnnotate = append(candidatesToAnnotate, manifest)
 					}
 				}
 			}

@@ -14,9 +14,9 @@ func TestConvertListToMap(t *testing.T) {
 
 	t.Run("Success", func(t *testing.T) {
 		assert := assert.New(t)
-		annotations := []string{"vnd.microsoft.artifact.end-of-life.date=2024-03-21", "testKey=testVal"}
+		annotations := []string{"vnd.microsoft.artifact.lifecycle.end-of-life.date=2024-03-21", "testKey=testVal"}
 		annotationMap := map[string]string{
-			"vnd.microsoft.artifact.end-of-life.date": "2024-03-21",
+			"vnd.microsoft.artifact.lifecycle.end-of-life.date": "2024-03-21",
 			"testKey": "testVal",
 		}
 		// mockClient := &mocks.AcrCLIClientInterface{}

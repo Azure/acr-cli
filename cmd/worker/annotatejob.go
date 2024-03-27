@@ -70,7 +70,7 @@ func newAnnotateTagJob(loginURL string, repoName string, artifactType string, an
 func (job *annotateManifestJob) processAnnotate(ctx context.Context, orasClient api.ORASClientInterface) error {
 	err := orasClient.Annotate(ctx, job.repoName, job.digest, job.artifactType, job.annotations)
 	if err == nil {
-		fmt.Printf("Deleted %s/%s@%s\n", job.loginURL, job.repoName, job.digest)
+		fmt.Printf("Annotated %s/%s@%s\n", job.loginURL, job.repoName, job.digest)
 		return nil
 	}
 
@@ -88,7 +88,7 @@ func (job *annotateManifestJob) processAnnotate(ctx context.Context, orasClient 
 func (job *annotateTagJob) processAnnotate(ctx context.Context, orasClient api.ORASClientInterface) error {
 	err := orasClient.Annotate(ctx, job.repoName, job.tag, job.artifactType, job.annotations)
 	if err == nil {
-		fmt.Printf("Deleted %s/%s:%s\n", job.loginURL, job.repoName, job.tag)
+		fmt.Printf("Annotated %s/%s:%s\n", job.loginURL, job.repoName, job.tag)
 		return nil
 	}
 
