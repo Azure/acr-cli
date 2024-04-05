@@ -96,6 +96,7 @@ func convertListToMap(annotations []string) map[string]string {
 	// EOL annotation: "vnd.microsoft.artifact.end-of-life.date=2024-03-21"
 	annotationMap := map[string]string{}
 	for _, annotation := range annotations {
+		// fmt.Println("annotation = ", annotation)
 		arr := strings.Split(annotation, "=")
 		annotationMap[arr[0]] = arr[1]
 	}

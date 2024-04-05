@@ -4,6 +4,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"testing"
 
@@ -96,8 +97,9 @@ func TestAnnotateTags(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockOrasClient := &mocks.ORASClientInterface{}
+		ref := fmt.Sprintf("%s/%s:latest", testLoginURL, testRepo)
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(OneTagResult, nil).Once()
-		mockOrasClient.On("Annotate", mock.Anything, testRepo, "latest", testArtifactType, annotationMap).Return(nil).Once()
+		mockOrasClient.On("Annotate", mock.Anything, testRepo, ref, testArtifactType, annotationMap).Return(nil).Once()
 		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], "^la.*", defaultRegexpMatchTimeoutSeconds)
 		assert.Equal(1, annotatedTags, "Number of annotated elements should be 1")
 		assert.Equal(nil, err, "Error should be nil")
@@ -112,11 +114,16 @@ func TestAnnotateTags(t *testing.T) {
 		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(OneTagResultWithNext, nil).Once()
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "latest").Return(FourTagsResult, nil).Once()
-		mockOrasClient.On("Annotate", mock.Anything, testRepo, "latest", testArtifactType, annotationMap).Return(nil).Once()
-		mockOrasClient.On("Annotate", mock.Anything, testRepo, "v1", testArtifactType, annotationMap).Return(nil).Once()
-		mockOrasClient.On("Annotate", mock.Anything, testRepo, "v2", testArtifactType, annotationMap).Return(nil).Once()
-		mockOrasClient.On("Annotate", mock.Anything, testRepo, "v3", testArtifactType, annotationMap).Return(nil).Once()
-		mockOrasClient.On("Annotate", mock.Anything, testRepo, "v4", testArtifactType, annotationMap).Return(nil).Once()
+		ref := fmt.Sprintf("%s/%s:latest", testLoginURL, testRepo)
+		mockOrasClient.On("Annotate", mock.Anything, testRepo, ref, testArtifactType, annotationMap).Return(nil).Once()
+		ref = fmt.Sprintf("%s/%s:v1", testLoginURL, testRepo)
+		mockOrasClient.On("Annotate", mock.Anything, testRepo, ref, testArtifactType, annotationMap).Return(nil).Once()
+		ref = fmt.Sprintf("%s/%s:v2", testLoginURL, testRepo)
+		mockOrasClient.On("Annotate", mock.Anything, testRepo, ref, testArtifactType, annotationMap).Return(nil).Once()
+		ref = fmt.Sprintf("%s/%s:v3", testLoginURL, testRepo)
+		mockOrasClient.On("Annotate", mock.Anything, testRepo, ref, testArtifactType, annotationMap).Return(nil).Once()
+		ref = fmt.Sprintf("%s/%s:v4", testLoginURL, testRepo)
+		mockOrasClient.On("Annotate", mock.Anything, testRepo, ref, testArtifactType, annotationMap).Return(nil).Once()
 		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], testRegex, defaultRegexpMatchTimeoutSeconds)
 		assert.Equal(5, annotatedTags, "Number of annotated elements should be 5")
 		assert.Equal(nil, err, "Error should be nil")
@@ -129,7 +136,8 @@ func TestAnnotateTags(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(TagWithLocal, nil).Once()
-		mockOrasClient.On("Annotate", mock.Anything, testRepo, "v1-c-local.test", testArtifactType, annotationMap).Return(nil).Once()
+		ref := fmt.Sprintf("%s/%s:v1-c-local.test", testLoginURL, testRepo)
+		mockOrasClient.On("Annotate", mock.Anything, testRepo, ref, testArtifactType, annotationMap).Return(nil).Once()
 		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], ".*-?local[.].+", defaultRegexpMatchTimeoutSeconds)
 		assert.Equal(1, annotatedTags, "Number of annotated elements should be 1")
 		assert.Equal(nil, err, "Error should be nil")
@@ -143,10 +151,14 @@ func TestAnnotateTags(t *testing.T) {
 		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(OneTagResultWithNext, nil).Once()
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "latest").Return(FourTagsResult, nil).Once()
-		mockOrasClient.On("Annotate", mock.Anything, testRepo, "v1", testArtifactType, annotationMap).Return(nil).Once()
-		mockOrasClient.On("Annotate", mock.Anything, testRepo, "v2", testArtifactType, annotationMap).Return(nil).Once()
-		mockOrasClient.On("Annotate", mock.Anything, testRepo, "v3", testArtifactType, annotationMap).Return(nil).Once()
-		mockOrasClient.On("Annotate", mock.Anything, testRepo, "v4", testArtifactType, annotationMap).Return(nil).Once()
+		ref := fmt.Sprintf("%s/%s:v1", testLoginURL, testRepo)
+		mockOrasClient.On("Annotate", mock.Anything, testRepo, ref, testArtifactType, annotationMap).Return(nil).Once()
+		ref = fmt.Sprintf("%s/%s:v2", testLoginURL, testRepo)
+		mockOrasClient.On("Annotate", mock.Anything, testRepo, ref, testArtifactType, annotationMap).Return(nil).Once()
+		ref = fmt.Sprintf("%s/%s:v3", testLoginURL, testRepo)
+		mockOrasClient.On("Annotate", mock.Anything, testRepo, ref, testArtifactType, annotationMap).Return(nil).Once()
+		ref = fmt.Sprintf("%s/%s:v4", testLoginURL, testRepo)
+		mockOrasClient.On("Annotate", mock.Anything, testRepo, ref, testArtifactType, annotationMap).Return(nil).Once()
 		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], "^v.*", defaultRegexpMatchTimeoutSeconds)
 		assert.Equal(4, annotatedTags, "Number of annotated elements should be 4")
 		assert.Equal(nil, err, "Error should be nil")
