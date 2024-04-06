@@ -9,7 +9,7 @@ require (
 	github.com/dlclark/regexp2 v1.10.0
 	github.com/docker/cli v20.10.16+incompatible
 	github.com/golang-jwt/jwt/v4 v4.5.0
-	github.com/google/uuid v1.5.0
+	github.com/google/uuid v1.6.0
 	github.com/moby/term v0.5.0
 	github.com/opencontainers/image-spec v1.1.0-rc5
 	github.com/pkg/errors v0.9.1
