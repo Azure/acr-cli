@@ -22,19 +22,29 @@ import (
 // The constants for the file are defined here
 const (
 	newAnnotateCmdLongMessage = `acr annotate: annotate images and dangling manifests.`
-	// TODO: write examples of the annotate command for different scenarios (see purge examples)
-	annotateExampleMessage = ``
+	annotateExampleMessage    = `- Annotate all tags that begin with hello in the example.azurecr.io registry inside the hello-world repository
+	acr annotate -r example --filter "hello-world:^hello.*" --annotations "vnd.microsoft.artifact.lifecycle.end-of-life.date=2024-04-09" 
+	--artifact-type "application/vnd.microsoft.artifact.lifecycle"
+
+- Annotate all tags that contain the word test in the tag name in the example.azurecr.io registry inside the hello-world 
+repository, after that, remove the dangling manifests in the same repository
+acr annotate -r example --filter "hello-world:\w*test\w*" --annotations "vnd.microsoft.artifact.lifecycle.end-of-life.date=2024-04-09" 
+--artifact-type "application/vnd.microsoft.artifact.lifecycle" --untagged 
+
+- Annotate all tags that contain the word test in the tag name in the example.azurecr.io registry inside the hello-world
+repository. Two annotations need to be applied.
+acr annotate -r example --filter "hello-world:\w*test\w* --annotations "vnd.microsoft.artifact.lifecycle.end-of-life.date=2024-04-09" 
+--annotations "key=value" --artifact-type "application/vnd.microsoft.artifact.lifecycle" 
+
+- Annotate all tags in the example.azurecr.io registry inside the hello-world repository, with 4 annotate tasks running concurrently
+acr annotate -r example --filter "hello-world:.*" --annotations "vnd.microsoft.artifact.lifecycle.end-of-life.date=2024-04-09" 
+--artifact-type "application/vnd.microsoft.artifact.lifecycle" --concurrency 4
+`
 )
 
 var (
 	annotatedConcurrencyDescription = fmt.Sprintf("Number of concurrent annotate tasks. Range: [1 - %d]", maxPoolSize)
 )
-
-// // Default settings for regexp2
-// const (
-// 	defaultRegexpOptions			regext2.RegexOptions = regexp2.RE2 // This option will turn on compatibility mode so that it uses the group rules in regexp
-
-// )
 
 // annotateParameters defines the parameters that the annotate command uses (including the registry name, username, and password)
 type annotateParameters struct {
