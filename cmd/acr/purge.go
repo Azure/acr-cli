@@ -176,8 +176,8 @@ func newPurgeCmd(rootParams *rootParameters) *cobra.Command {
 
 // purgeTags deletes all tags that are older than the ago value and that match the tagFilter string.
 func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, poolSize int, loginURL string, repoName string, ago string, tagFilter string, keep int, regexpMatchTimeoutSeconds uint64) (int, error) {
-	fmt.Printf("Deleting tags for repository: %s\n", repoName) // repoName = "bar"
-	agoDuration, err := parseDuration(ago)                     // agoDuration = 0
+	fmt.Printf("Deleting tags for repository: %s\n", repoName)
+	agoDuration, err := parseDuration(ago)
 	if err != nil {
 		return -1, err
 	}
