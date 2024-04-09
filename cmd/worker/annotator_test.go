@@ -36,15 +36,4 @@ func TestConvertListToMap(t *testing.T) {
 		assert.NotEqual(nil, err, "Error should not be nil")
 	})
 
-	// t.Run("EmptyRepositoryTest", func(t *testing.T) {
-	// 	assert := assert.New(t)
-	// 	mockClient := &mocks.AcrCLIClientInterface{}
-	// 	mockOrasClient := &mocks.ORASClientInterface{}
-	// 	mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(EmptyListTagsResult, nil).Once()
-	// 	annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], testRegex, defaultRegexpMatchTimeoutSeconds)
-	// 	assert.Equal(0, annotatedTags, "Number of annotated elements should be 0")
-	// 	assert.Equal(nil, err, "Error should be nil")
-	// 	mockClient.AssertExpectations(t)
-	// })
-
 }

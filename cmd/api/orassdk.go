@@ -10,14 +10,8 @@ import (
 	orasauth "github.com/Azure/acr-cli/auth/oras"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"oras.land/oras-go/v2"
-	"oras.land/oras-go/v2/registry/remote"
-
-	// // oras "github.com/oras-project/oras-go"
-
 	"oras.land/oras-go/v2/content/file"
-	// track "oras.land/oras/cmd/oras/internal/display/status/track"
-	// option "oras.land/oras/cmd/oras/internal/option"
-	// "oras.land/oras/internal/graph"
+	"oras.land/oras-go/v2/registry/remote"
 )
 
 const (
@@ -101,7 +95,7 @@ func (o *ORASClient) Annotate(ctx context.Context, repoName string, reference st
 	}
 
 	// Attach
-	_, err = doPush(dst, pack, copy) // pack is thing you push
+	_, err = doPush(dst, pack, copy)
 	if err != nil {
 		return err
 	}
@@ -141,7 +135,7 @@ func (o *ORASClient) getTarget(reference string) (repo *remote.Repository, err e
 	}
 
 	repo.SkipReferrersGC = true
-	repo.Client = o.client // remote repo reference w/ client set on top
+	repo.Client = o.client
 	repo.SetReferrersCapability(true)
 	return repo, nil
 }
