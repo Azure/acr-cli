@@ -99,7 +99,7 @@ func convertListToMap(annotations []string) (map[string]string, error) {
 	for _, annotation := range annotations {
 		arr := strings.Split(annotation, "=")
 		if len(arr) == 1 {
-			return nil, errors.New("Annotation is not a key-value pair")
+			return nil, errors.New("annotation is not a key-value pair")
 		}
 		annotationMap[arr[0]] = arr[1]
 	}
