@@ -3,7 +3,6 @@
 package worker
 
 import (
-	"fmt"
 	"reflect"
 	"testing"
 
@@ -22,9 +21,9 @@ func TestConvertListToMap(t *testing.T) {
 
 		m, _ := convertListToMap(annotations)
 		if reflect.DeepEqual(m, annotationMap) {
-			fmt.Printf("equal")
+			t.Logf("equal")
 		} else {
-			fmt.Printf("not equal")
+			t.Logf("not equal")
 		}
 		assert.Equal(m, annotationMap, "Maps should be equal")
 	})
