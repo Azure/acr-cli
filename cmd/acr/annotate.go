@@ -4,7 +4,6 @@
 package main
 
 import (
-	// "context"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -120,13 +119,12 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 					annotatedManifestsCount += singleAnnotatedManifestsCount
 				} else {
 					// No tag or manifest will be annotated but the counters will still be updated
-					singleAnnotatedTagsCount, singleAnnotatedManifestsCount, err := dryRunAnnotate(ctx, acrClient, loginURL, repoName, annotateParams.artifactType, tagRegex, annotateParams.untagged, annotateParams.filterTimeout)
+					singleAnnotatedTagsCount, singleAnnotatedManifestsCount, err := dryRunAnnotate(ctx, acrClient, loginURL, repoName, tagRegex, annotateParams.untagged, annotateParams.filterTimeout)
 					if err != nil {
 						return errors.Wrap(err, "Failed to dry-run annotate")
 					}
 					annotatedTagsCount += singleAnnotatedTagsCount
 					annotatedManifestsCount += singleAnnotatedManifestsCount
-					fmt.Printf("Dry run, needs to be uncommented after implemented")
 				}
 			}
 
@@ -180,7 +178,10 @@ func annotateTags(ctx context.Context,
 
 	// In order to only have a limited amount of http requests, an annotator is used that will start goroutines to annotate tags.
 	// pass orasClient instead of acrClient
-	annotator := worker.NewAnnotator(poolSize, orasClient, loginURL, repoName, artifactType, annotations)
+	annotator, err := worker.NewAnnotator(poolSize, orasClient, loginURL, repoName, artifactType, annotations)
+	if err != nil {
+		return -1, err
+	}
 
 	for {
 		// GetTagsToAnnotate will return an empty lastTag when there are no more tags.
@@ -262,7 +263,10 @@ func annotateDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientIn
 	}
 
 	// In order to only have a limited amount of http requests, an annotator is used that will start goroutines to annotate manifests.
-	annotator := worker.NewAnnotator(poolSize, orasClient, loginURL, repoName, artifactType, annotations)
+	annotator, err := worker.NewAnnotator(poolSize, orasClient, loginURL, repoName, artifactType, annotations)
+	if err != nil {
+		return -1, err
+	}
 	annotatedManifestsCount, annotateErr := annotator.AnnotateManifests(ctx, manifestsToAnnotate)
 	if annotateErr != nil {
 		return annotatedManifestsCount, annotateErr
@@ -371,7 +375,6 @@ func dryRunAnnotate(ctx context.Context,
 	acrClient api.AcrCLIClientInterface,
 	loginURL string,
 	repoName string,
-	artifactType string,
 	filter string,
 	untagged bool,
 	regexMatchTimeout uint64) (int, int, error) {

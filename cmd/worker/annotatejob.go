@@ -6,9 +6,6 @@ package worker
 import (
 	"context"
 	"fmt"
-
-	// "fmt"
-	// "net/http"
 	"time"
 
 	"github.com/Azure/acr-cli/cmd/api"
@@ -75,14 +72,7 @@ func (job *annotateManifestJob) processAnnotate(ctx context.Context, orasClient 
 		return nil
 	}
 
-	// if resp != nil && resp.Response != nil && resp.StatusCode == http.StatusNotFound {
-	// 	// If the manifest is not found it can be assumed to have been deleted.
-	// 	fmt.Printf("Skipped %s/%s@%s, HTTP status: %d\n", job.loginURL, job.repoName, job.digest, resp.StatusCode)
-	// 	return nil
-	// }
-
 	return err
-	// return nil
 }
 
 // process calls acrClient to annotate a tag.
@@ -93,12 +83,6 @@ func (job *annotateTagJob) processAnnotate(ctx context.Context, orasClient api.O
 		fmt.Printf("Annotated %s/%s:%s\n", job.loginURL, job.repoName, job.tag)
 		return nil
 	}
-
-	// if resp != nil && resp.Response != nil && resp.StatusCode == http.StatusNotFound {
-	// 	// If the tag is not found it can be assumed to have been deleted.
-	// 	fmt.Printf("Skipped %s/%s:%s, HTTP status: %d\n", job.loginURL, job.repoName, job.tag, resp.StatusCode)
-	// 	return nil
-	// }
 
 	return err
 }

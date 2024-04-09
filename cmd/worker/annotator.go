@@ -2,12 +2,12 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
 
 	"github.com/Azure/acr-cli/acr"
 	"github.com/Azure/acr-cli/cmd/api"
-	// "oras.land/oras-go/v2/registry/remote"
 )
 
 // Annotator annotates tags or manifests concurrently.
@@ -21,17 +21,19 @@ type Annotator struct {
 }
 
 // NewAnnotator creates a new Annotator.
-func NewAnnotator(poolSize int, orasClient api.ORASClientInterface, loginURL string, repoName string, artifactType string, annotations []string) *Annotator {
-	annotationsMap := convertListToMap(annotations)
+func NewAnnotator(poolSize int, orasClient api.ORASClientInterface, loginURL string, repoName string, artifactType string, annotations []string) (*Annotator, error) {
+	annotationsMap, err := convertListToMap(annotations)
+	if err != nil {
+		return nil, err
+	}
 	return &Annotator{
-		pool: newPool(poolSize),
-		// acrClient:    acrClient,
+		pool:         newPool(poolSize),
 		orasClient:   orasClient,
 		loginURL:     loginURL,
 		repoName:     repoName,
 		artifactType: artifactType,
 		annotations:  annotationsMap,
-	}
+	}, nil
 }
 
 // process starts annotate jobs in worker pool and returns a count of successful jobs and the first error occurred.
@@ -92,14 +94,15 @@ func (a *Annotator) AnnotateManifests(ctx context.Context, manifests *[]acr.Mani
 
 // convertListToMap takes a list of annotations and converts it into a map, where the keys are the contents before the = and the values
 // are the contents after the =. This is done so ORAS can be used to annotate.
-func convertListToMap(annotations []string) map[string]string {
-	// EOL annotation: "vnd.microsoft.artifact.end-of-life.date=2024-03-21"
+func convertListToMap(annotations []string) (map[string]string, error) {
 	annotationMap := map[string]string{}
 	for _, annotation := range annotations {
-		// fmt.Println("annotation = ", annotation)
 		arr := strings.Split(annotation, "=")
+		if len(arr) == 1 {
+			return nil, errors.New("Annotation is not a key-value pair")
+		}
 		annotationMap[arr[0]] = arr[1]
 	}
 
-	return annotationMap
+	return annotationMap, nil
 }
