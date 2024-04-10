@@ -15,7 +15,7 @@ steps:
 
 - task: GoTool@0
   inputs:
-    version: '1.18.1'
+    version: '1.21.9'
 
 - script: |
     set -e
