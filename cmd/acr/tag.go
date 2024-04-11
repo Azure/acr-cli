@@ -59,7 +59,7 @@ func newTagListCmd(tagParams *tagParameters) *cobra.Command {
 		Use:   "list",
 		Short: "List tags from a repository",
 		Long:  newTagListCmdLongMessage,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			registryName, err := tagParams.GetRegistryName()
 			if err != nil {
 				return err
@@ -116,7 +116,7 @@ func newTagDeleteCmd(tagParams *tagParameters) *cobra.Command {
 		Use:   "delete",
 		Short: "Delete tags from a repository",
 		Long:  newTagDeleteCmdLongMessage,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, args []string) error {
 			registryName, err := tagParams.GetRegistryName()
 			if err != nil {
 				return err
