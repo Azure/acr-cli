@@ -32,7 +32,7 @@ func NewClient(opts ClientOptions) remote.Client {
 		client.Client.Transport = NewDebugTransport(client.Client.Transport)
 	}
 	if opts.Credential != auth.EmptyCredential {
-		client.Credential = func(ctx context.Context, s string) (auth.Credential, error) {
+		client.Credential = func(_ context.Context, s string) (auth.Credential, error) {
 			return opts.Credential, nil
 		}
 	} else if opts.CredentialStore != nil {

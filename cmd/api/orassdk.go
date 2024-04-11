@@ -61,7 +61,7 @@ type GraphTarget interface {
 	Inner() oras.GraphTarget
 }
 
-func (o *ORASClient) Annotate(ctx context.Context, repoName string, reference string, artifactType string, annotationsArg map[string]string) error {
+func (o *ORASClient) Annotate(ctx context.Context, reference string, artifactType string, annotationsArg map[string]string) error {
 	dst, err := o.getTarget(reference)
 	if err != nil {
 		return err
@@ -90,12 +90,12 @@ func (o *ORASClient) Annotate(ctx context.Context, repoName string, reference st
 		return oras.PackManifest(ctx, store, oras.PackManifestVersion1_1, artifactType, packOpts)
 	}
 
-	copy := func(root ocispec.Descriptor) error {
+	copyFunc := func(root ocispec.Descriptor) error {
 		return oras.CopyGraph(ctx, store, dst, root, graphCopyOptions)
 	}
 
 	// Attach
-	_, err = doPush(dst, pack, copy)
+	_, err = doPush(dst, pack, copyFunc)
 	if err != nil {
 		return err
 	}
@@ -108,13 +108,13 @@ func doPush(dst oras.Target, pack packFunc, copy copyFunc) (ocispec.Descriptor, 
 		defer tracked.Close()
 	}
 	// Push
-	return pushArtifact(dst, pack, copy)
+	return pushArtifact(pack, copy)
 }
 
 type packFunc func() (ocispec.Descriptor, error)
 type copyFunc func(desc ocispec.Descriptor) error
 
-func pushArtifact(dst oras.Target, pack packFunc, copy copyFunc) (ocispec.Descriptor, error) {
+func pushArtifact(pack packFunc, copy copyFunc) (ocispec.Descriptor, error) {
 	root, err := pack()
 	if err != nil {
 		return ocispec.Descriptor{}, err
@@ -140,7 +140,7 @@ func (o *ORASClient) getTarget(reference string) (repo *remote.Repository, err e
 	return repo, nil
 }
 
-func GetORASClientWithAuth(loginURL string, username string, password string, configs []string) (*ORASClient, error) {
+func GetORASClientWithAuth(username string, password string, configs []string) (*ORASClient, error) {
 	clientOpts := orasauth.ClientOptions{}
 	if username != "" && password != "" {
 		clientOpts.Credential = orasauth.Credential(username, password)
@@ -160,5 +160,5 @@ func GetORASClientWithAuth(loginURL string, username string, password string, co
 
 // ORASClientInterface defines the required methods that the acr-cli will need to use with ORAS.
 type ORASClientInterface interface {
-	Annotate(ctx context.Context, repoName string, reference string, artifactType string, annotations map[string]string) error
+	Annotate(ctx context.Context, reference string, artifactType string, annotations map[string]string) error
 }

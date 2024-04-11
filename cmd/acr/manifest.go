@@ -32,7 +32,7 @@ func newManifestCmd(rootParams *rootParameters) *cobra.Command {
 		Use:   "manifest",
 		Short: "Manage manifests inside a repository",
 		Long:  newManifestCmdLongMessage,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.Help()
 			return nil
 		},

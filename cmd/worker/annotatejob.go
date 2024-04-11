@@ -66,7 +66,7 @@ func newAnnotateTagJob(loginURL string, repoName string, artifactType string, an
 // process calls acrClient to annotate a manifest.
 func (job *annotateManifestJob) processAnnotate(ctx context.Context, orasClient api.ORASClientInterface) error {
 	ref := fmt.Sprintf("%s/%s@%s", job.loginURL, job.repoName, job.digest)
-	err := orasClient.Annotate(ctx, job.repoName, ref, job.artifactType, job.annotations)
+	err := orasClient.Annotate(ctx, ref, job.artifactType, job.annotations)
 	if err == nil {
 		fmt.Printf("Annotated %s/%s@%s\n", job.loginURL, job.repoName, job.digest)
 		return nil
@@ -78,7 +78,7 @@ func (job *annotateManifestJob) processAnnotate(ctx context.Context, orasClient 
 // process calls acrClient to annotate a tag.
 func (job *annotateTagJob) processAnnotate(ctx context.Context, orasClient api.ORASClientInterface) error {
 	ref := fmt.Sprintf("%s/%s:%s", job.loginURL, job.repoName, job.tag)
-	err := orasClient.Annotate(ctx, job.repoName, ref, job.artifactType, job.annotations)
+	err := orasClient.Annotate(ctx, ref, job.artifactType, job.annotations)
 	if err == nil {
 		fmt.Printf("Annotated %s/%s:%s\n", job.loginURL, job.repoName, job.tag)
 		return nil

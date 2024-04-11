@@ -66,7 +66,7 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 		Short:   "Annotate images in a registry",
 		Long:    newAnnotateCmdLongMessage,
 		Example: annotateExampleMessage,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, args []string) error {
 			// This context is used for all the http requests
 			ctx := context.Background()
 			registryName, err := annotateParams.GetRegistryName()
@@ -80,12 +80,11 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 				return err
 			}
 
-			orasClient, err := api.GetORASClientWithAuth(loginURL, annotateParams.username, annotateParams.password, annotateParams.configs)
+			orasClient, err := api.GetORASClientWithAuth(annotateParams.username, annotateParams.password, annotateParams.configs)
 			if err != nil {
 				return err
-			} else {
-				fmt.Println("oras auth ok?")
 			}
+
 			// A map is used to collect the regex tags for every repository.
 			tagFilters, err := collectTagFilters(ctx, annotateParams.filters, acrClient.AutorestClient, annotateParams.filterTimeout)
 			if err != nil {
@@ -449,12 +448,11 @@ func dryRunAnnotate(ctx context.Context,
 					// If the number of tags asdsociated with the manifest is not equal to the number of tags
 					// to be annotated, the said manifest will still have tags remaining and we will consider if it has any
 					// dependant manifests.
-					err := doNotAnnotateDependantManifests(ctx, manifest, doNotAnnotate, acrClient, repoName)
+					err = doNotAnnotateDependantManifests(ctx, manifest, doNotAnnotate, acrClient, repoName)
 					if err != nil {
 						return -1, -1, err
-					} else {
-						candidatesToAnnotate = append(candidatesToAnnotate, manifest)
 					}
+					candidatesToAnnotate = append(candidatesToAnnotate, manifest)
 				}
 			}
 			// Get the last manifest digest from the last manifest from manifests

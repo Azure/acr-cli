@@ -32,7 +32,7 @@ func newTagCmd(rootParams *rootParameters) *cobra.Command {
 		Use:   "tag",
 		Short: "Manage tags inside a repository",
 		Long:  newTagCmdLongMessage,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.Help()
 			return nil
 		},

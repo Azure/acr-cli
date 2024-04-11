@@ -13,13 +13,13 @@ type ORASClientInterface struct {
 	mock.Mock
 }
 
-// Annotate provides a mock function with given fields: ctx, repoName, reference, artifactType, annotations
-func (_m *ORASClientInterface) Annotate(ctx context.Context, repoName string, reference string, artifactType string, annotations map[string]string) error {
-	ret := _m.Called(ctx, repoName, reference, artifactType, annotations)
+// Annotate provides a mock function with given fields: ctx, reference, artifactType, annotations
+func (_m *ORASClientInterface) Annotate(ctx context.Context, reference string, artifactType string, annotations map[string]string) error {
+	ret := _m.Called(ctx, reference, artifactType, annotations)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, string, string, map[string]string) error); ok {
-		r0 = rf(ctx, repoName, reference, artifactType, annotations)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, map[string]string) error); ok {
+		r0 = rf(ctx, reference, artifactType, annotations)
 	} else {
 		r0 = ret.Error(0)
 	}
