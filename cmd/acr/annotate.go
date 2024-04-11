@@ -66,7 +66,7 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 		Short:   "Annotate images in a registry",
 		Long:    newAnnotateCmdLongMessage,
 		Example: annotateExampleMessage,
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			// This context is used for all the http requests
 			ctx := context.Background()
 			registryName, err := annotateParams.GetRegistryName()
@@ -114,7 +114,7 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 					}
 
 					singleAnnotatedManifestsCount := 0
-					// If the untagged flag is set, then also manifests are deleted.
+					// If the untagged flag is set, then manifests with no tags are also annotated..
 					if annotateParams.untagged {
 						singleAnnotatedManifestsCount, err = annotateDanglingManifests(ctx, acrClient, orasClient, poolSize, loginURL, repoName, annotateParams.artifactType, annotateParams.annotations)
 						if err != nil {
