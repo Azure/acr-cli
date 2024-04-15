@@ -118,7 +118,7 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 					if annotateParams.untagged {
 						singleAnnotatedManifestsCount, err = annotateDanglingManifests(ctx, acrClient, orasClient, poolSize, loginURL, repoName, annotateParams.artifactType, annotateParams.annotations)
 						if err != nil {
-							return errors.Wrap(err, "Failed to annotated manifests")
+							return errors.Wrap(err, "Failed to annotate manifests")
 						}
 					}
 
@@ -185,7 +185,6 @@ func annotateTags(ctx context.Context,
 	annotatedTagsCount := 0
 
 	// In order to only have a limited amount of http requests, an annotator is used that will start goroutines to annotate tags.
-	// pass orasClient instead of acrClient
 	annotator, err := worker.NewAnnotator(poolSize, orasClient, loginURL, repoName, artifactType, annotations)
 	if err != nil {
 		return -1, err
@@ -326,17 +325,6 @@ func getManifestsToAnnotate(ctx context.Context, acrClient api.AcrCLIClientInter
 			return nil, err
 		}
 	}
-
-	// Remove all the manifests that should not be annotated
-	// for _, manifest := range candidatesToAnnotate {
-	// 	if !doNotAnnotate.Contains(*manifest.Digest) {
-	// 		// If a manifest has no tags, is not part of a manifest list, and can be altered, then it is added to the
-	// 		// manifestsToAnnotate array
-	// 		if *manifest.ChangeableAttributes.WriteEnabled {
-	// 			manifestsToAnnotate = append(manifestsToAnnotate, manifest)
-	// 		}
-	// 	}
-	// }
 
 	// Remove all manifests that should not be annotated
 	for i := 0; i < len(candidatesToAnnotate); i++ {
