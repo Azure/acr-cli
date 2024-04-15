@@ -15,14 +15,13 @@ import (
 	"github.com/Azure/acr-cli/internal/container/set"
 	"github.com/dlclark/regexp2"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
-	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )
 
 // The constants for the file are defined here
 const (
 	newAnnotateCmdLongMessage = `acr annotate: annotate images and dangling manifests.`
-	annotateExampleMessage    = `- Annotate all tags that begin with hello in the example.azurecr.io registry inside the hello-world repository
+	annotateExampleMessage    = `- Annotate all images with tags that begin with hello in the example.azurecr.io registry inside the hello-world repository
 	acr annotate -r example --filter "hello-world:^hello.*" --annotations "vnd.microsoft.artifact.lifecycle.end-of-life.date=2024-04-09" 
 	--artifact-type "application/vnd.microsoft.artifact.lifecycle"
 
@@ -97,20 +96,20 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 			// In order to print a summary of the annotated tags/manifests, the counters get updated every time a repo is annotated.
 			annotatedTagsCount := 0
 			annotatedManifestsCount := 0
+
+			poolSize := annotateParams.concurrency
+			if poolSize <= 0 {
+				poolSize = defaultPoolSize
+				fmt.Printf("Specified concurrency value invalid. Set to default value: %d \n", defaultPoolSize)
+			} else if poolSize > maxPoolSize {
+				poolSize = maxPoolSize
+				fmt.Printf("Specified concurrency value too large. Set to maximum value: %d \n", maxPoolSize)
+			}
 			for repoName, tagRegex := range tagFilters {
 				if !annotateParams.dryRun {
-					poolSize := annotateParams.concurrency
-					if poolSize <= 0 {
-						poolSize = defaultPoolSize
-						fmt.Printf("Specified concurrency value invalid. Set to default value: %d \n", defaultPoolSize)
-					} else if poolSize > maxPoolSize {
-						poolSize = maxPoolSize
-						fmt.Printf("Specified concurrency value too large. Set to maximum value: %d \n", maxPoolSize)
-					}
-
 					singleAnnotatedTagsCount, err := annotateTags(ctx, acrClient, orasClient, poolSize, loginURL, repoName, annotateParams.artifactType, annotateParams.annotations, tagRegex, annotateParams.filterTimeout)
 					if err != nil {
-						return errors.Wrap(err, "Failed to annotate tags")
+						return fmt.Errorf("failed to annotate tags: %w", err)
 					}
 
 					singleAnnotatedManifestsCount := 0
@@ -118,7 +117,7 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 					if annotateParams.untagged {
 						singleAnnotatedManifestsCount, err = annotateDanglingManifests(ctx, acrClient, orasClient, poolSize, loginURL, repoName, annotateParams.artifactType, annotateParams.annotations)
 						if err != nil {
-							return errors.Wrap(err, "Failed to annotate manifests")
+							return fmt.Errorf("failed to annotate manifests: %w", err)
 						}
 					}
 
@@ -129,7 +128,7 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 					// No tag or manifest will be annotated but the counters will still be updated
 					singleAnnotatedTagsCount, singleAnnotatedManifestsCount, err := dryRunAnnotate(ctx, acrClient, loginURL, repoName, tagRegex, annotateParams.untagged, annotateParams.filterTimeout)
 					if err != nil {
-						return errors.Wrap(err, "Failed to dry-run annotate")
+						return fmt.Errorf("failed to dry-run annotate")
 					}
 					annotatedTagsCount += singleAnnotatedTagsCount
 					annotatedManifestsCount += singleAnnotatedManifestsCount

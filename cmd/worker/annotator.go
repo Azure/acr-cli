@@ -45,7 +45,7 @@ func (a *Annotator) process(ctx context.Context, jobs *[]annotateJob) (int, erro
 	var succ int64
 	errChan := make(chan error)
 
-	// Start purge jobs in worker pool.
+	// Start annotate jobs in worker pool.
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -54,13 +54,13 @@ func (a *Annotator) process(ctx context.Context, jobs *[]annotateJob) (int, erro
 		}
 	}()
 
-	// Wait for all purge jobs to finish.
+	// Wait for all annotate jobs to finish.
 	go func() {
 		wg.Wait()
 		close(errChan)
 	}()
 
-	// If there are errors occurred during processing purge jobs, record the first error and cancel other jobs.
+	// If there are errors occurred during processing annotate jobs, record the first error and cancel other jobs.
 	var firstErr error
 	for err := range errChan {
 		if firstErr == nil {
