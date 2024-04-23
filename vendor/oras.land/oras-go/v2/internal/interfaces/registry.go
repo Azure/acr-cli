@@ -13,17 +13,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package registryutil
+package interfaces
 
-import (
-	"context"
+import "oras.land/oras-go/v2/registry"
 
-	"oras.land/oras-go/v2/registry"
-	"oras.land/oras-go/v2/registry/remote/auth"
-)
-
-// WithScopeHint adds a hinted scope to the context.
-func WithScopeHint(ctx context.Context, ref registry.Reference, actions ...string) context.Context {
-	scope := auth.ScopeRepository(ref.Repository, actions...)
-	return auth.AppendScopes(ctx, scope)
+// ReferenceParser provides reference parsing.
+type ReferenceParser interface {
+	// ParseReference parses a reference to a fully qualified reference.
+	ParseReference(reference string) (registry.Reference, error)
 }

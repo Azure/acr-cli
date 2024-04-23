@@ -87,7 +87,7 @@ func newPurgeCmd(rootParams *rootParameters) *cobra.Command {
 		Short:   "Delete images from a registry.",
 		Long:    newPurgeCmdLongMessage,
 		Example: purgeExampleMessage,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			// This context is used for all the http requests.
 			ctx := context.Background()
 			registryName, err := purgeParams.GetRegistryName()

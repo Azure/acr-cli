@@ -13,12 +13,28 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package slices
+package set
 
-// Clone returns a shallow copy of the slice.
-func Clone[S ~[]E, E any](s S) S {
-	if s == nil {
-		return nil
-	}
-	return append(make(S, 0, len(s)), s...)
+// Set represents a set data structure.
+type Set[T comparable] map[T]struct{}
+
+// New returns an initialized set.
+func New[T comparable]() Set[T] {
+	return make(Set[T])
+}
+
+// Add adds item into the set s.
+func (s Set[T]) Add(item T) {
+	s[item] = struct{}{}
+}
+
+// Contains returns true if the set s contains item.
+func (s Set[T]) Contains(item T) bool {
+	_, ok := s[item]
+	return ok
+}
+
+// Delete deletes an item from the set.
+func (s Set[T]) Delete(item T) {
+	delete(s, item)
 }

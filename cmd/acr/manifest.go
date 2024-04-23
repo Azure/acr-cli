@@ -32,7 +32,7 @@ func newManifestCmd(rootParams *rootParameters) *cobra.Command {
 		Use:   "manifest",
 		Short: "Manage manifests inside a repository",
 		Long:  newManifestCmdLongMessage,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.Help()
 			return nil
 		},
@@ -59,7 +59,7 @@ func newManifestListCmd(manifestParams *manifestParameters) *cobra.Command {
 		Use:   "list",
 		Short: "List manifests from a repository",
 		Long:  newManifestListCmdLongMessage,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			registryName, err := manifestParams.GetRegistryName()
 			if err != nil {
 				return err
@@ -116,7 +116,7 @@ func newManifestDeleteCmd(manifestParams *manifestParameters) *cobra.Command {
 		Use:   "delete",
 		Short: "Delete manifest from a repository",
 		Long:  newManifestDeleteCmdLongMessage,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, args []string) error {
 			registryName, err := manifestParams.GetRegistryName()
 			if err != nil {
 				return err

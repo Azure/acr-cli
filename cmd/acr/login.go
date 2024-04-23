@@ -51,7 +51,7 @@ func newLoginCmd() *cobra.Command {
 		Long:    newLoginCmdLongMessage,
 		Example: loginExampleMessage,
 		Args:    cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, args []string) error {
 			opts.hostname = args[0]
 			return runLogin(opts)
 		},
