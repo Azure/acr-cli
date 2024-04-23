@@ -16,38 +16,38 @@ import (
 // is not set.
 func TestAnnotateTags(t *testing.T) {
 
-	// If there are no tags on a registry, no error should show and no other methods should be called. (line 71)
+	// If there are no tags on a registry, no error should show and no other methods should be called.
 	t.Run("EmptyRepositoryTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(EmptyListTagsResult, nil).Once()
-		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], testRegex, defaultRegexpMatchTimeoutSeconds)
+		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], testRegex, defaultRegexpMatchTimeoutSeconds, false)
 		assert.Equal(0, annotatedTags, "Number of annotated elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
 		mockOrasClient.AssertExpectations(t)
 	})
 
-	// There is only one tag but it does not match the regex filter so no other method should be called. (line 94)
+	// There is only one tag but it does not match the regex filter so no other method should be called.
 	t.Run("NoAnnotationFilterTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(OneTagResult, nil).Once()
-		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], "^i.*", defaultRegexpMatchTimeoutSeconds)
+		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], "^i.*", defaultRegexpMatchTimeoutSeconds, false)
 		assert.Equal(0, annotatedTags, "Number of annotated elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
 		mockOrasClient.AssertExpectations(t)
 	})
 
-	// Invalid regex filter, an error should be returned. (line 106)
+	// Invalid regex filter, an error should be returned.
 	t.Run("InvalidRegexTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockOrasClient := &mocks.ORASClientInterface{}
-		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], "[", defaultRegexpMatchTimeoutSeconds)
+		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], "[", defaultRegexpMatchTimeoutSeconds, false)
 		assert.Equal(-1, annotatedTags, "Number of annotated elements should be -1")
 		assert.NotEqual(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -60,7 +60,7 @@ func TestAnnotateTags(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(nil, errors.New("error fetching tags")).Once()
-		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], testRegex, defaultRegexpMatchTimeoutSeconds)
+		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], testRegex, defaultRegexpMatchTimeoutSeconds, false)
 		assert.Equal(-1, annotatedTags, "Number of annotated elements should be -1")
 		assert.NotEqual(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -69,13 +69,13 @@ func TestAnnotateTags(t *testing.T) {
 	})
 
 	// If a tag should be annotated but the write-enabled attribute is set ot false, it should not be annotated and
-	// no error should show on the CLI output. (line 162)
+	// no error should show on the CLI output.
 	t.Run("OperationNotAllowedTagWriteDisabledTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(WriteDisabledOneTagResult, nil).Once()
-		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], testRegex, defaultRegexpMatchTimeoutSeconds)
+		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], testRegex, defaultRegexpMatchTimeoutSeconds, false)
 		assert.Equal(0, annotatedTags, "Number of annotated elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -87,14 +87,14 @@ func TestAnnotateTags(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockOrasClient := &mocks.ORASClientInterface{}
-		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testBadAnnotations[:], testRegex, defaultRegexpMatchTimeoutSeconds)
+		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testBadAnnotations[:], testRegex, defaultRegexpMatchTimeoutSeconds, false)
 		assert.Equal(-1, annotatedTags, "Number of annotated elements should be -1")
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
 		mockOrasClient.AssertExpectations(t)
 	})
 
-	// The following tests involve annotating tags. (line 183)
+	// The following tests involve annotating tags.
 	// There is only one tag and it should be annotated. The AnnotateAcrTag method should be called once.
 	t.Run("OneTagAnnotationTest", func(t *testing.T) {
 		assert := assert.New(t)
@@ -103,7 +103,7 @@ func TestAnnotateTags(t *testing.T) {
 		ref := fmt.Sprintf("%s/%s:latest", testLoginURL, testRepo)
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(OneTagResult, nil).Once()
 		mockOrasClient.On("Annotate", mock.Anything, ref, testArtifactType, annotationMap).Return(nil).Once()
-		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], "^la.*", defaultRegexpMatchTimeoutSeconds)
+		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], "^la.*", defaultRegexpMatchTimeoutSeconds, false)
 		assert.Equal(1, annotatedTags, "Number of annotated elements should be 1")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -128,14 +128,14 @@ func TestAnnotateTags(t *testing.T) {
 		mockOrasClient.On("Annotate", mock.Anything, ref, testArtifactType, annotationMap).Return(nil).Once()
 		ref = fmt.Sprintf("%s/%s:v4", testLoginURL, testRepo)
 		mockOrasClient.On("Annotate", mock.Anything, ref, testArtifactType, annotationMap).Return(nil).Once()
-		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], testRegex, defaultRegexpMatchTimeoutSeconds)
+		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], testRegex, defaultRegexpMatchTimeoutSeconds, false)
 		assert.Equal(5, annotatedTags, "Number of annotated elements should be 5")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
 		mockOrasClient.AssertExpectations(t)
 	})
 
-	// Annotate tag with "local" in it (line 23)
+	// Annotate tag with "local" in it
 	t.Run("Annotate tag with local in it", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
@@ -143,7 +143,7 @@ func TestAnnotateTags(t *testing.T) {
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(TagWithLocal, nil).Once()
 		ref := fmt.Sprintf("%s/%s:v1-c-local.test", testLoginURL, testRepo)
 		mockOrasClient.On("Annotate", mock.Anything, ref, testArtifactType, annotationMap).Return(nil).Once()
-		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], ".*-?local[.].+", defaultRegexpMatchTimeoutSeconds)
+		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], ".*-?local[.].+", defaultRegexpMatchTimeoutSeconds, false)
 		assert.Equal(1, annotatedTags, "Number of annotated elements should be 1")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -165,7 +165,7 @@ func TestAnnotateTags(t *testing.T) {
 		mockOrasClient.On("Annotate", mock.Anything, ref, testArtifactType, annotationMap).Return(nil).Once()
 		ref = fmt.Sprintf("%s/%s:v4", testLoginURL, testRepo)
 		mockOrasClient.On("Annotate", mock.Anything, ref, testArtifactType, annotationMap).Return(nil).Once()
-		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], "^v.*", defaultRegexpMatchTimeoutSeconds)
+		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], "^v.*", defaultRegexpMatchTimeoutSeconds, false)
 		assert.Equal(4, annotatedTags, "Number of annotated elements should be 4")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -179,7 +179,7 @@ func TestAnnotateTags(t *testing.T) {
 		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(OneTagResultWithNext, nil).Once()
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "latest").Return(FourTagsResult, nil).Once()
-		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], "^i.*", defaultRegexpMatchTimeoutSeconds)
+		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], "^i.*", defaultRegexpMatchTimeoutSeconds, false)
 		assert.Equal(0, annotatedTags, "Number of annotated elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -237,8 +237,8 @@ func TestAnnotateManifests(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(notFoundManifestResponse, errors.New("testRepo not found")).Once()
-		annotatedTags, err := annotateDanglingManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:])
-		assert.Equal(0, annotatedTags, "Number of annotated elements should be 0")
+		annotatedManifests, err := annotateDanglingManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false)
+		assert.Equal(0, annotatedManifests, "Number of annotated elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
 		mockOrasClient.AssertExpectations(t)
@@ -250,8 +250,8 @@ func TestAnnotateManifests(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(nil, errors.New("unauthorized")).Once()
-		annotatedTags, err := annotateDanglingManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:])
-		assert.Equal(-1, annotatedTags, "Number of annotated elements should be -1")
+		annotatedManifests, err := annotateDanglingManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false)
+		assert.Equal(-1, annotatedManifests, "Number of annotated elements should be -1")
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
 		mockOrasClient.AssertExpectations(t)
@@ -264,8 +264,8 @@ func TestAnnotateManifests(t *testing.T) {
 		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleManifestV2WithTagsResult, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:2830cc0fcddc1bc2bd4aeab0ed5ee7087dab29a49e65151c77553e46a7ed5283").Return(EmptyListManifestsResult, nil).Once()
-		annotatedTags, err := annotateDanglingManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:])
-		assert.Equal(0, annotatedTags, "Number of annotated elements should be 0")
+		annotatedManifests, err := annotateDanglingManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false)
+		assert.Equal(0, annotatedManifests, "Number of annotated elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
 		mockOrasClient.AssertExpectations(t)
@@ -278,8 +278,8 @@ func TestAnnotateManifests(t *testing.T) {
 		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleManifestV2WithTagsResult, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:2830cc0fcddc1bc2bd4aeab0ed5ee7087dab29a49e65151c77553e46a7ed5283").Return(nil, errors.New("error getting manifests")).Once()
-		annotatedTags, err := annotateDanglingManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:])
-		assert.Equal(-1, annotatedTags, "Number of annotated elements should be -1")
+		annotatedManifests, err := annotateDanglingManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false)
+		assert.Equal(-1, annotatedManifests, "Number of annotated elements should be -1")
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
 		mockOrasClient.AssertExpectations(t)
@@ -293,8 +293,8 @@ func TestAnnotateManifests(t *testing.T) {
 		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleMultiArchManifestV2WithTagsResult, nil).Once()
 		mockClient.On("GetManifest", mock.Anything, testRepo, "sha256:d88fb54ba4424dada7c928c6af332ed1c49065ad85eafefb6f26664695015119").Return(nil, errors.New("error getting manifest")).Once()
-		annotatedTags, err := annotateDanglingManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:])
-		assert.Equal(-1, annotatedTags, "Number of annotated elements should be -1")
+		annotatedManifests, err := annotateDanglingManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false)
+		assert.Equal(-1, annotatedManifests, "Number of annotated elements should be -1")
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
 		mockOrasClient.AssertExpectations(t)
@@ -307,8 +307,8 @@ func TestAnnotateManifests(t *testing.T) {
 		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleMultiArchManifestV2WithTagsResult, nil).Once()
 		mockClient.On("GetManifest", mock.Anything, testRepo, "sha256:d88fb54ba4424dada7c928c6af332ed1c49065ad85eafefb6f26664695015119").Return(nil, errors.New("error getting manifest")).Once()
-		annotatedTags, err := annotateDanglingManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:])
-		assert.Equal(-1, annotatedTags, "Number of annotated elements should be -1")
+		annotatedManifests, err := annotateDanglingManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false)
+		assert.Equal(-1, annotatedManifests, "Number of annotated elements should be -1")
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
 		mockOrasClient.AssertExpectations(t)
@@ -321,8 +321,8 @@ func TestAnnotateManifests(t *testing.T) {
 		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleManifestV2WithTagsResult, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:2830cc0fcddc1bc2bd4aeab0ed5ee7087dab29a49e65151c77553e46a7ed5283").Return(EmptyListManifestsResult, nil).Once()
-		annotatedTags, err := annotateDanglingManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testBadAnnotations[:])
-		assert.Equal(-1, annotatedTags, "Number of annotated elements should be -1")
+		annotatedManifests, err := annotateDanglingManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testBadAnnotations[:], false)
+		assert.Equal(-1, annotatedManifests, "Number of annotated elements should be -1")
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
 		mockOrasClient.AssertExpectations(t)
@@ -342,8 +342,8 @@ func TestAnnotateManifests(t *testing.T) {
 		mockOrasClient.On("Annotate", mock.Anything, ref, testArtifactType, annotationMap).Return(nil).Once()
 		ref = fmt.Sprintf("%s/%s@sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696", testLoginURL, testRepo)
 		mockOrasClient.On("Annotate", mock.Anything, ref, testArtifactType, annotationMap).Return(nil).Once()
-		annotatedTags, err := annotateDanglingManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:])
-		assert.Equal(2, annotatedTags, "Number of annotated elements should be 2")
+		annotatedManifests, err := annotateDanglingManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false)
+		assert.Equal(2, annotatedManifests, "Number of annotated elements should be 2")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
 		mockOrasClient.AssertExpectations(t)
@@ -361,8 +361,8 @@ func TestAnnotateManifests(t *testing.T) {
 		mockOrasClient.On("Annotate", mock.Anything, ref, testArtifactType, annotationMap).Return(nil).Once()
 		ref = fmt.Sprintf("%s/%s@sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696", testLoginURL, testRepo)
 		mockOrasClient.On("Annotate", mock.Anything, ref, testArtifactType, annotationMap).Return(errors.New("manifest not found")).Once()
-		annotatedTags, err := annotateDanglingManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:])
-		assert.Equal(1, annotatedTags, "Number of annotated elements should be 1")
+		annotatedManifests, err := annotateDanglingManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false)
+		assert.Equal(1, annotatedManifests, "Number of annotated elements should be 1")
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
 		mockOrasClient.AssertExpectations(t)
@@ -377,11 +377,11 @@ func TestAnnotateManifests(t *testing.T) {
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:2830cc0fcddc1bc2bd4aeab0ed5ee7087dab29a49e65151c77553e46a7ed5283").Return(doubleManifestV2WithoutTagsResult, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696").Return(EmptyListManifestsResult, nil).Once()
 		ref := fmt.Sprintf("%s/%s@sha256:63532043b5af6247377a472ad075a42bde35689918de1cf7f807714997e0e683", testLoginURL, testRepo)
-		mockOrasClient.On("Annotate", mock.Anything, ref, testArtifactType, annotationMap).Return(errors.New("error deleting manifest")).Once()
+		mockOrasClient.On("Annotate", mock.Anything, ref, testArtifactType, annotationMap).Return(errors.New("error annotating manifest")).Once()
 		ref = fmt.Sprintf("%s/%s@sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696", testLoginURL, testRepo)
 		mockOrasClient.On("Annotate", mock.Anything, ref, testArtifactType, annotationMap).Return(nil).Once()
-		annotatedTags, err := annotateDanglingManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:])
-		assert.Equal(1, annotatedTags, "Number of annotated elements should be 1")
+		annotatedManifests, err := annotateDanglingManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false)
+		assert.Equal(1, annotatedManifests, "Number of annotated elements should be 1")
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
 		mockOrasClient.AssertExpectations(t)
@@ -399,12 +399,10 @@ func TestAnnotateManifests(t *testing.T) {
 		ref := fmt.Sprintf("%s/%s@sha256:63532043b5af6247377a472ad075a42bde35689918de1cf7f807714997e0e683", testLoginURL, testRepo)
 		mockOrasClient.On("Annotate", mock.Anything, ref, testArtifactType, annotationMap).Return(nil).Once()
 		ref = fmt.Sprintf("%s/%s@sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696", testLoginURL, testRepo)
-		mockOrasClient.On("Annotate", mock.Anything, ref, testArtifactType, annotationMap).Return(errors.New("error deleting manifest")).Once()
-		annotatedTags, err := annotateDanglingManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:])
-		assert.Equal(1, annotatedTags, "Number of annotated elements should be 1")
-		// assert.Equal(0, annotatedTags, "Number of annotated elements should be 0")
+		mockOrasClient.On("Annotate", mock.Anything, ref, testArtifactType, annotationMap).Return(errors.New("error annotating manifest")).Once()
+		annotatedManifests, err := annotateDanglingManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false)
+		assert.Equal(1, annotatedManifests, "Number of annotated elements should be 1")
 		assert.NotEqual(nil, err, "Error should not be nil")
-		// assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
 		mockOrasClient.AssertExpectations(t)
 	})
@@ -422,9 +420,8 @@ func TestAnnotateManifests(t *testing.T) {
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696").Return(EmptyListManifestsResult, nil).Once()
 		ref := fmt.Sprintf("%s/%s@sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696", testLoginURL, testRepo)
 		mockOrasClient.On("Annotate", mock.Anything, ref, testArtifactType, annotationMap).Return(nil).Once()
-		annotatedTags, err := annotateDanglingManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:])
-		assert.Equal(1, annotatedTags, "Number of annotated elements should be 1")
-		// assert.Equal(0, annotatedTags, "Number of annotated elements should be 0")
+		annotatedManifests, err := annotateDanglingManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false)
+		assert.Equal(1, annotatedManifests, "Number of annotated elements should be 1")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
 		mockOrasClient.AssertExpectations(t)
@@ -438,182 +435,182 @@ func TestAnnotateManifests(t *testing.T) {
 		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(writeDisabledOneManifestResult, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", digest).Return(EmptyListManifestsResult, nil).Once()
-		annotatedTags, err := annotateDanglingManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:])
-		assert.Equal(0, annotatedTags, "Number of annotated elements should be 0")
+		annotatedManifests, err := annotateDanglingManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false)
+		assert.Equal(0, annotatedManifests, "Number of annotated elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
 		mockOrasClient.AssertExpectations(t)
 	})
 }
 
-// TestDryRun contains the tests for the dryRunAnnotate method. It is called when the --dry-run flag is set.
+// TestDryRun contains the tests for dry-runs of annotateTags and annotateDanglingManifests.
+//
+//	It is called when the --dry-run flag is set.
 func TestDryRunAnnotate(t *testing.T) {
-	// If a repository is not known, dryRunAnnotate should not return an error and there should not be any tags or manifests annotated. (line 492)
+	// If a repository is not known, annotateTags and annotateDanglingManifests should not return an error,
+	// and there should not be any tags or manifests annotated.
 	t.Run("RepositoryNotFoundTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
+		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(notFoundManifestResponse, errors.New("testRepo not found")).Once()
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(notFoundTagResponse, errors.New("testRepo not found")).Once()
-		mockClient.On("GetAcrTags", mock.Anything, testRepo, "", "").Return(notFoundTagResponse, errors.New("testRepo not found")).Once()
-		annotatedTags, annotatedManifests, err := dryRunAnnotate(testCtx, mockClient, testLoginURL, testRepo, "[\\s\\S]*", true, defaultRegexpMatchTimeoutSeconds)
+		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], "[\\s\\S]*", defaultRegexpMatchTimeoutSeconds, true)
+		annotatedManifests, errManifests := annotateDanglingManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], true)
 		assert.Equal(0, annotatedTags, "Number of annotated elements should be 0")
 		assert.Equal(0, annotatedManifests, "Number of annotated elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
+		assert.Equal(nil, errManifests, "Error should be nil")
 		mockClient.AssertExpectations(t)
 	})
 
-	// If there is an invalid regex, an error should be returned as well as the invalid counters. (line 517)
+	// If there is an invalid regex, an error should be returned as well as the invalid counters.
 	t.Run("InvalidRegexTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
-		annotatedTags, annotatedManifests, err := dryRunAnnotate(testCtx, mockClient, testLoginURL, testRepo, "[", true, defaultRegexpMatchTimeoutSeconds)
+		mockOrasClient := &mocks.ORASClientInterface{}
+		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], "[", defaultRegexpMatchTimeoutSeconds, true)
 		assert.Equal(-1, annotatedTags, "Number of annotated elements should be -1")
-		assert.Equal(-1, annotatedManifests, "Number of annotated elements should be -1")
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
 	})
 
-	// There are 4 tags that should be annotated. Note how there are no AnnotateAcrTag calls because this a dry-run. (line 528)
+	// There are 4 tags that should be annotated. Note how there are no AnnotateAcrTag calls because this a dry-run.
 	t.Run("FourTagAnnotationDryRunTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
+		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(FourTagsResult, nil).Once()
-		annotatedTags, annotatedManifests, err := dryRunAnnotate(testCtx, mockClient, testLoginURL, testRepo, "[\\s\\S]*", false, defaultRegexpMatchTimeoutSeconds)
+		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], "[\\s\\S]*", defaultRegexpMatchTimeoutSeconds, true)
 		assert.Equal(4, annotatedTags, "Number of annotated elements should be 4")
-		assert.Equal(0, annotatedManifests, "Number of annotated elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
 	})
 
-	// If there is an error on the first GetAcrTags call (different to a 404), an error should be returned. (line 540)
+	// If there is an error on the first GetAcrTags call (different to a 404), an error should be returned.
 	t.Run("GetAcrTagsErrorTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
+		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(nil, errors.New("error fetching tags")).Once()
-		annotatedTags, annotatedManifests, err := dryRunAnnotate(testCtx, mockClient, testLoginURL, testRepo, "[\\s\\S]*", false, defaultRegexpMatchTimeoutSeconds)
+		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], "[\\s\\S]*", defaultRegexpMatchTimeoutSeconds, true)
 		assert.Equal(-1, annotatedTags, "Number of annotated elements should be -1")
-		assert.Equal(-1, annotatedManifests, "Number of annotated elements should be -1")
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
 	})
 
-	// If there is an error on the second GetAcrTags call (different to a 404), an error should be returned. (line 552)
+	// If there is an error on the second GetAcrTags call (different to a 404), an error should be returned.
 	t.Run("GetAcrTagsError2Test", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
+		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(nil, errors.New("error fetching tags")).Once()
-		annotatedTags, annotatedManifests, err := dryRunAnnotate(testCtx, mockClient, testLoginURL, testRepo, "[\\s\\S]*", false, defaultRegexpMatchTimeoutSeconds)
+		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], "[\\s\\S]*", defaultRegexpMatchTimeoutSeconds, true)
 		assert.Equal(-1, annotatedTags, "Number of annotated elements should be -1")
-		assert.Equal(-1, annotatedManifests, "Number of annotated elements should be -1")
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
 	})
-
-	// If there is an error on the first GetAcrManifests call (different to a 404), an error should be returned. (line 564)
+	// If there is an error on the first GetAcrManifests call (different to a 404), an error should be returned.
 	t.Run("GetAcrManifestsErrorTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
+		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(EmptyListTagsResult, nil).Once()
-		mockClient.On("GetAcrTags", mock.Anything, testRepo, "", "").Return(EmptyListTagsResult, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(nil, errors.New("testRepo not found")).Once()
-		annotatedTags, annotatedManifests, err := dryRunAnnotate(testCtx, mockClient, testLoginURL, testRepo, "[\\s\\S]*", true, defaultRegexpMatchTimeoutSeconds)
-		assert.Equal(-1, annotatedTags, "Number of annotated elements should be -1")
+		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], "[\\s\\S]*", defaultRegexpMatchTimeoutSeconds, true)
+		annotatedManifests, errManifests := annotateDanglingManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], true)
+		assert.Equal(0, annotatedTags, "Number of annotated elements should be 0")
 		assert.Equal(-1, annotatedManifests, "Number of annotated elements should be -1")
-		assert.NotEqual(nil, err, "Error should not be nil")
+		assert.Equal(nil, err, "Error should be nil")
+		assert.NotEqual(nil, errManifests, "Error should not be nil")
 		mockClient.AssertExpectations(t)
 	})
 
-	// If there is an error on the second GetAcrManifests call (different to a 404), an error should be returned. (line 578)
+	// If there is an error on the second GetAcrManifests call (different to a 404), an error should be returned.
 	t.Run("GetAcrManifestsError2Test", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
+		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(EmptyListTagsResult, nil).Once()
-		mockClient.On("GetAcrTags", mock.Anything, testRepo, "", "").Return(nil, errors.New("error fetching tags")).Once()
-		annotatedTags, annotatedManifests, err := dryRunAnnotate(testCtx, mockClient, testLoginURL, testRepo, "[\\s\\S]*", true, defaultRegexpMatchTimeoutSeconds)
-		assert.Equal(-1, annotatedTags, "Number of annotated elements should be -1")
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(nil, errors.New("error fetching tags")).Once()
+		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], "[\\s\\S]*", defaultRegexpMatchTimeoutSeconds, true)
+		annotatedManifests, errManifests := annotateDanglingManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], true)
+		assert.Equal(0, annotatedTags, "Number of annotated elements should be 0")
 		assert.Equal(-1, annotatedManifests, "Number of annotated elements should be -1")
-		assert.NotEqual(nil, err, "Error should not be nil")
+		assert.Equal(nil, err, "Error should be nil")
+		assert.NotEqual(nil, errManifests, "Error should not be nil")
 		mockClient.AssertExpectations(t)
 	})
 
-	// If there is a GetManifest error for the multiarch scenario, an error should be returned. (line 591)
+	// If there is a GetManifest error for the multiarch scenario, an error should be returned.
 	t.Run("MultiArchGetManifestErrorTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
-		mockClient.On("GetAcrTags", mock.Anything, testRepo, "", "").Return(FourTagsResult, nil).Once()
+		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(FourTagsResult, nil).Once()
-		mockClient.On("GetAcrTags", mock.Anything, testRepo, "", "v4").Return(EmptyListTagsResult, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleMultiArchManifestV2WithTagsResult, nil).Once()
 		mockClient.On("GetManifest", mock.Anything, testRepo, "sha256:d88fb54ba4424dada7c928c6af332ed1c49065ad85eafefb6f26664695015119").Return(nil, errors.New("error getting manifest")).Once()
-		annotatedTags, annotatedManifests, err := dryRunAnnotate(testCtx, mockClient, testLoginURL, testRepo, "^lat.*", true, defaultRegexpMatchTimeoutSeconds)
-		assert.Equal(-1, annotatedTags, "Number of annotated elements should be -1")
+		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], "^lat.*", defaultRegexpMatchTimeoutSeconds, true)
+		annotatedManifests, errManifests := annotateDanglingManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], true)
+		assert.Equal(0, annotatedTags, "Number of annotated elements should be 0")
 		assert.Equal(-1, annotatedManifests, "Number of annotated elements should be -1")
-		assert.NotEqual(nil, err, "Error should not be nil")
+		assert.Equal(nil, err, "Error should be nil")
+		assert.NotEqual(nil, errManifests, "Error should not be nil")
 		mockClient.AssertExpectations(t)
 	})
 
-	// If the returned multiarch manifest json is invalid, an error should be returned. (line 607)
+	// If the returned multiarch manifest json is invalid, an error should be returned.
 	t.Run("MultiArchInvalidJSONTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
+		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(FourTagsResult, nil).Once()
-		mockClient.On("GetAcrTags", mock.Anything, testRepo, "", "").Return(FourTagsResult, nil).Once()
-		mockClient.On("GetAcrTags", mock.Anything, testRepo, "", "v4").Return(EmptyListTagsResult, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleMultiArchManifestV2WithTagsResult, nil).Once()
 		mockClient.On("GetManifest", mock.Anything, testRepo, "sha256:d88fb54ba4424dada7c928c6af332ed1c49065ad85eafefb6f26664695015119").Return([]byte("invalid json"), nil).Once()
-		annotatedTags, annotatedManifests, err := dryRunAnnotate(testCtx, mockClient, testLoginURL, testRepo, "^lat.*", true, defaultRegexpMatchTimeoutSeconds)
-		assert.Equal(-1, annotatedTags, "Number of annotated elements should be -1")
+		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], "^lat.*", defaultRegexpMatchTimeoutSeconds, true)
+		annotatedManifests, errManifests := annotateDanglingManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], true)
+		assert.Equal(0, annotatedTags, "Number of annotated elements should be 0")
 		assert.Equal(-1, annotatedManifests, "Number of annotated elements should be -1")
-		assert.NotEqual(nil, err, "Error should not be nil")
+		assert.Equal(nil, err, "Error should be nil")
+		assert.NotEqual(nil, errManifests, "Error should not be nil")
 		mockClient.AssertExpectations(t)
 	})
 
-	// Error on the fourth GetAcrTags, an error should be returned. (line 623)
+	// Error on the fourth GetAcrTags, an error should be returned.
 	t.Run("MultiArchGetAcrTagsErrorTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
+		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(FourTagsResult, nil).Once()
-		mockClient.On("GetAcrTags", mock.Anything, testRepo, "", "").Return(nil, errors.New("error fetching tags")).Once()
-		annotatedTags, annotatedManifests, err := dryRunAnnotate(testCtx, mockClient, testLoginURL, testRepo, "^lat.*", true, defaultRegexpMatchTimeoutSeconds)
-		assert.Equal(-1, annotatedTags, "Number of annotated elements should be -1")
-		assert.Equal(-1, annotatedManifests, "Number of annotated elements should be -1")
-		assert.NotEqual(nil, err, "Error should not be nil")
-		mockClient.AssertExpectations(t)
-	})
-
-	// If there is an error during the second call of GetAcrManifests, an error should be returned. (line 636)
-	t.Run("MultiArchGetAcrTagsError2Test", func(t *testing.T) {
-		assert := assert.New(t)
-		mockClient := &mocks.AcrCLIClientInterface{}
-		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(FourTagsResult, nil).Once()
-		mockClient.On("GetAcrTags", mock.Anything, testRepo, "", "").Return(FourTagsResult, nil).Once()
-		mockClient.On("GetAcrTags", mock.Anything, testRepo, "", "v4").Return(EmptyListTagsResult, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleMultiArchManifestV2WithTagsResult, nil).Once()
 		mockClient.On("GetManifest", mock.Anything, testRepo, "sha256:d88fb54ba4424dada7c928c6af332ed1c49065ad85eafefb6f26664695015119").Return(multiArchManifestV2Bytes, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:d88fb54ba4424dada7c928c6af332ed1c49065ad85eafefb6f26664695015119").Return(nil, errors.New("error fetching manifests")).Once()
-		annotatedTags, annotatedManifests, err := dryRunAnnotate(testCtx, mockClient, testLoginURL, testRepo, "^lat.*", true, defaultRegexpMatchTimeoutSeconds)
-		assert.Equal(-1, annotatedTags, "Number of annotated elements should be -1")
-		assert.Equal(-1, annotatedManifests, "Number of annotated elements should be -1")
-		assert.NotEqual(nil, err, "Error should not be nil")
+		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], "^lat.*", defaultRegexpMatchTimeoutSeconds, true)
+		annotatedManifests, errManifests := annotateDanglingManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], true)
+		assert.Equal(0, annotatedTags, "Number of annotated tags should be 0")
+		assert.Equal(-1, annotatedManifests, "Number of annotated manifests should be -1")
+		assert.Equal(nil, err, "Error should be nil")
+		assert.NotEqual(nil, errManifests, "Error should not be nil")
 		mockClient.AssertExpectations(t)
 	})
 
 	// One image that has no tags belongs to a multiarch image that has tags so it should not be annotated, but there is one manifest
-	// that should be annotated. (line 653)
+	// that should be annotated.
 	t.Run("MultiArchGetAcrTagsError2Test", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
+		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(FourTagsResult, nil).Once()
-		mockClient.On("GetAcrTags", mock.Anything, testRepo, "", "").Return(FourTagsResult, nil).Once()
-		mockClient.On("GetAcrTags", mock.Anything, testRepo, "", "v4").Return(EmptyListTagsResult, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleMultiArchManifestV2WithTagsResult, nil).Once()
 		mockClient.On("GetManifest", mock.Anything, testRepo, "sha256:d88fb54ba4424dada7c928c6af332ed1c49065ad85eafefb6f26664695015119").Return(multiArchManifestV2Bytes, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:d88fb54ba4424dada7c928c6af332ed1c49065ad85eafefb6f26664695015119").Return(doubleManifestV2WithoutTagsResult, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696").Return(EmptyListManifestsResult, nil).Once()
-		annotatedTags, annotatedManifests, err := dryRunAnnotate(testCtx, mockClient, testLoginURL, testRepo, "^lat.*", true, defaultRegexpMatchTimeoutSeconds)
+		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], "^lat.*", defaultRegexpMatchTimeoutSeconds, true)
+		annotatedManifests, errManifests := annotateDanglingManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], true)
 		assert.Equal(0, annotatedTags, "Number of annotated elements should be 0")
 		assert.Equal(1, annotatedManifests, "Number of annotated elements should be 1")
 		assert.Equal(nil, err, "Error should be nil")
+		assert.Equal(nil, errManifests, "Error should be nil")
 		mockClient.AssertExpectations(t)
 	})
 
@@ -621,11 +618,11 @@ func TestDryRunAnnotate(t *testing.T) {
 	t.Run("NoAnnotationTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
+		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(OneTagResultWithNext, nil).Once()
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "latest").Return(FourTagsResult, nil).Once()
-		annotatedTags, annotatedManifests, err := dryRunAnnotate(testCtx, mockClient, testLoginURL, testRepo, "^i.*", false, defaultRegexpMatchTimeoutSeconds)
+		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], "^i.*", defaultRegexpMatchTimeoutSeconds, true)
 		assert.Equal(0, annotatedTags, "Number of annotated elements should be 0")
-		assert.Equal(0, annotatedManifests, "Number of annotated elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
 	})
