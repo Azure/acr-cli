@@ -5,16 +5,13 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 
 	"github.com/Azure/acr-cli/acr"
 	"github.com/Azure/acr-cli/cmd/api"
 	"github.com/Azure/acr-cli/cmd/worker"
-	"github.com/Azure/acr-cli/internal/container/set"
 	"github.com/dlclark/regexp2"
-	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/spf13/cobra"
 )
 
@@ -62,7 +59,7 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 	annotateParams := annotateParameters{rootParameters: rootParams}
 	cmd := &cobra.Command{
 		Use:     "annotate",
-		Short:   "Annotate images in a registry",
+		Short:   "[Preview] Annotate images in a registry",
 		Long:    newAnnotateCmdLongMessage,
 		Example: annotateExampleMessage,
 		RunE: func(_ *cobra.Command, _ []string) error {
@@ -106,7 +103,6 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 				fmt.Printf("Specified concurrency value too large. Set to maximum value: %d \n", maxPoolSize)
 			}
 			for repoName, tagRegex := range tagFilters {
-				// if !annotateParams.dryRun {
 				singleAnnotatedTagsCount, err := annotateTags(ctx, acrClient, orasClient, poolSize, loginURL, repoName, annotateParams.artifactType, annotateParams.annotations, tagRegex, annotateParams.filterTimeout, annotateParams.dryRun)
 				if err != nil {
 					return fmt.Errorf("failed to annotate tags: %w", err)
@@ -128,10 +124,10 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 
 			// After all repos have been purged, the summary is printed
 			if annotateParams.dryRun {
-				fmt.Printf("\nNumber of tags to be annotated: %d\n", annotatedTagsCount)
+				fmt.Printf("\nNumber of tags to be annotated: %d", annotatedTagsCount)
 				fmt.Printf("\nNumber of manifests to be annotated: %d\n", annotatedManifestsCount)
 			} else {
-				fmt.Printf("\nNumber of annotated tags: %d\n", annotatedTagsCount)
+				fmt.Printf("\nNumber of annotated tags: %d", annotatedTagsCount)
 				fmt.Printf("\nNumber of annotated manifests: %d\n", annotatedManifestsCount)
 			}
 			return nil
@@ -280,7 +276,7 @@ func annotateDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientIn
 	// Contrary to getTagsToAnnotate, getManifestsToAnnotate gets all the manifests at once.
 	// This was done because if there is a manifest that has no tag but is referenced by a multiarch manifest that has tags then it
 	// should not be annotated.
-	manifestsToAnnotate, err := getManifestsToAnnotate(ctx, acrClient, loginURL, repoName, dryRun)
+	manifestsToAnnotate, err := getManifests(ctx, acrClient, loginURL, repoName, dryRun, false)
 	if err != nil {
 		return -1, err
 	}
@@ -308,83 +304,83 @@ func annotateDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientIn
 
 // getManifestsToAnnotate gets all the manifests that should be annotated under the scenario that they do not have any tag
 // and do not form part of a manifest list that has tags referencing it.
-func getManifestsToAnnotate(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string, dryRun bool) (*[]acr.ManifestAttributesBase, error) {
-	lastManifestDigest := ""
-	var manifestsToAnnotate []acr.ManifestAttributesBase
-	resultManifests, err := acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
-	if err != nil {
-		if resultManifests != nil && resultManifests.Response.Response != nil && resultManifests.StatusCode == http.StatusNotFound {
-			fmt.Printf("%s repository not found\n", repoName)
-			return &manifestsToAnnotate, nil
-		}
-		return nil, err
-	}
-	// This will act as a set. If a key is present then it should not be annotated because it is referenced by a multiarch manifest.
-	doNotAnnotate := set.New[string]()
-	var candidatesToAnnotate []acr.ManifestAttributesBase
-	for resultManifests != nil && resultManifests.ManifestsAttributes != nil {
-		manifests := *resultManifests.ManifestsAttributes
-		for _, manifest := range manifests {
-			if manifest.Tags != nil {
-				// If a manifest has tags and its media type supports multiarch manifests, we will
-				// iterate all its dependent manifests and mark them as not to be annotated.
-				err = doNotAnnotateDependantManifests(ctx, manifest, doNotAnnotate, acrClient, repoName)
-				if err != nil {
-					return nil, err
-				}
-			} else {
-				candidatesToAnnotate = append(candidatesToAnnotate, manifest)
-			}
-		}
+// func getManifestsToAnnotate(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string, dryRun bool) (*[]acr.ManifestAttributesBase, error) {
+// 	lastManifestDigest := ""
+// 	var manifestsToAnnotate []acr.ManifestAttributesBase
+// 	resultManifests, err := acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
+// 	if err != nil {
+// 		if resultManifests != nil && resultManifests.Response.Response != nil && resultManifests.StatusCode == http.StatusNotFound {
+// 			fmt.Printf("%s repository not found\n", repoName)
+// 			return &manifestsToAnnotate, nil
+// 		}
+// 		return nil, err
+// 	}
+// 	// This will act as a set. If a key is present then it should not be annotated because it is referenced by a multiarch manifest.
+// 	doNotAnnotate := set.New[string]()
+// 	var candidatesToAnnotate []acr.ManifestAttributesBase
+// 	for resultManifests != nil && resultManifests.ManifestsAttributes != nil {
+// 		manifests := *resultManifests.ManifestsAttributes
+// 		for _, manifest := range manifests {
+// 			if manifest.Tags != nil {
+// 				// If a manifest has tags and its media type supports multiarch manifests, we will
+// 				// iterate all its dependent manifests and mark them as not to be annotated.
+// 				err = doNotAnnotateDependantManifests(ctx, manifest, doNotAnnotate, acrClient, repoName)
+// 				if err != nil {
+// 					return nil, err
+// 				}
+// 			} else {
+// 				candidatesToAnnotate = append(candidatesToAnnotate, manifest)
+// 			}
+// 		}
 
-		// Get the last manifest digest from the last manifest from manifests
-		lastManifestDigest = *manifests[len(manifests)-1].Digest
-		// Use this new digest to find the next batch of manifests
-		resultManifests, err = acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
-		if err != nil {
-			return nil, err
-		}
-	}
+// 		// Get the last manifest digest from the last manifest from manifests
+// 		lastManifestDigest = *manifests[len(manifests)-1].Digest
+// 		// Use this new digest to find the next batch of manifests
+// 		resultManifests, err = acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
+// 		if err != nil {
+// 			return nil, err
+// 		}
+// 	}
 
-	// Remove all manifests that should not be annotated
-	for i := 0; i < len(candidatesToAnnotate); i++ {
-		if !doNotAnnotate.Contains(*candidatesToAnnotate[i].Digest) {
-			// if a manifest has no tags, is not part of a manifest list and can be annotated then it is added to the
-			// manifestsToAnnotate array.
-			if *(*candidatesToAnnotate[i].ChangeableAttributes).WriteEnabled {
-				manifestsToAnnotate = append(manifestsToAnnotate, candidatesToAnnotate[i])
-				if dryRun {
-					fmt.Printf("%s/%s@%s\n", loginURL, repoName, *candidatesToAnnotate[i].Digest)
-				}
-			}
-		}
-	}
+// 	// Remove all manifests that should not be annotated
+// 	for i := 0; i < len(candidatesToAnnotate); i++ {
+// 		if !doNotAnnotate.Contains(*candidatesToAnnotate[i].Digest) {
+// 			// if a manifest has no tags, is not part of a manifest list and can be annotated then it is added to the
+// 			// manifestsToAnnotate array.
+// 			if *(*candidatesToAnnotate[i].ChangeableAttributes).WriteEnabled {
+// 				manifestsToAnnotate = append(manifestsToAnnotate, candidatesToAnnotate[i])
+// 				if dryRun {
+// 					fmt.Printf("%s/%s@%s\n", loginURL, repoName, *candidatesToAnnotate[i].Digest)
+// 				}
+// 			}
+// 		}
+// 	}
 
-	return &manifestsToAnnotate, nil
-}
+// 	return &manifestsToAnnotate, nil
+// }
 
 // doNotAnnotateDependantManifests adds the dependant manifest to doNotAnnotate
 // if the referred manifest has tags.
-func doNotAnnotateDependantManifests(ctx context.Context, manifest acr.ManifestAttributesBase, doNotAnnotate set.Set[string], acrClient api.AcrCLIClientInterface, repoName string) error {
-	switch *manifest.MediaType {
-	case mediaTypeDockerManifestList, v1.MediaTypeImageIndex:
-		var manifestBytes []byte
-		manifestBytes, err := acrClient.GetManifest(ctx, repoName, *manifest.Digest)
-		if err != nil {
-			return err
-		}
-		// this struct defines a customized struct for manifests
-		// which is used to parse the content of a multiarch manifest
-		mam := struct {
-			Manifests []v1.Descriptor `json:"manifests"`
-		}{}
+// func doNotAnnotateDependantManifests(ctx context.Context, manifest acr.ManifestAttributesBase, doNotAnnotate set.Set[string], acrClient api.AcrCLIClientInterface, repoName string) error {
+// 	switch *manifest.MediaType {
+// 	case mediaTypeDockerManifestList, v1.MediaTypeImageIndex:
+// 		var manifestBytes []byte
+// 		manifestBytes, err := acrClient.GetManifest(ctx, repoName, *manifest.Digest)
+// 		if err != nil {
+// 			return err
+// 		}
+// 		// this struct defines a customized struct for manifests
+// 		// which is used to parse the content of a multiarch manifest
+// 		mam := struct {
+// 			Manifests []v1.Descriptor `json:"manifests"`
+// 		}{}
 
-		if err = json.Unmarshal(manifestBytes, &mam); err != nil {
-			return err
-		}
-		for _, dependentManifest := range mam.Manifests {
-			doNotAnnotate.Add(dependentManifest.Digest.String())
-		}
-	}
-	return nil
-}
+// 		if err = json.Unmarshal(manifestBytes, &mam); err != nil {
+// 			return err
+// 		}
+// 		for _, dependentManifest := range mam.Manifests {
+// 			doNotAnnotate.Add(dependentManifest.Digest.String())
+// 		}
+// 	}
+// 	return nil
+// }

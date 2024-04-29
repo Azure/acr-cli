@@ -427,6 +427,21 @@ func TestAnnotateManifests(t *testing.T) {
 		mockOrasClient.AssertExpectations(t)
 	})
 
+	// If a manifest should be annotated but the delete-enabled attribute is set to false it should not be deleted
+	// and no error should show on the CLI output.
+	t.Run("OperationNotAllowedManifestDeleteDisabledTest", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		mockOrasClient := &mocks.ORASClientInterface{}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(deleteDisabledOneManifestResult, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", digest).Return(EmptyListManifestsResult, nil).Once()
+		annotatedManifests, err := annotateDanglingManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false)
+		assert.Equal(0, annotatedManifests, "Number of deleted elements should be 0")
+		assert.Equal(nil, err, "Error should be nil")
+		mockClient.AssertExpectations(t)
+		mockOrasClient.AssertExpectations(t)
+	})
+
 	// If a manifest should be annotated but the write-enabled attribute is set to false, it should not be annotated
 	// and no error should show on the CLI output.
 	t.Run("OperationNotAllowedManifestWriteDisabledTest", func(t *testing.T) {
