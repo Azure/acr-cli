@@ -20,4 +20,4 @@ linters:
     - govet
     - ineffassign
     - unconvert
-    - varcheck
+    - unused
