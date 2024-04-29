@@ -1,13 +1,7 @@
 run:
   concurrency: 2
   deadline: 10m
-  skip-dirs:
-    - vendor
-    - docs
-    - baseimages
 linters-settings:
-  govet:
-    check-shadowing: true
   golint:
     min-confidence: 0
 linters:
@@ -21,3 +15,8 @@ linters:
     - ineffassign
     - unconvert
     - unused
+issues:
+  exclude-dirs:
+    - vendor
+    - docs
+    - baseimages

@@ -21,7 +21,7 @@ func newVersionCmd() *cobra.Command {
 		Use:   "version",
 		Short: "Print version information",
 		Long:  versionLongMessage,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			fmt.Printf(`Version: %s, Revision: %s
 `, version.Version, version.Revision)
 			return nil
