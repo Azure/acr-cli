@@ -15,7 +15,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
-	"oras.land/oras-go/v2"
+	oras "oras.land/oras-go/v2"
 	"oras.land/oras-go/v2/content"
 	"oras.land/oras-go/v2/registry/remote"
 	"oras.land/oras-go/v2/registry/remote/auth"
@@ -128,7 +128,7 @@ func listFilteredRepositoriesByFilterPolicy(ctx context.Context, csscParams *css
 	}
 
 	// 2. Get manifest by tag
-	_, pulledManifestContent, err := v2.FetchBytes(ctx, repo, filterRepoTagName, v2.DefaultFetchBytesOptions)
+	_, pulledManifestContent, err := oras.FetchBytes(ctx, repo, filterRepoTagName, oras.DefaultFetchBytesOptions)
 	if err != nil {
 		panic(err)
 	}
