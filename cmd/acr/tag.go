@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/Azure/acr-cli/acr"
 	"github.com/Azure/acr-cli/cmd/api"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -32,7 +33,7 @@ func newTagCmd(rootParams *rootParameters) *cobra.Command {
 		Use:   "tag",
 		Short: "Manage tags inside a repository",
 		Long:  newTagCmdLongMessage,
-		RunE: func(cmd *cobra.Command, _ []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.Help()
 			return nil
 		},
@@ -59,7 +60,7 @@ func newTagListCmd(tagParams *tagParameters) *cobra.Command {
 		Use:   "list",
 		Short: "List tags from a repository",
 		Long:  newTagListCmdLongMessage,
-		RunE: func(_ *cobra.Command, _ []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			registryName, err := tagParams.GetRegistryName()
 			if err != nil {
 				return err
@@ -71,42 +72,51 @@ func newTagListCmd(tagParams *tagParameters) *cobra.Command {
 				return err
 			}
 			ctx := context.Background()
-			err = listTags(ctx, acrClient, loginURL, tagParams.repoName)
+			tagList, err := listTags(ctx, acrClient, loginURL, tagParams.repoName)
 			if err != nil {
 				return err
 			}
+			fmt.Printf("Listing tags for the %q repository:\n", tagParams.repoName)
+			for _, tag := range tagList {
+				fmt.Printf("%s/%s:%s\n", loginURL, tagParams.repoName, *tag.Name)
+			}
+
 			return nil
 		},
 	}
 	return cmd
 }
 
-// listTagss will do the http requests and print the digest of all the tags in the selected repository.
-func listTags(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string) error {
+// listTags will do the http requests and return the digest of all the tags in the selected repository.
+func listTags(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string) ([]acr.TagAttributesBase, error) {
+	//var resultList *[]acr.TagAttributesBase
 	lastTag := ""
 	resultTags, err := acrClient.GetAcrTags(ctx, repoName, "", lastTag)
 	if err != nil {
-		return errors.Wrap(err, "failed to list tags")
+		return nil, errors.Wrap(err, "failed to list tags")
 	}
 
-	fmt.Printf("Listing tags for the %q repository:\n", repoName)
+	var resultList []acr.TagAttributesBase
+	resultList = append(resultList, *resultTags.TagsAttributes...)
+
 	// A for loop is used because the GetAcrTags method returns by default only 100 tags and their attributes.
 	for resultTags != nil && resultTags.TagsAttributes != nil {
 		tags := *resultTags.TagsAttributes
-		for _, tag := range tags {
-			tagName := *tag.Name
-			fmt.Printf("%s/%s:%s\n", loginURL, repoName, tagName)
-		}
+
 		// Since the GetAcrTags supports pagination when supplied with the last digest that was returned the last tag name
 		// digest is saved, the tag array contains at least one element because if it was empty the API would return
 		// a nil pointer instead of a pointer to a length 0 array.
 		lastTag = *tags[len(tags)-1].Name
 		resultTags, err = acrClient.GetAcrTags(ctx, repoName, "", lastTag)
 		if err != nil {
-			return err
+			return nil, err
+		}
+		if resultTags != nil && resultTags.TagsAttributes != nil {
+			resultList = append(resultList, *resultTags.TagsAttributes...)
 		}
 	}
-	return nil
+
+	return resultList, nil
 }
 
 // newTagDeleteCmd defines the tag delete subcommand, it receives as an argument an array of tag digests.
@@ -116,7 +126,7 @@ func newTagDeleteCmd(tagParams *tagParameters) *cobra.Command {
 		Use:   "delete",
 		Short: "Delete tags from a repository",
 		Long:  newTagDeleteCmdLongMessage,
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			registryName, err := tagParams.GetRegistryName()
 			if err != nil {
 				return err

@@ -127,3 +127,26 @@ func (_m *AcrCLIClientInterface) GetManifest(ctx context.Context, repoName strin
 
 	return r0, r1
 }
+
+// GetRepositories provides a mock function with given fields: ctx
+func (_m *AcrCLIClientInterface) GetAcrRepositories(ctx context.Context, last string, n *int32) (*acr.Repositories, error) {
+	ret := _m.Called(ctx, last, n)
+
+	var r0 *acr.Repositories
+	if rf, ok := ret.Get(0).(func(context.Context, string, int32) *acr.Repositories); ok {
+		r0 = rf(ctx, last, *n)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*acr.Repositories)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, string, int32) error); ok {
+		r1 = rf(ctx, last, *n)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}

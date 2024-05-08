@@ -295,6 +295,19 @@ func (c *AcrCLIClient) GetManifest(ctx context.Context, repoName string, referen
 	return manifestBytes, nil
 }
 
+func (c *AcrCLIClient) GetAcrRepositories(ctx context.Context, last string, n *int32) (*acrapi.Repositories, error) {
+	if c.isExpired() {
+		if err := refreshAcrCLIClientToken(ctx, c); err != nil {
+			return nil, err
+		}
+	}
+	repos, err := c.AutorestClient.GetAcrRepositories(ctx, last, n)
+	if err != nil {
+		return &repos, err
+	}
+	return &repos, nil
+}
+
 // AcrCLIClientInterface defines the required methods that the acr-cli will need to use.
 type AcrCLIClientInterface interface {
 	GetAcrTags(ctx context.Context, repoName string, orderBy string, last string) (*acrapi.RepositoryTagsType, error)
@@ -302,4 +315,5 @@ type AcrCLIClientInterface interface {
 	GetAcrManifests(ctx context.Context, repoName string, orderBy string, last string) (*acrapi.Manifests, error)
 	DeleteManifest(ctx context.Context, repoName string, reference string) (*autorest.Response, error)
 	GetManifest(ctx context.Context, repoName string, reference string) ([]byte, error)
+	GetAcrRepositories(ctx context.Context, last string, n *int32) (*acrapi.Repositories, error)
 }
