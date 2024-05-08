@@ -139,7 +139,7 @@ func listFilteredRepositoriesByFilterPolicy(ctx context.Context, csscParams *css
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(string(pulledManifestContent))
+	//fmt.Println(string(pulledManifestContent))
 
 	// 3. Parse the pulled manifest and fetch its layers.
 	var pulledManifest v1.Manifest
@@ -153,7 +153,7 @@ func listFilteredRepositoriesByFilterPolicy(ctx context.Context, csscParams *css
 		if err != nil {
 			panic(err)
 		}
-		fmt.Println(string(fileContent))
+		//fmt.Println(string(fileContent))
 	}
 
 	//4. Unmarshal the JSON file data into the filter slice
