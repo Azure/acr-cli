@@ -15,6 +15,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
+	"oras.land/oras-go/v2"
 	"oras.land/oras-go/v2/content"
 	"oras.land/oras-go/v2/registry/remote"
 	"oras.land/oras-go/v2/registry/remote/auth"
@@ -125,21 +126,12 @@ func listFilteredRepositoriesByFilterPolicy(ctx context.Context, csscParams *css
 			Password: csscParams.password,
 		}),
 	}
+
 	// 2. Get manifest by tag
-	descriptor, err := repo.Resolve(ctx, filterRepoTagName)
+	_, pulledManifestContent, err := v2.FetchBytes(ctx, repo, filterRepoTagName, v2.DefaultFetchBytesOptions)
 	if err != nil {
 		panic(err)
 	}
-	rc, err := repo.Fetch(ctx, descriptor)
-	if err != nil {
-		panic(err)
-	}
-	defer rc.Close() // don't forget to close
-	pulledManifestContent, err := content.ReadAll(rc, descriptor)
-	if err != nil {
-		panic(err)
-	}
-	//fmt.Println(string(pulledManifestContent))
 
 	// 3. Parse the pulled manifest and fetch its layers.
 	var pulledManifest v1.Manifest
@@ -147,13 +139,12 @@ func listFilteredRepositoriesByFilterPolicy(ctx context.Context, csscParams *css
 		panic(err)
 	}
 
-	fileContent := []byte{}
+	var fileContent []byte
 	for _, layer := range pulledManifest.Layers {
 		fileContent, err = content.FetchAll(ctx, repo, layer)
 		if err != nil {
 			panic(err)
 		}
-		//fmt.Println(string(fileContent))
 	}
 
 	//4. Unmarshal the JSON file data into the filter slice
