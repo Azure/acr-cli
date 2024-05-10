@@ -33,7 +33,7 @@ func newTagCmd(rootParams *rootParameters) *cobra.Command {
 		Use:   "tag",
 		Short: "Manage tags inside a repository",
 		Long:  newTagCmdLongMessage,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.Help()
 			return nil
 		},
@@ -60,7 +60,7 @@ func newTagListCmd(tagParams *tagParameters) *cobra.Command {
 		Use:   "list",
 		Short: "List tags from a repository",
 		Long:  newTagListCmdLongMessage,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			registryName, err := tagParams.GetRegistryName()
 			if err != nil {
 				return err
@@ -72,7 +72,7 @@ func newTagListCmd(tagParams *tagParameters) *cobra.Command {
 				return err
 			}
 			ctx := context.Background()
-			tagList, err := listTags(ctx, acrClient, loginURL, tagParams.repoName)
+			tagList, err := listTags(ctx, acrClient, tagParams.repoName)
 			if err != nil {
 				return err
 			}
@@ -88,16 +88,16 @@ func newTagListCmd(tagParams *tagParameters) *cobra.Command {
 }
 
 // listTags will do the http requests and return the digest of all the tags in the selected repository.
-func listTags(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string) ([]acr.TagAttributesBase, error) {
-	//var resultList *[]acr.TagAttributesBase
+func listTags(ctx context.Context, acrClient api.AcrCLIClientInterface, repoName string) ([]acr.TagAttributesBase, error) {
+
 	lastTag := ""
 	resultTags, err := acrClient.GetAcrTags(ctx, repoName, "", lastTag)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to list tags")
 	}
 
-	var resultList []acr.TagAttributesBase
-	resultList = append(resultList, *resultTags.TagsAttributes...)
+	var tagList []acr.TagAttributesBase
+	tagList = append(tagList, *resultTags.TagsAttributes...)
 
 	// A for loop is used because the GetAcrTags method returns by default only 100 tags and their attributes.
 	for resultTags != nil && resultTags.TagsAttributes != nil {
@@ -112,11 +112,11 @@ func listTags(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL
 			return nil, err
 		}
 		if resultTags != nil && resultTags.TagsAttributes != nil {
-			resultList = append(resultList, *resultTags.TagsAttributes...)
+			tagList = append(tagList, *resultTags.TagsAttributes...)
 		}
 	}
 
-	return resultList, nil
+	return tagList, nil
 }
 
 // newTagDeleteCmd defines the tag delete subcommand, it receives as an argument an array of tag digests.
@@ -126,7 +126,7 @@ func newTagDeleteCmd(tagParams *tagParameters) *cobra.Command {
 		Use:   "delete",
 		Short: "Delete tags from a repository",
 		Long:  newTagDeleteCmdLongMessage,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, args []string) error {
 			registryName, err := tagParams.GetRegistryName()
 			if err != nil {
 				return err
