@@ -192,10 +192,10 @@ func getAndFilterRepositories(ctx context.Context, acrClient api.AcrCLIClientInt
 			continue
 		}
 		if f.Repository == "" {
-			return nil, errors.New("repository is not specified in the filter") // Return an error if repository is not specified in the filter
+			return nil, errors.New("one or more repository missing in the filter") // Return an error if repository is not specified in the filter
 		}
 		if f.Tags == nil || len(f.Tags) == 0 { // Return an error if tags are not specified in the filter
-			return nil, errors.New("tags are not specified in the filter")
+			return nil, errors.New("one or more tag missing in the filter")
 		}
 
 		// Get all tags for the repository

@@ -32,7 +32,7 @@ func TestNewPatchFilterCmd(t *testing.T) {
 func TestGetAndFilterRepositories(t *testing.T) {
 	mockAcrClient := &mocks.AcrCLIClientInterface{}
 
-	//1. Error when the repository is not specified in the filter
+	// 1. Error should be returned when one or more repository is not specified in the filter
 	t.Run("RepositoryNotSpecifiedTest", func(t *testing.T) {
 		filter := []Filter{
 			{
@@ -43,11 +43,11 @@ func TestGetAndFilterRepositories(t *testing.T) {
 		}
 		filteredRepositories, err := getAndFilterRepositories(context.Background(), mockAcrClient, filter)
 		assert.Error(t, err)
-		assert.ErrorContains(t, err, "repository is not specified in the filter")
+		assert.ErrorContains(t, err, "one or more repository missing in the filter")
 		assert.Nil(t, filteredRepositories)
 	})
 
-	//2. Error when the tags are not specified in the filter
+	//2. Error should be returned when one or more tag is not specified in the filter
 	t.Run("TagsNotSpecifiedTest", func(t *testing.T) {
 		filter := []Filter{
 			{
@@ -58,11 +58,11 @@ func TestGetAndFilterRepositories(t *testing.T) {
 		}
 		filteredRepositories, err := getAndFilterRepositories(context.Background(), mockAcrClient, filter)
 		assert.Error(t, err)
-		assert.ErrorContains(t, err, "tags are not specified in the filter")
+		assert.ErrorContains(t, err, "one or more tag missing in the filter")
 		assert.Nil(t, filteredRepositories)
 	})
 
-	//3. Test when GetAcrTags fails
+	//3. Error should be returned when GetAcrTags fails for a repository
 	t.Run("GetAcrTagsFailsTest", func(t *testing.T) {
 		filter := []Filter{
 			{
@@ -78,7 +78,7 @@ func TestGetAndFilterRepositories(t *testing.T) {
 		assert.Nil(t, filteredRepositories)
 	})
 
-	//4. Test when a tag in filter does not actually exist in the repository, skip that tag in the result
+	//4. If filter has a tag that doesn't exist in the repository, ignore it and return what exists and matches the filter
 	t.Run("TagSpecifiedInFilterDoesNotExistTest", func(t *testing.T) {
 		filter := []Filter{
 			{
@@ -97,7 +97,7 @@ func TestGetAndFilterRepositories(t *testing.T) {
 		assert.Equal(t, csscTestTag1, filteredRepositories[0].Tag)
 	})
 
-	// 5. Test with all the combination of filters
+	// 5. Success scenario with all the combination of filters
 	t.Run("AllFilterCombinationTest", func(t *testing.T) {
 		filter := []Filter{
 			{
@@ -164,7 +164,7 @@ func TestListRepositoriesAndTagsMatchingFilterPolicy(t *testing.T) {
 	loginURL := testLoginURL
 	mockAcrClient := &mocks.AcrCLIClientInterface{}
 
-	//1. Test when the filter policy is not in the correct format
+	//1. Error should be returned when filter policy is not in the correct format
 	t.Run("FilterPolicyNotCorrectFormatTest", func(t *testing.T) {
 		csscParams.filterPolicy = "notcorrectformat"
 		err := listRepositoriesAndTagsMatchingFilterPolicy(context.Background(), &csscParams, loginURL, mockAcrClient)
@@ -172,7 +172,7 @@ func TestListRepositoriesAndTagsMatchingFilterPolicy(t *testing.T) {
 		assert.Equal(t, "--filter-policy should be in the format repo:tag", err.Error())
 	})
 
-	//2. Test when fetch bytes fails for the filter policy
+	//2. Error should be returned when fetching repository manifest fails
 	t.Run("FetchBytesFailsTest", func(t *testing.T) {
 		csscParams.filterPolicy = "repo1:tag1"
 		err := listRepositoriesAndTagsMatchingFilterPolicy(context.Background(), &csscParams, loginURL, mockAcrClient)
@@ -181,14 +181,14 @@ func TestListRepositoriesAndTagsMatchingFilterPolicy(t *testing.T) {
 	})
 }
 
-// TestGetRegistryCredsFromStore tests the case where creds are provided.
+
 func TestGetRegistryCredsFromStore(t *testing.T) {
 	rootParams := &rootParameters{}
 	rootParams.configs = []string{"config1", "config2"}
 	csscParams := csscParameters{rootParameters: rootParams}
 	loginURL := testLoginURL
 
-	// 1. When creds are provided
+	// 1. Should not get the creds from the store when creds are provided
 	t.Run("CredsProvidedTest", func(t *testing.T) {
 		rootParams.username = "username"
 		rootParams.password = "password"
@@ -197,7 +197,7 @@ func TestGetRegistryCredsFromStore(t *testing.T) {
 		assert.Equal(t, "password", csscParams.password)
 	})
 
-	// 2. When creds are not provided and store is empty
+	// 2. When creds are not provided, should get the creds from the store
 	t.Run("CredsNotProvidedTest", func(t *testing.T) {
 		rootParams.username = ""
 		rootParams.password = ""
@@ -210,7 +210,7 @@ func TestGetRegistryCredsFromStore(t *testing.T) {
 // Test appending element to a slice which does not contain the element. It should be appended.
 func TestAppendElement(t *testing.T) {
 
-	// 1. Test when the slice does not contain the element
+	// 1. Should append the element to the slice when the slice does not contain the element
 	t.Run("AppendElementTest", func(t *testing.T) {
 		slice := []FilteredRepository{
 			{
@@ -234,7 +234,7 @@ func TestAppendElement(t *testing.T) {
 		assert.Equal(t, csscTestPatch2, newSlice[1].PatchTag)
 	})
 
-	// 2. Test when the slice already contains the element
+	// 2. Should not append the element to the slice when the slice already contains the element
 	t.Run("AppendElementAlreadyExistsTest", func(t *testing.T) {
 		slice := []FilteredRepository{
 			{
