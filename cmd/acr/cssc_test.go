@@ -32,7 +32,7 @@ func TestNewPatchFilterCmd(t *testing.T) {
 func TestGetAndFilterRepositories(t *testing.T) {
 	mockAcrClient := &mocks.AcrCLIClientInterface{}
 
-	// 1. Error should be returned when one or more repository is not specified in the filter
+	// 1. If Repository is not specified in the filter, return an empty list
 	t.Run("RepositoryNotSpecifiedTest", func(t *testing.T) {
 		filter := []Filter{
 			{
@@ -42,12 +42,12 @@ func TestGetAndFilterRepositories(t *testing.T) {
 			},
 		}
 		filteredRepositories, err := getAndFilterRepositories(context.Background(), mockAcrClient, filter)
-		assert.Error(t, err)
-		assert.ErrorContains(t, err, "one or more repository missing in the filter")
+		assert.NoError(t, err)
 		assert.Nil(t, filteredRepositories)
+		assert.Len(t, filteredRepositories, 0)
 	})
 
-	//2. Error should be returned when one or more tag is not specified in the filter
+	//2.  If Tag is not specified in the filter, return an empty list
 	t.Run("TagsNotSpecifiedTest", func(t *testing.T) {
 		filter := []Filter{
 			{
@@ -55,11 +55,16 @@ func TestGetAndFilterRepositories(t *testing.T) {
 				Tags:       nil,
 				Enabled:    boolPtr(true),
 			},
+			{
+				Repository: csscTestRepo2,
+				Tags:       []string{""},
+				Enabled:    boolPtr(true),
+			},
 		}
 		filteredRepositories, err := getAndFilterRepositories(context.Background(), mockAcrClient, filter)
-		assert.Error(t, err)
-		assert.ErrorContains(t, err, "one or more tag missing in the filter")
+		assert.NoError(t, err)
 		assert.Nil(t, filteredRepositories)
+		assert.Len(t, filteredRepositories, 0)
 	})
 
 	//3. Error should be returned when GetAcrTags fails for a repository
@@ -180,7 +185,6 @@ func TestListRepositoriesAndTagsMatchingFilterPolicy(t *testing.T) {
 		assert.ErrorContains(t, err, "Error fetching manifest by tag for the repository and tag specified in the filter policy")
 	})
 }
-
 
 func TestGetRegistryCredsFromStore(t *testing.T) {
 	rootParams := &rootParameters{}
