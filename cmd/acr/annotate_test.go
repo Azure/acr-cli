@@ -197,7 +197,7 @@ func TestGetTagstoAnnotate(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(nil, errors.New("error fetching tags")).Once()
-		_, testLastTag, err := getTagsToAnnotate(testCtx, mockClient, testRepo, tagRegex, "")
+		_, testLastTag, err := getTagsToAnnotate(testCtx, mockClient, testLoginURL, testRepo, tagRegex, "", false)
 		assert.Equal("", testLastTag, "Last tag should be empty")
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
@@ -208,7 +208,7 @@ func TestGetTagstoAnnotate(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(notFoundTagResponse, errors.New("testRepo not found")).Once()
-		_, testLastTag, err := getTagsToAnnotate(testCtx, mockClient, testRepo, tagRegex, "")
+		_, testLastTag, err := getTagsToAnnotate(testCtx, mockClient, testLoginURL, testRepo, tagRegex, "", false)
 		assert.Equal("", testLastTag, "Last tag should be empty")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -219,7 +219,7 @@ func TestGetTagstoAnnotate(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(TagWithLocal, nil).Once()
-		tagsToAnnotate, testLastTag, err := getTagsToAnnotate(testCtx, mockClient, testRepo, tagRegex, "")
+		tagsToAnnotate, testLastTag, err := getTagsToAnnotate(testCtx, mockClient, testLoginURL, testRepo, tagRegex, "", false)
 		assert.Equal(4, len(*tagsToAnnotate), "Number of tags to annotate should be 1")
 		assert.Equal("", testLastTag, "Last tag should be empty")
 		assert.Equal(nil, err, "Error should be nil")

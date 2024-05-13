@@ -4,8 +4,6 @@ import (
 	"context"
 	"sync"
 	"sync/atomic"
-
-	"github.com/Azure/acr-cli/cmd/api"
 )
 
 // pool manages a limited number of workers that process purgeJob.
@@ -21,7 +19,7 @@ func newPool(size int) *pool {
 }
 
 // start starts a goroutine to process purgeJob.
-func (p *pool) start(ctx context.Context, job purgeJob, acrClient api.AcrCLIClientInterface, errChan chan error, wg *sync.WaitGroup, succ *int64) {
+func (p *pool) start(ctx context.Context, job job, errChan chan error, wg *sync.WaitGroup, succ *int64) {
 	select {
 	case <-ctx.Done():
 		// Return when context is canceled
@@ -37,34 +35,7 @@ func (p *pool) start(ctx context.Context, job purgeJob, acrClient api.AcrCLIClie
 		}()
 		defer wg.Done()
 
-		err := job.process(ctx, acrClient)
-		// If error occurs, put error in errChan, otherwise increase the success count
-		if err != nil {
-			errChan <- err
-		} else {
-			atomic.AddInt64(succ, 1)
-		}
-	}()
-}
-
-// starts a goroutine to process annotateJob.
-func (p *pool) startAnnotate(ctx context.Context, job annotateJob, orasClient api.ORASClientInterface, errChan chan error, wg *sync.WaitGroup, succ *int64) {
-	select {
-	case <-ctx.Done():
-		// Return when context is canceled
-		return
-	case p.sem <- struct{}{}: // Acquire a semaphore
-	}
-
-	wg.Add(1)
-	go func() {
-		// Release a semaphore
-		defer func() {
-			<-p.sem
-		}()
-		defer wg.Done()
-
-		err := job.processAnnotate(ctx, orasClient)
+		err := job.execute(ctx)
 		// If error occurs, put error in errChan, otherwise increase the success count
 		if err != nil {
 			errChan <- err
