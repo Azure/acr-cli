@@ -27,17 +27,22 @@ const (
 	newPatchFilterCmdLongMessage = `acr cssc patch: List cssc continuous patch filters for a registry. Use the --filter-policy flag to specify the repo where filters exists. Example: acr cssc patch --filter-policy continuouspatchpolicy:v1.`
 )
 
-// Besides the registry name and authentication information only the repository is needed.
+// Besides the registry name and authentication information only the filterPolicy is needed.
 type csscParameters struct {
 	*rootParameters
 	filterPolicy  string
 	showPatchTags bool
 }
 
-type Filter struct {
+type Repository struct {
 	Repository string   `json:"repository"`
 	Tags       []string `json:"tags"`
 	Enabled    *bool    `json:"enabled"`
+}
+
+type Filter struct {
+	Version      string       `json:"version"`
+	Repositories []Repository `json:"repositories"`
 }
 
 type FilteredRepository struct {
@@ -68,7 +73,7 @@ func newCsscCmd(rootParams *rootParameters) *cobra.Command {
 	return cmd
 }
 
-// The patch subcommand can be used to list cssc continuous patch filters for a registry or to list matching tags and its corresponding patch tag if present.
+// The patch subcommand can be used to list cssc continuous patch filters for a registry.
 func newPatchFilterCmd(csscParams *csscParameters) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "patch",
@@ -101,19 +106,16 @@ func newPatchFilterCmd(csscParams *csscParameters) *cobra.Command {
 	return cmd
 }
 
-// List repositories and tags that match the filter policy
 func listRepositoriesAndTagsMatchingFilterPolicy(ctx context.Context, csscParams *csscParameters, loginURL string, acrClient api.AcrCLIClientInterface) error {
-	// Check if the filter policy is in the correct format
 	if !strings.Contains(csscParams.filterPolicy, ":") {
 		return errors.New("--filter-policy should be in the format repo:tag")
 	}
 
-	// 0. Get the repository and tag from the filter policy
 	repoTag := strings.Split(csscParams.filterPolicy, ":")
 	filterRepoName := repoTag[0]
 	filterRepoTagName := repoTag[1]
 
-	// 1. Connect to the remote repository
+	// Connect to the remote repository
 	repo, err := remote.NewRepository(fmt.Sprintf("%s/%s", loginURL, filterRepoName))
 	if err != nil {
 		panic(err)
@@ -130,18 +132,15 @@ func listRepositoriesAndTagsMatchingFilterPolicy(ctx context.Context, csscParams
 		}),
 	}
 
-	// 2. Get manifest by tag for the repository and tag specified in the filter policy
+	// Get manifest and read content
 	_, pulledManifestContent, err := oras.FetchBytes(ctx, repo, filterRepoTagName, oras.DefaultFetchBytesOptions)
 	if err != nil {
 		return errors.Wrap(err, "Error fetching manifest by tag for the repository and tag specified in the filter policy")
 	}
-
-	// 3. Parse the pulled manifest and fetch its layers.
 	var pulledManifest v1.Manifest
 	if err := json.Unmarshal(pulledManifestContent, &pulledManifest); err != nil {
 		panic(err)
 	}
-
 	var fileContent []byte
 	for _, layer := range pulledManifest.Layers {
 		fileContent, err = content.FetchAll(ctx, repo, layer)
@@ -150,19 +149,18 @@ func listRepositoriesAndTagsMatchingFilterPolicy(ctx context.Context, csscParams
 		}
 	}
 
-	//4. Unmarshal the JSON file data into the filter slice
-	var filter []Filter = nil
+	// Unmarshal the JSON file data to Filter struct
+	var filter Filter = Filter{}
 	if err := json.Unmarshal(fileContent, &filter); err != nil {
 		fmt.Printf("Error unmarshalling JSON data: %v ", err)
 	}
 
-	//5. Get a list of filtered repository and tag which matches the filter
+	// Get a list of filtered repository and tag which matches the filter
 	filteredResult, err := getAndFilterRepositories(ctx, acrClient, filter)
 	if err != nil {
 		return err
 	}
 
-	//6. Print the list of filtered repository and tag
 	if len(filteredResult) == 0 {
 		fmt.Println("No matching repository and tag found")
 		return nil
@@ -183,20 +181,18 @@ func listRepositoriesAndTagsMatchingFilterPolicy(ctx context.Context, csscParams
 	return nil
 }
 
-// Gets all repositories and corrosponding tags and matches with the repos and tags defined in the filter
-func getAndFilterRepositories(ctx context.Context, acrClient api.AcrCLIClientInterface, filter []Filter) ([]FilteredRepository, error) {
+func getAndFilterRepositories(ctx context.Context, acrClient api.AcrCLIClientInterface, filter Filter) ([]FilteredRepository, error) {
 	var filteredRepos []FilteredRepository = nil
 
-	for _, f := range filter {
-		if f.Enabled != nil && *f.Enabled == false { // Skip the repository if enabled is set to false and continue to the next repository
+	for _, filterRepo := range filter.Repositories {
+		if filterRepo.Enabled != nil && *filterRepo.Enabled == false {
 			continue
 		}
-		if f.Repository == "" || f.Tags == nil || len(f.Tags) == 0 || f.Tags[0] == "" { // Skip the repository if repository or tags are empty and continue to the next repository
+		if filterRepo.Repository == "" || filterRepo.Tags == nil || len(filterRepo.Tags) == 0 || filterRepo.Tags[0] == "" {
 			continue
 		}
 
-		// Get all tags for the repository
-		tagList, err := listTags(ctx, acrClient, f.Repository)
+		tagList, err := listTags(ctx, acrClient, filterRepo.Repository)
 		if err != nil {
 			if strings.Contains(err.Error(), "404") {
 				continue
@@ -204,25 +200,25 @@ func getAndFilterRepositories(ctx context.Context, acrClient api.AcrCLIClientInt
 			return nil, err
 		}
 
-		if len(f.Tags) == 1 && f.Tags[0] == "*" { // If tag in filter = *, then all tags are eligible for that repository
+		if len(filterRepo.Tags) == 1 && filterRepo.Tags[0] == "*" {
 			for _, tag := range tagList {
 				if strings.Contains(*tag.Name, "-patched") {
 					originalTag := strings.Split(*tag.Name, "-patched")[0]
-					matchingRepo := FilteredRepository{Repository: f.Repository, Tag: originalTag, PatchTag: *tag.Name}
+					matchingRepo := FilteredRepository{Repository: filterRepo.Repository, Tag: originalTag, PatchTag: *tag.Name}
 					filteredRepos = appendElement(filteredRepos, matchingRepo)
 				} else {
-					matchingRepo := FilteredRepository{Repository: f.Repository, Tag: *tag.Name, PatchTag: *tag.Name}
+					matchingRepo := FilteredRepository{Repository: filterRepo.Repository, Tag: *tag.Name, PatchTag: *tag.Name}
 					filteredRepos = appendElement(filteredRepos, matchingRepo)
 				}
 			}
-		} else { // If tags are specified in the filter for the repository, then add only the tags that match the filter
-			for _, ftag := range f.Tags {
+		} else {
+			for _, ftag := range filterRepo.Tags {
 				for _, tag := range tagList {
 					if *tag.Name == ftag {
-						matchingRepo := FilteredRepository{Repository: f.Repository, Tag: *tag.Name, PatchTag: *tag.Name}
+						matchingRepo := FilteredRepository{Repository: filterRepo.Repository, Tag: *tag.Name, PatchTag: *tag.Name}
 						filteredRepos = appendElement(filteredRepos, matchingRepo)
 					} else if *tag.Name == ftag+"-patched" {
-						matchingRepo := FilteredRepository{Repository: f.Repository, Tag: ftag, PatchTag: ftag + "-patched"}
+						matchingRepo := FilteredRepository{Repository: filterRepo.Repository, Tag: ftag, PatchTag: ftag + "-patched"}
 						filteredRepos = appendElement(filteredRepos, matchingRepo)
 					}
 				}
@@ -266,6 +262,6 @@ func appendElement(slice []FilteredRepository, element FilteredRepository) []Fil
 			}
 		}
 	}
-	//Append element to the slice
+	// Append the new element to the slice
 	return append(slice, element)
 }

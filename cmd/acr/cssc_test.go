@@ -34,13 +34,17 @@ func TestGetAndFilterRepositories(t *testing.T) {
 
 	// 1. If Repository is not specified in the filter, return an empty list
 	t.Run("RepositoryNotSpecifiedTest", func(t *testing.T) {
-		filter := []Filter{
-			{
-				Repository: "",
-				Tags:       []string{csscTestTag1, csscTestTag2},
-				Enabled:    boolPtr(true),
+		filter := Filter{
+			Version: "v1",
+			Repositories: []Repository{
+				{
+					Repository: "",
+					Tags:       []string{csscTestTag1, csscTestTag2},
+					Enabled:    boolPtr(true),
+				},
 			},
 		}
+
 		filteredRepositories, err := getAndFilterRepositories(context.Background(), mockAcrClient, filter)
 		assert.NoError(t, err)
 		assert.Nil(t, filteredRepositories)
@@ -49,16 +53,19 @@ func TestGetAndFilterRepositories(t *testing.T) {
 
 	//2.  If Tag is not specified in the filter, return an empty list
 	t.Run("TagsNotSpecifiedTest", func(t *testing.T) {
-		filter := []Filter{
-			{
-				Repository: csscTestRepo1,
-				Tags:       nil,
-				Enabled:    boolPtr(true),
-			},
-			{
-				Repository: csscTestRepo2,
-				Tags:       []string{""},
-				Enabled:    boolPtr(true),
+		filter := Filter{
+			Version: "v1",
+			Repositories: []Repository{
+				{
+					Repository: csscTestRepo1,
+					Tags:       nil,
+					Enabled:    boolPtr(true),
+				},
+				{
+					Repository: csscTestRepo2,
+					Tags:       []string{""},
+					Enabled:    boolPtr(true),
+				},
 			},
 		}
 		filteredRepositories, err := getAndFilterRepositories(context.Background(), mockAcrClient, filter)
@@ -69,11 +76,14 @@ func TestGetAndFilterRepositories(t *testing.T) {
 
 	//3. Error should be returned when GetAcrTags fails for a repository
 	t.Run("GetAcrTagsFailsTest", func(t *testing.T) {
-		filter := []Filter{
-			{
-				Repository: csscTestRepo1,
-				Tags:       []string{csscTestTag1, csscTestTag2},
-				Enabled:    boolPtr(true),
+		filter := Filter{
+			Version: "v1",
+			Repositories: []Repository{
+				{
+					Repository: csscTestRepo1,
+					Tags:       []string{csscTestTag1, csscTestTag2},
+					Enabled:    boolPtr(true),
+				},
 			},
 		}
 		mockAcrClient.On("GetAcrTags", csscTestCtx, csscTestRepo1, "", "").Return(nil, errors.New("failed getting the tags")).Once()
@@ -85,11 +95,14 @@ func TestGetAndFilterRepositories(t *testing.T) {
 
 	//4. If filter has a tag that doesn't exist in the repository, ignore it and return what exists and matches the filter
 	t.Run("TagSpecifiedInFilterDoesNotExistTest", func(t *testing.T) {
-		filter := []Filter{
-			{
-				Repository: csscTestRepo1,
-				Tags:       []string{csscTestTag1, csscTestTag2},
-				Enabled:    boolPtr(true),
+		filter := Filter{
+			Version: "v1",
+			Repositories: []Repository{
+				{
+					Repository: csscTestRepo1,
+					Tags:       []string{csscTestTag1, csscTestTag2},
+					Enabled:    boolPtr(true),
+				},
 			},
 		}
 		mockAcrClient.On("GetAcrTags", csscTestCtx, csscTestRepo1, "", "").Return(CsscTestOneTagResult, nil).Once()
@@ -104,26 +117,29 @@ func TestGetAndFilterRepositories(t *testing.T) {
 
 	// 5. Success scenario with all the combination of filters
 	t.Run("AllFilterCombinationTest", func(t *testing.T) {
-		filter := []Filter{
-			{
-				Repository: csscTestRepo1,
-				Tags:       []string{csscTestTag1, csscTestTag2}, // tags specified
-				Enabled:    boolPtr(true),
-			},
-			{
-				Repository: csscTestRepo2,
-				Tags:       []string{"*"}, // * all tags
-				Enabled:    boolPtr(true),
-			},
-			{
-				Repository: csscTestRepo3,
-				Tags:       []string{csscTestTag1, csscTestTag2},
-				Enabled:    nil, // nil means enabled
-			},
-			{
-				Repository: csscTestRepo4,
-				Tags:       []string{csscTestTag1, csscTestTag2},
-				Enabled:    boolPtr(false), // disabled repository for all tags
+		filter := Filter{
+			Version: "v1",
+			Repositories: []Repository{
+				{
+					Repository: csscTestRepo1,
+					Tags:       []string{csscTestTag1, csscTestTag2}, // tags specified
+					Enabled:    boolPtr(true),
+				},
+				{
+					Repository: csscTestRepo2,
+					Tags:       []string{"*"}, // * all tags
+					Enabled:    boolPtr(true),
+				},
+				{
+					Repository: csscTestRepo3,
+					Tags:       []string{csscTestTag1, csscTestTag2},
+					Enabled:    nil, // nil means enabled
+				},
+				{
+					Repository: csscTestRepo4,
+					Tags:       []string{csscTestTag1, csscTestTag2},
+					Enabled:    boolPtr(false), // disabled repository for all tags
+				},
 			},
 		}
 		mockAcrClient.On("GetAcrTags", csscTestCtx, csscTestRepo1, "", "").Return(CsscTestTagResult, nil).Once()
