@@ -177,7 +177,7 @@ func TestGetAndFilterRepositories(t *testing.T) {
 	})
 }
 
-func TestListRepositoriesAndTagsMatchingFilterPolicy(t *testing.T) {
+func TestGetFilterFromFilterPolicy(t *testing.T) {
 	rootParams := &rootParameters{}
 	rootParams.username = "username"
 	rootParams.password = "password"
@@ -188,17 +188,19 @@ func TestListRepositoriesAndTagsMatchingFilterPolicy(t *testing.T) {
 	//1. Error should be returned when filter policy is not in the correct format
 	t.Run("FilterPolicyNotCorrectFormatTest", func(t *testing.T) {
 		csscParams.filterPolicy = "notcorrectformat"
-		err := listRepositoriesAndTagsMatchingFilterPolicy(context.Background(), &csscParams, loginURL, mockAcrClient)
+		filter, err := getFilterFromFilterPolicy(context.Background(), &csscParams, loginURL, mockAcrClient)
 		assert.NotEqual(nil, err, "Error should not be nil")
 		assert.Equal(t, "--filter-policy should be in the format repo:tag", err.Error())
+		assert.Equal(t, Filter{}, filter)
 	})
 
 	//2. Error should be returned when fetching repository manifest fails
 	t.Run("FetchBytesFailsTest", func(t *testing.T) {
 		csscParams.filterPolicy = "repo1:tag1"
-		err := listRepositoriesAndTagsMatchingFilterPolicy(context.Background(), &csscParams, loginURL, mockAcrClient)
+		filter, err := getFilterFromFilterPolicy(context.Background(), &csscParams, loginURL, mockAcrClient)
 		assert.NotEqual(nil, err, "Error should not be nil")
-		assert.ErrorContains(t, err, "Error fetching manifest by tag for the repository and tag specified in the filter policy")
+		assert.ErrorContains(t, err, "Error fetching manifest content. Please make sure the filter JSON file is uploaded in the correct format")
+		assert.Equal(t, Filter{}, filter)
 	})
 }
 

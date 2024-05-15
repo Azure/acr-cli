@@ -32,6 +32,8 @@ type csscParameters struct {
 	*rootParameters
 	filterPolicy  string
 	showPatchTags bool
+	dryRun        bool
+	filterContent string
 }
 
 type Repository struct {
@@ -91,26 +93,65 @@ func newPatchFilterCmd(csscParams *csscParameters) *cobra.Command {
 				return err
 			}
 
-			// If patch is called with filter-policy flag, get the filter policy from the specified repository and list the repositories and tags that match the filter
-			if csscParams.filterPolicy != "" {
-				return listRepositoriesAndTagsMatchingFilterPolicy(ctx, csscParams, loginURL, acrClient)
+			filter := Filter{}
+			filteredResult := []FilteredRepository{}
+
+			// If patch is called with dry-run flag, get the filter from the filter content flag
+			if csscParams.dryRun == true {
+				if csscParams.filterContent == "" {
+					return errors.New("--filter-content flag is required when using --dry-run flag. Please provide the filter content as JSON string")
+				}
+				if err := json.Unmarshal([]byte(csscParams.filterContent), &filter); err != nil {
+					return errors.Wrap(err, "Error unmarshalling JSON content. Please ensure the filter content is in the correct format")
+				}
+				fmt.Println("This is a dry-run operation...")
+			} else if csscParams.filterPolicy != "" { // If patch is called with filter-policy flag, get the filter from the filter policy
+				filter, err = getFilterFromFilterPolicy(ctx, csscParams, loginURL, acrClient)
+				if err != nil {
+					return err
+				}
+			}
+
+			// Use the filter to get repositories and tags that match the filter
+			filteredResult, err = getAndFilterRepositories(ctx, acrClient, filter)
+			if err != nil {
+				return err
+			}
+
+			// Print result as appropriate
+			if len(filteredResult) == 0 {
+				fmt.Println("No matching repository and tag found")
+				return nil
+			}
+			if csscParams.showPatchTags {
+				fmt.Println("Listing repositories and tags matching the filter with corrosponding patch tag (if present):")
+				for _, result := range filteredResult {
+					fmt.Printf("%s/%s:%s,%s\n", loginURL, result.Repository, result.Tag, result.PatchTag)
+				}
+			} else {
+				fmt.Println("Listing repositories and tags matching the filter:")
+				for _, result := range filteredResult {
+					fmt.Printf("%s/%s:%s\n", loginURL, result.Repository, result.Tag)
+				}
 			}
 
 			return nil
 		},
 	}
 
-	cmd.PersistentFlags().StringVar(&csscParams.filterPolicy, "filter-policy", "", "The filter policy defined by the filter.json uploaded in a repo:tag. For v1, it will be continuouspatchpolicy:v1")
+	cmd.PersistentFlags().StringVar(&csscParams.filterPolicy, "filter-policy", "continuouspatchpolicy:latest", "The filter policy defined by the filter.json uploaded in a repo:tag. For v1, it will be continuouspatchpolicy:v1")
+	cmd.PersistentFlags().BoolVar(&csscParams.dryRun, "dry-run", false, "Use this flag to simulate the operation without making any changes")
+	cmd.PersistentFlags().StringVar(&csscParams.filterContent, "filter-content", "", "The filter content in JSON format. Use this flag in combination with --dry-run flag to simulate the operation without making any changes")
 	cmd.Flags().BoolVar(&csscParams.showPatchTags, "show-patch-tags", false, "Use this flag in combination with --filter-policy to get patched image tag (if it exists) for repositories and tags that match the filter. Example: acr cssc patch --filter-policy continuouspatchpolicy:v1 --show-patch-tags")
-	cmd.MarkPersistentFlagRequired("filter-policy")
 	return cmd
 }
 
-func listRepositoriesAndTagsMatchingFilterPolicy(ctx context.Context, csscParams *csscParameters, loginURL string, acrClient api.AcrCLIClientInterface) error {
-	if !strings.Contains(csscParams.filterPolicy, ":") {
-		return errors.New("--filter-policy should be in the format repo:tag")
-	}
+func getFilterFromFilterPolicy(ctx context.Context, csscParams *csscParameters, loginURL string, acrClient api.AcrCLIClientInterface) (Filter, error) {
 
+	// Validate the filter policy format
+	if !strings.Contains(csscParams.filterPolicy, ":") {
+		return Filter{}, errors.New("--filter-policy should be in the format repo:tag")
+	}
 	repoTag := strings.Split(csscParams.filterPolicy, ":")
 	filterRepoName := repoTag[0]
 	filterRepoTagName := repoTag[1]
@@ -120,9 +161,7 @@ func listRepositoriesAndTagsMatchingFilterPolicy(ctx context.Context, csscParams
 	if err != nil {
 		panic(err)
 	}
-
 	getRegistryCredsFromStore(csscParams, loginURL)
-
 	repo.Client = &auth.Client{
 		Client: retry.DefaultClient,
 		Cache:  auth.NewCache(),
@@ -135,7 +174,7 @@ func listRepositoriesAndTagsMatchingFilterPolicy(ctx context.Context, csscParams
 	// Get manifest and read content
 	_, pulledManifestContent, err := oras.FetchBytes(ctx, repo, filterRepoTagName, oras.DefaultFetchBytesOptions)
 	if err != nil {
-		return errors.Wrap(err, "Error fetching manifest by tag for the repository and tag specified in the filter policy")
+		return Filter{}, errors.Wrap(err, "Error fetching manifest content. Please make sure the filter JSON file is uploaded in the correct format")
 	}
 	var pulledManifest v1.Manifest
 	if err := json.Unmarshal(pulledManifestContent, &pulledManifest); err != nil {
@@ -152,33 +191,10 @@ func listRepositoriesAndTagsMatchingFilterPolicy(ctx context.Context, csscParams
 	// Unmarshal the JSON file data to Filter struct
 	var filter Filter = Filter{}
 	if err := json.Unmarshal(fileContent, &filter); err != nil {
-		fmt.Printf("Error unmarshalling JSON data: %v ", err)
+		return Filter{}, errors.Wrap(err, "Error unmarshalling JSON content. Please make sure the filter JSON file is in the correct format")
 	}
 
-	// Get a list of filtered repository and tag which matches the filter
-	filteredResult, err := getAndFilterRepositories(ctx, acrClient, filter)
-	if err != nil {
-		return err
-	}
-
-	if len(filteredResult) == 0 {
-		fmt.Println("No matching repository and tag found")
-		return nil
-	}
-
-	if csscParams.showPatchTags {
-		fmt.Println("Listing repositories and tags matching the filter with corrosponding patch tag (if present):")
-		for _, result := range filteredResult {
-			fmt.Printf("%s/%s:%s,%s\n", loginURL, result.Repository, result.Tag, result.PatchTag)
-		}
-	} else {
-		fmt.Println("Listing repositories and tags matching the filter:")
-		for _, result := range filteredResult {
-			fmt.Printf("%s/%s:%s\n", loginURL, result.Repository, result.Tag)
-		}
-	}
-
-	return nil
+	return filter, nil
 }
 
 func getAndFilterRepositories(ctx context.Context, acrClient api.AcrCLIClientInterface, filter Filter) ([]FilteredRepository, error) {
