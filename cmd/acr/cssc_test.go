@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"net/http"
+	"os"
 	"testing"
 
 	"github.com/Azure/acr-cli/acr"
@@ -12,27 +13,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestNewCsscCmd(t *testing.T) {
-	rootParams := &rootParameters{}
-	cmd := newCsscCmd(rootParams)
-	assert.NotNil(t, cmd)
-	assert.Equal(t, "cssc", cmd.Use)
-	assert.Equal(t, newCsscCmdLongMessage, cmd.Long)
-}
-
-func TestNewPatchFilterCmd(t *testing.T) {
-	rootParams := &rootParameters{}
-	csscParams := csscParameters{rootParameters: rootParams}
-	cmd := newPatchFilterCmd(&csscParams)
-	assert.NotNil(t, cmd)
-	assert.Equal(t, "patch", cmd.Use)
-	assert.Equal(t, newPatchFilterCmdLongMessage, cmd.Long)
-}
-
-func TestGetAndFilterRepositories(t *testing.T) {
+func TestApplyFilterAndGetFilteredList(t *testing.T) {
 	mockAcrClient := &mocks.AcrCLIClientInterface{}
 
-	// 1. If Repository is not specified in the filter, return an empty list
+	// 1. If filter contains only one repository and it is not specified, nothing will match the filter and an empty list should be returned
 	t.Run("RepositoryNotSpecifiedTest", func(t *testing.T) {
 		filter := Filter{
 			Version: "v1",
@@ -45,13 +29,13 @@ func TestGetAndFilterRepositories(t *testing.T) {
 			},
 		}
 
-		filteredRepositories, err := getAndFilterRepositories(context.Background(), mockAcrClient, filter)
+		filteredRepositories, err := applyFilterAndGetFilteredList(context.Background(), mockAcrClient, filter)
 		assert.NoError(t, err)
 		assert.Nil(t, filteredRepositories)
 		assert.Len(t, filteredRepositories, 0)
 	})
 
-	//2.  If Tag is not specified in the filter, return an empty list
+	//2.  If Tags are not specified for any repository in the filter, nothing will match the filter and an empty list should be returned
 	t.Run("TagsNotSpecifiedTest", func(t *testing.T) {
 		filter := Filter{
 			Version: "v1",
@@ -68,7 +52,7 @@ func TestGetAndFilterRepositories(t *testing.T) {
 				},
 			},
 		}
-		filteredRepositories, err := getAndFilterRepositories(context.Background(), mockAcrClient, filter)
+		filteredRepositories, err := applyFilterAndGetFilteredList(context.Background(), mockAcrClient, filter)
 		assert.NoError(t, err)
 		assert.Nil(t, filteredRepositories)
 		assert.Len(t, filteredRepositories, 0)
@@ -87,13 +71,13 @@ func TestGetAndFilterRepositories(t *testing.T) {
 			},
 		}
 		mockAcrClient.On("GetAcrTags", csscTestCtx, csscTestRepo1, "", "").Return(nil, errors.New("failed getting the tags")).Once()
-		filteredRepositories, err := getAndFilterRepositories(context.Background(), mockAcrClient, filter)
+		filteredRepositories, err := applyFilterAndGetFilteredList(context.Background(), mockAcrClient, filter)
 		assert.Error(t, err)
 		assert.ErrorContains(t, err, "failed getting the tags")
 		assert.Nil(t, filteredRepositories)
 	})
 
-	//4. If filter has a tag that doesn't exist in the repository, ignore it and return what exists and matches the filter
+	//4. If filter has a tag that doesn't exist in the repository, ignore it and return whatever exists that matches the filter
 	t.Run("TagSpecifiedInFilterDoesNotExistTest", func(t *testing.T) {
 		filter := Filter{
 			Version: "v1",
@@ -108,7 +92,7 @@ func TestGetAndFilterRepositories(t *testing.T) {
 		mockAcrClient.On("GetAcrTags", csscTestCtx, csscTestRepo1, "", "").Return(CsscTestOneTagResult, nil).Once()
 		mockAcrClient.On("GetAcrTags", csscTestCtx, csscTestRepo1, "", csscTestTag1).Return(EmptyListTagsResult, nil).Once()
 
-		filteredRepositories, err := getAndFilterRepositories(context.Background(), mockAcrClient, filter)
+		filteredRepositories, err := applyFilterAndGetFilteredList(context.Background(), mockAcrClient, filter)
 		assert.NoError(t, err)
 		assert.Len(t, filteredRepositories, 1) //
 		assert.Equal(t, csscTestRepo1, filteredRepositories[0].Repository)
@@ -151,7 +135,7 @@ func TestGetAndFilterRepositories(t *testing.T) {
 		mockAcrClient.On("GetAcrTags", csscTestCtx, csscTestRepo4, "", "").Return(CsscTestTagResult, nil).Once()
 		mockAcrClient.On("GetAcrTags", csscTestCtx, csscTestRepo4, "", csscTestPatch2).Return(EmptyListTagsResult, nil).Once()
 
-		filteredRepositories, err := getAndFilterRepositories(context.Background(), mockAcrClient, filter)
+		filteredRepositories, err := applyFilterAndGetFilteredList(context.Background(), mockAcrClient, filter)
 		assert.NoError(t, err)
 		assert.Len(t, filteredRepositories, 6)
 		assert.Equal(t, csscTestRepo1, filteredRepositories[0].Repository)
@@ -183,12 +167,11 @@ func TestGetFilterFromFilterPolicy(t *testing.T) {
 	rootParams.password = "password"
 	csscParams := csscParameters{rootParameters: rootParams}
 	loginURL := testLoginURL
-	mockAcrClient := &mocks.AcrCLIClientInterface{}
 
 	//1. Error should be returned when filter policy is not in the correct format
 	t.Run("FilterPolicyNotCorrectFormatTest", func(t *testing.T) {
 		csscParams.filterPolicy = "notcorrectformat"
-		filter, err := getFilterFromFilterPolicy(context.Background(), &csscParams, loginURL, mockAcrClient)
+		filter, err := getFilterFromFilterPolicy(context.Background(), &csscParams, loginURL)
 		assert.NotEqual(nil, err, "Error should not be nil")
 		assert.Equal(t, "--filter-policy should be in the format repo:tag", err.Error())
 		assert.Equal(t, Filter{}, filter)
@@ -197,10 +180,72 @@ func TestGetFilterFromFilterPolicy(t *testing.T) {
 	//2. Error should be returned when fetching repository manifest fails
 	t.Run("FetchBytesFailsTest", func(t *testing.T) {
 		csscParams.filterPolicy = "repo1:tag1"
-		filter, err := getFilterFromFilterPolicy(context.Background(), &csscParams, loginURL, mockAcrClient)
+		filter, err := getFilterFromFilterPolicy(context.Background(), &csscParams, loginURL)
 		assert.NotEqual(nil, err, "Error should not be nil")
 		assert.ErrorContains(t, err, "Error fetching manifest content. Please make sure the filter JSON file is uploaded in the correct format")
 		assert.Equal(t, Filter{}, filter)
+	})
+}
+
+func TestGetFilterFromFilePath(t *testing.T) {
+
+	//1. Error should be returned when filter file does not exist
+	t.Run("FileDoesNotExistTest", func(t *testing.T) {
+		filter, err := getFilterFromFilePath("idontexist")
+		assert.NotEqual(nil, err, "Error should not be nil")
+		assert.ErrorContains(t, err, "Error reading the file. Please ensure the file path is correct")
+		assert.Equal(t, Filter{}, filter)
+	})
+
+	//2. Error should be returned when filter file is not in the correct format
+	t.Run("FileNotCorrectFormatTest", func(t *testing.T) {
+		var filterFile = []byte(`i am not a json file`)
+		err := os.WriteFile("filter-wrongformat.json", filterFile, 0644)
+
+		assert.Nil(t, err, "Error should be nil")
+		filter, err := getFilterFromFilePath("filter-wrongformat.json")
+		assert.NotEqual(nil, err, "Error should not be nil")
+		assert.ErrorContains(t, err, "Error unmarshalling JSON content. Please make sure the filter JSON file is in the correct format")
+		assert.Equal(t, Filter{}, filter)
+
+		err = os.Remove("filter-wrongformat.json")
+		assert.Nil(t, err, "Error should be nil")
+	})
+
+	//3. Success scenario with correct filter file
+	t.Run("SuccessTest", func(t *testing.T) {
+		var filterFile = []byte(`{
+			"version": "v1",
+			"repositories": [
+				{
+					"repository": "repo1",
+					"tags": ["tag1", "tag2"],
+					"enabled": true
+				},
+				{
+					"repository": "repo2",
+					"tags": ["tag1"],
+					"enabled": true
+				}
+			]
+		}`)
+		err := os.WriteFile("filter.json", filterFile, 0644)
+		assert.Nil(t, err, "Error should be nil")
+
+		filter, err := getFilterFromFilePath("filter.json")
+		assert.Nil(t, err, "Error should be nil")
+		assert.Equal(t, "v1", filter.Version)
+		assert.Len(t, filter.Repositories, 2)
+		assert.Equal(t, csscTestRepo1, filter.Repositories[0].Repository)
+		assert.Equal(t, csscTestTag1, filter.Repositories[0].Tags[0])
+		assert.Equal(t, csscTestTag2, filter.Repositories[0].Tags[1])
+		assert.Equal(t, true, *filter.Repositories[0].Enabled)
+		assert.Equal(t, csscTestRepo2, filter.Repositories[1].Repository)
+		assert.Equal(t, csscTestTag1, filter.Repositories[1].Tags[0])
+		assert.Equal(t, true, *filter.Repositories[1].Enabled)
+
+		err = os.Remove("filter.json")
+		assert.Nil(t, err, "Error should be nil")
 	})
 }
 

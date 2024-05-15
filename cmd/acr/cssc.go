@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	orasauth "github.com/Azure/acr-cli/auth/oras"
@@ -23,17 +24,39 @@ import (
 )
 
 const (
-	newCsscCmdLongMessage        = `acr cssc: Lists cssc configurations for the registry. Use the subcommands to list continuous patch filters for the registry.`
-	newPatchFilterCmdLongMessage = `acr cssc patch: List cssc continuous patch filters for a registry. Use the --filter-policy flag to specify the repo where filters exists. Example: acr cssc patch --filter-policy continuouspatchpolicy:v1.`
+	newCsscCmdLongMessage  = `acr cssc: CSSC (Container Secure Supply Chain) operations for a registry. Use subcommands for more specific operations.`
+	newPatchCmdLongMessage = `acr cssc patch: List all repositories and tags that match the filter.
+
+	Use the --filter-policy flag to specify the repository:tag where the filter file exists. If no filter policy is provided, the default filter policy is continuouspatchpolicy:latest
+	Example: acr cssc patch -r example --filter-policy continuouspatchpolicy:latest
+
+	Use the --show-patch-tags flag to also get patch image tag (if it exists) for repositories and tags that match the filter.
+	Example: acr cssc patch -r example --filter-policy continuouspatchpolicy:latest --show-patch-tags
+
+	Use the --dry-run flag in combination with --file-path flag to read filter from file path instead of filter policy.
+	Use this to validate the filter file without uploading it to the registry.
+	Example: acr cssc patch -r example --dry-run --file-path /path/to/filter.json
+	
+	Filter JSON file format:
+	{
+		"version": "v1",
+		"repositories": [
+			{
+				"repository": "example",
+				"tags": ["tag1", "tag2"],
+				"enabled": true
+			}
+		]
+	}
+`
 )
 
-// Besides the registry name and authentication information only the filterPolicy is needed.
 type csscParameters struct {
 	*rootParameters
 	filterPolicy  string
 	showPatchTags bool
 	dryRun        bool
-	filterContent string
+	filePath      string
 }
 
 type Repository struct {
@@ -58,7 +81,7 @@ func newCsscCmd(rootParams *rootParameters) *cobra.Command {
 	csscParams := csscParameters{rootParameters: rootParams}
 	cmd := &cobra.Command{
 		Use:   "cssc",
-		Short: "Lists cssc configurations for a registry",
+		Short: "cssc operations for a registry",
 		Long:  newCsscCmdLongMessage,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.Help()
@@ -80,7 +103,7 @@ func newPatchFilterCmd(csscParams *csscParameters) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "patch",
 		Short: "Manage cssc patch operations for a registry",
-		Long:  newPatchFilterCmdLongMessage,
+		Long:  newPatchCmdLongMessage,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			ctx := context.Background()
 			registryName, err := csscParams.GetRegistryName()
@@ -94,33 +117,37 @@ func newPatchFilterCmd(csscParams *csscParameters) *cobra.Command {
 			}
 
 			filter := Filter{}
-			filteredResult := []FilteredRepository{}
-
-			// If patch is called with dry-run flag, get the filter from the filter content flag
-			if csscParams.dryRun == true {
-				if csscParams.filterContent == "" {
-					return errors.New("--filter-content flag is required when using --dry-run flag. Please provide the filter content as JSON string")
+			if csscParams.dryRun == false && csscParams.filePath != "" {
+				return errors.New("--file-path flag can only be used in combination with --dry-run flag.")
+			} else if csscParams.dryRun == true {
+				if csscParams.filePath == "" {
+					return errors.New("--file-path flag is required when using --dry-run flag. Please provide the file path of the JSON filter file.")
 				}
-				if err := json.Unmarshal([]byte(csscParams.filterContent), &filter); err != nil {
-					return errors.Wrap(err, "Error unmarshalling JSON content. Please ensure the filter content is in the correct format")
+				filter, err = getFilterFromFilePath(csscParams.filePath)
+				if err != nil {
+					return err
 				}
-				fmt.Println("This is a dry-run operation...")
-			} else if csscParams.filterPolicy != "" { // If patch is called with filter-policy flag, get the filter from the filter policy
-				filter, err = getFilterFromFilterPolicy(ctx, csscParams, loginURL, acrClient)
+			} else if csscParams.filterPolicy != "" {
+				filter, err = getFilterFromFilterPolicy(ctx, csscParams, loginURL)
 				if err != nil {
 					return err
 				}
 			}
 
-			// Use the filter to get repositories and tags that match the filter
-			filteredResult, err = getAndFilterRepositories(ctx, acrClient, filter)
+			// Continue only if the filter is not empty
+			if len(filter.Repositories) == 0 {
+				fmt.Println("Filter is empty or invalid!")
+				return nil
+			}
+
+			filteredResult, err := applyFilterAndGetFilteredList(ctx, acrClient, filter)
 			if err != nil {
 				return err
 			}
 
-			// Print result as appropriate
+			// Print the filtered result
 			if len(filteredResult) == 0 {
-				fmt.Println("No matching repository and tag found")
+				fmt.Println("No matching repository and tag found!")
 				return nil
 			}
 			if csscParams.showPatchTags {
@@ -134,20 +161,20 @@ func newPatchFilterCmd(csscParams *csscParameters) *cobra.Command {
 					fmt.Printf("%s/%s:%s\n", loginURL, result.Repository, result.Tag)
 				}
 			}
+			fmt.Println("Total matches found:", len(filteredResult))
 
 			return nil
 		},
 	}
 
-	cmd.PersistentFlags().StringVar(&csscParams.filterPolicy, "filter-policy", "continuouspatchpolicy:latest", "The filter policy defined by the filter.json uploaded in a repo:tag. For v1, it will be continuouspatchpolicy:v1")
-	cmd.PersistentFlags().BoolVar(&csscParams.dryRun, "dry-run", false, "Use this flag to simulate the operation without making any changes")
-	cmd.PersistentFlags().StringVar(&csscParams.filterContent, "filter-content", "", "The filter content in JSON format. Use this flag in combination with --dry-run flag to simulate the operation without making any changes")
-	cmd.Flags().BoolVar(&csscParams.showPatchTags, "show-patch-tags", false, "Use this flag in combination with --filter-policy to get patched image tag (if it exists) for repositories and tags that match the filter. Example: acr cssc patch --filter-policy continuouspatchpolicy:v1 --show-patch-tags")
+	cmd.PersistentFlags().StringVar(&csscParams.filterPolicy, "filter-policy", "continuouspatchpolicy:latest", "The filter policy defined by the filter json file uploaded in a repo:tag. For v1, it will be continuouspatchpolicy:latest")
+	cmd.PersistentFlags().BoolVar(&csscParams.dryRun, "dry-run", false, "Use this in combination with --file-path to read filter from file path instead of filter policy. This allows to validate the filter file without uploading it to the registry.")
+	cmd.PersistentFlags().StringVar(&csscParams.filePath, "file-path", "", "The file path of the JSON filter file. Use this in combination with --dry-run to simulate the operation without making any changes on the registry.")
+	cmd.Flags().BoolVar(&csscParams.showPatchTags, "show-patch-tags", false, "Use this flag to get patch tag (if it exists) for repositories and tags that match the filter. Example: acr cssc patch --filter-policy continuouspatchpolicy:latest --show-patch-tags")
 	return cmd
 }
 
-func getFilterFromFilterPolicy(ctx context.Context, csscParams *csscParameters, loginURL string, acrClient api.AcrCLIClientInterface) (Filter, error) {
-
+func getFilterFromFilterPolicy(ctx context.Context, csscParams *csscParameters, loginURL string) (Filter, error) {
 	// Validate the filter policy format
 	if !strings.Contains(csscParams.filterPolicy, ":") {
 		return Filter{}, errors.New("--filter-policy should be in the format repo:tag")
@@ -197,7 +224,21 @@ func getFilterFromFilterPolicy(ctx context.Context, csscParams *csscParameters, 
 	return filter, nil
 }
 
-func getAndFilterRepositories(ctx context.Context, acrClient api.AcrCLIClientInterface, filter Filter) ([]FilteredRepository, error) {
+func getFilterFromFilePath(filePath string) (Filter, error) {
+	file, err := os.ReadFile(filePath)
+	if err != nil {
+		return Filter{}, errors.Wrap(err, "Error reading the file. Please ensure the file path is correct")
+	}
+
+	var filter Filter = Filter{}
+	if err := json.Unmarshal(file, &filter); err != nil {
+		return Filter{}, errors.Wrap(err, "Error unmarshalling JSON content. Please make sure the filter JSON file is in the correct format")
+	}
+
+	return filter, nil
+}
+
+func applyFilterAndGetFilteredList(ctx context.Context, acrClient api.AcrCLIClientInterface, filter Filter) ([]FilteredRepository, error) {
 	var filteredRepos []FilteredRepository = nil
 
 	for _, filterRepo := range filter.Repositories {
