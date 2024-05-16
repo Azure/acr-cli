@@ -182,7 +182,7 @@ func TestGetFilterFromFilterPolicy(t *testing.T) {
 		csscParams.filterPolicy = "repo1:tag1"
 		filter, err := getFilterFromFilterPolicy(context.Background(), &csscParams, loginURL)
 		assert.NotEqual(nil, err, "Error should not be nil")
-		assert.ErrorContains(t, err, "Error fetching manifest content. Please make sure the filter JSON file is uploaded in the correct format")
+		assert.ErrorContains(t, err, "error fetching manifest content when reading the filter policy")
 		assert.Equal(t, Filter{}, filter)
 	})
 }
@@ -193,7 +193,7 @@ func TestGetFilterFromFilePath(t *testing.T) {
 	t.Run("FileDoesNotExistTest", func(t *testing.T) {
 		filter, err := getFilterFromFilePath("idontexist")
 		assert.NotEqual(nil, err, "Error should not be nil")
-		assert.ErrorContains(t, err, "Error reading the file. Please ensure the file path is correct")
+		assert.ErrorContains(t, err, "error reading the filter json file from file path")
 		assert.Equal(t, Filter{}, filter)
 	})
 
@@ -205,7 +205,7 @@ func TestGetFilterFromFilePath(t *testing.T) {
 		assert.Nil(t, err, "Error should be nil")
 		filter, err := getFilterFromFilePath("filter-wrongformat.json")
 		assert.NotEqual(nil, err, "Error should not be nil")
-		assert.ErrorContains(t, err, "Error unmarshalling JSON content. Please make sure the filter JSON file is in the correct format")
+		assert.ErrorContains(t, err, "error unmarshalling json content when reading the filter file from file path")
 		assert.Equal(t, Filter{}, filter)
 
 		err = os.Remove("filter-wrongformat.json")

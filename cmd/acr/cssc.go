@@ -121,7 +121,7 @@ func newPatchFilterCmd(csscParams *csscParameters) *cobra.Command {
 				return errors.New("flag --file-path can only be used in combination with --dry-run flag")
 			} else if csscParams.dryRun == true {
 				if csscParams.filePath == "" {
-					return errors.New("flag --file-path is required when using --dry-run flag. Please provide the file path of the JSON filter file")
+					return errors.New("flag --file-path is required when using --dry-run flag")
 				}
 				fmt.Println("DRY RUN mode enabled. Reading filter from file path...")
 				filter, err = getFilterFromFilePath(csscParams.filePath)
@@ -186,7 +186,7 @@ func getFilterFromFilterPolicy(ctx context.Context, csscParams *csscParameters, 
 	// Get manifest and read content
 	_, pulledManifestContent, err := oras.FetchBytes(ctx, repo, filterRepoTagName, oras.DefaultFetchBytesOptions)
 	if err != nil {
-		return Filter{}, errors.Wrap(err, "Error fetching manifest content. Please make sure the filter JSON file is uploaded in the correct format")
+		return Filter{}, errors.Wrap(err, "error fetching manifest content when reading the filter policy")
 	}
 	var pulledManifest v1.Manifest
 	if err := json.Unmarshal(pulledManifestContent, &pulledManifest); err != nil {
@@ -203,7 +203,7 @@ func getFilterFromFilterPolicy(ctx context.Context, csscParams *csscParameters, 
 	// Unmarshal the JSON file data to Filter struct
 	var filter = Filter{}
 	if err := json.Unmarshal(fileContent, &filter); err != nil {
-		return Filter{}, errors.Wrap(err, "Error unmarshalling JSON content. Please make sure the filter JSON file is in the correct format")
+		return Filter{}, errors.Wrap(err, "error unmarshalling json content when reading the filter policy")
 	}
 
 	return filter, nil
@@ -212,12 +212,12 @@ func getFilterFromFilterPolicy(ctx context.Context, csscParams *csscParameters, 
 func getFilterFromFilePath(filePath string) (Filter, error) {
 	file, err := os.ReadFile(filePath)
 	if err != nil {
-		return Filter{}, errors.Wrap(err, "Error reading the file. Please ensure the file path is correct")
+		return Filter{}, errors.Wrap(err, "error reading the filter json file from file path")
 	}
 
 	var filter = Filter{}
 	if err := json.Unmarshal(file, &filter); err != nil {
-		return Filter{}, errors.Wrap(err, "Error unmarshalling JSON content. Please make sure the filter JSON file is in the correct format")
+		return Filter{}, errors.Wrap(err, "error unmarshalling json content when reading the filter file from file path")
 	}
 
 	return filter, nil
