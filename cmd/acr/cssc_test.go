@@ -336,8 +336,6 @@ var (
 	csscTestRepo2    = "repo2"
 	csscTestRepo3    = "repo3"
 	csscTestRepo4    = "repo4"
-	csscTestRepo5    = "repo5"
-	csscTestRepo6    = "repo6"
 	csscTestTag1     = "tag1"
 	csscTestTag2     = "tag2"
 	csscTestPatch1   = "tag1-patched"
