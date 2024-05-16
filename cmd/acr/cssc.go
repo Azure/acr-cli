@@ -123,13 +123,13 @@ func newPatchFilterCmd(csscParams *csscParameters) *cobra.Command {
 				if csscParams.filePath == "" {
 					return errors.New("--file-path flag is required when using --dry-run flag. Please provide the file path of the JSON filter file.")
 				}
-				fmt.Println("Dry run mode enabled. Reading filter from file path...\n")
+				fmt.Println("DRY RUN mode enabled. Reading filter from file path...")
 				filter, err = getFilterFromFilePath(csscParams.filePath)
 				if err != nil {
 					return err
 				}
 			} else if csscParams.filterPolicy != "" {
-				fmt.Println("Reading filter from filter policy...\n")
+				fmt.Println("Reading filter from filter policy...")
 				filter, err = getFilterFromFilterPolicy(ctx, csscParams, loginURL)
 				if err != nil {
 					return err
