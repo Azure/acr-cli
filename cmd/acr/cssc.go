@@ -123,11 +123,13 @@ func newPatchFilterCmd(csscParams *csscParameters) *cobra.Command {
 				if csscParams.filePath == "" {
 					return errors.New("--file-path flag is required when using --dry-run flag. Please provide the file path of the JSON filter file.")
 				}
+				fmt.Println("Dry run mode enabled. Reading filter from file path...\n")
 				filter, err = getFilterFromFilePath(csscParams.filePath)
 				if err != nil {
 					return err
 				}
 			} else if csscParams.filterPolicy != "" {
+				fmt.Println("Reading filter from filter policy...\n")
 				filter, err = getFilterFromFilterPolicy(ctx, csscParams, loginURL)
 				if err != nil {
 					return err
@@ -145,24 +147,7 @@ func newPatchFilterCmd(csscParams *csscParameters) *cobra.Command {
 				return err
 			}
 
-			// Print the filtered result
-			if len(filteredResult) == 0 {
-				fmt.Println("No matching repository and tag found!")
-				return nil
-			}
-			if csscParams.showPatchTags {
-				fmt.Println("Listing repositories and tags matching the filter with corrosponding patch tag (if present):")
-				for _, result := range filteredResult {
-					fmt.Printf("%s/%s:%s,%s\n", loginURL, result.Repository, result.Tag, result.PatchTag)
-				}
-			} else {
-				fmt.Println("Listing repositories and tags matching the filter:")
-				for _, result := range filteredResult {
-					fmt.Printf("%s/%s:%s\n", loginURL, result.Repository, result.Tag)
-				}
-			}
-			fmt.Println("Total matches found:", len(filteredResult))
-
+			printFilteredResult(filteredResult, csscParams, loginURL)
 			return nil
 		},
 	}
@@ -321,4 +306,22 @@ func appendElement(slice []FilteredRepository, element FilteredRepository) []Fil
 	}
 	// Append the new element to the slice
 	return append(slice, element)
+}
+
+func printFilteredResult(filteredResult []FilteredRepository, csscParams *csscParameters, loginURL string) {
+	if len(filteredResult) == 0 {
+		fmt.Println("No matching repository and tag found!")
+	}
+	if csscParams.showPatchTags {
+		fmt.Println("Listing repositories and tags matching the filter with corrosponding patch tag (if present):")
+		for _, result := range filteredResult {
+			fmt.Printf("%s/%s:%s,%s\n", loginURL, result.Repository, result.Tag, result.PatchTag)
+		}
+	} else {
+		fmt.Println("Listing repositories and tags matching the filter:")
+		for _, result := range filteredResult {
+			fmt.Printf("%s/%s:%s\n", loginURL, result.Repository, result.Tag)
+		}
+	}
+	fmt.Println("Total matches found:", len(filteredResult))
 }
