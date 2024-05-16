@@ -83,7 +83,7 @@ func newCsscCmd(rootParams *rootParameters) *cobra.Command {
 		Use:   "cssc",
 		Short: "cssc operations for a registry",
 		Long:  newCsscCmdLongMessage,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.Help()
 			return nil
 		},
@@ -118,10 +118,10 @@ func newPatchFilterCmd(csscParams *csscParameters) *cobra.Command {
 
 			filter := Filter{}
 			if csscParams.dryRun == false && csscParams.filePath != "" {
-				return errors.New("--file-path flag can only be used in combination with --dry-run flag.")
+				return errors.New("Flag --file-path can only be used in combination with --dry-run flag.")
 			} else if csscParams.dryRun == true {
 				if csscParams.filePath == "" {
-					return errors.New("--file-path flag is required when using --dry-run flag. Please provide the file path of the JSON filter file.")
+					return errors.New("Flag --file-path is required when using --dry-run flag. Please provide the file path of the JSON filter file.")
 				}
 				fmt.Println("DRY RUN mode enabled. Reading filter from file path...")
 				filter, err = getFilterFromFilePath(csscParams.filePath)
@@ -138,7 +138,7 @@ func newPatchFilterCmd(csscParams *csscParameters) *cobra.Command {
 
 			// Continue only if the filter is not empty
 			if len(filter.Repositories) == 0 {
-				fmt.Println("Filter is empty or invalid!")
+				fmt.Println("Filter is empty or invalid.")
 				return nil
 			}
 
@@ -201,7 +201,7 @@ func getFilterFromFilterPolicy(ctx context.Context, csscParams *csscParameters, 
 	}
 
 	// Unmarshal the JSON file data to Filter struct
-	var filter Filter = Filter{}
+	var filter = Filter{}
 	if err := json.Unmarshal(fileContent, &filter); err != nil {
 		return Filter{}, errors.Wrap(err, "Error unmarshalling JSON content. Please make sure the filter JSON file is in the correct format")
 	}
@@ -215,7 +215,7 @@ func getFilterFromFilePath(filePath string) (Filter, error) {
 		return Filter{}, errors.Wrap(err, "Error reading the file. Please ensure the file path is correct")
 	}
 
-	var filter Filter = Filter{}
+	var filter = Filter{}
 	if err := json.Unmarshal(file, &filter); err != nil {
 		return Filter{}, errors.Wrap(err, "Error unmarshalling JSON content. Please make sure the filter JSON file is in the correct format")
 	}
@@ -224,7 +224,7 @@ func getFilterFromFilePath(filePath string) (Filter, error) {
 }
 
 func applyFilterAndGetFilteredList(ctx context.Context, acrClient api.AcrCLIClientInterface, filter Filter) ([]FilteredRepository, error) {
-	var filteredRepos []FilteredRepository = nil
+	var filteredRepos []FilteredRepository
 
 	for _, filterRepo := range filter.Repositories {
 		if filterRepo.Enabled != nil && *filterRepo.Enabled == false {

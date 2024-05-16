@@ -200,7 +200,7 @@ func TestGetFilterFromFilePath(t *testing.T) {
 	//2. Error should be returned when filter file is not in the correct format
 	t.Run("FileNotCorrectFormatTest", func(t *testing.T) {
 		var filterFile = []byte(`i am not a json file`)
-		err := os.WriteFile("filter-wrongformat.json", filterFile, 0644)
+		err := os.WriteFile("filter-wrongformat.json", filterFile, 0600)
 
 		assert.Nil(t, err, "Error should be nil")
 		filter, err := getFilterFromFilePath("filter-wrongformat.json")
@@ -229,7 +229,7 @@ func TestGetFilterFromFilePath(t *testing.T) {
 				}
 			]
 		}`)
-		err := os.WriteFile("filter.json", filterFile, 0644)
+		err := os.WriteFile("filter.json", filterFile, 0600)
 		assert.Nil(t, err, "Error should be nil")
 
 		filter, err := getFilterFromFilePath("filter.json")
@@ -331,7 +331,6 @@ func boolPtr(v bool) *bool {
 // All variables used in the tests
 var (
 	csscTestCtx      = context.Background()
-	csscTestLoginURL = "foo.azurecr.io"
 	csscTestRegistry = "registry"
 	csscTestRepo1    = "repo1"
 	csscTestRepo2    = "repo2"
