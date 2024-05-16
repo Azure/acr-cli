@@ -173,7 +173,7 @@ func TestGetFilterFromFilterPolicy(t *testing.T) {
 		csscParams.filterPolicy = "notcorrectformat"
 		filter, err := getFilterFromFilterPolicy(context.Background(), &csscParams, loginURL)
 		assert.NotEqual(nil, err, "Error should not be nil")
-		assert.Equal(t, "--filter-policy should be in the format repo:tag", err.Error())
+		assert.Equal(t, "filter-policy should be in the format repo:tag", err.Error())
 		assert.Equal(t, Filter{}, filter)
 	})
 

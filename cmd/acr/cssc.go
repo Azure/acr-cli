@@ -118,10 +118,10 @@ func newPatchFilterCmd(csscParams *csscParameters) *cobra.Command {
 
 			filter := Filter{}
 			if csscParams.dryRun == false && csscParams.filePath != "" {
-				return errors.New("flag --file-path can only be used in combination with --dry-run flag.")
+				return errors.New("flag --file-path can only be used in combination with --dry-run flag")
 			} else if csscParams.dryRun == true {
 				if csscParams.filePath == "" {
-					return errors.New("flag --file-path is required when using --dry-run flag. Please provide the file path of the JSON filter file.")
+					return errors.New("flag --file-path is required when using --dry-run flag. Please provide the file path of the JSON filter file")
 				}
 				fmt.Println("DRY RUN mode enabled. Reading filter from file path...")
 				filter, err = getFilterFromFilePath(csscParams.filePath)
