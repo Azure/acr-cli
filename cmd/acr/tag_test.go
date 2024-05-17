@@ -17,8 +17,9 @@ func TestListTags(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(notFoundTagResponse, errors.New("testRepo not found")).Once()
-		err := listTags(testCtx, mockClient, testLoginURL, testRepo)
+		tagList, err := listTags(testCtx, mockClient, testRepo)
 		assert.NotEqual(nil, err, "Error should not be nil")
+		assert.Equal(0, len(tagList), "Tag list should be empty")
 		mockClient.AssertExpectations(t)
 	})
 	// Second test, if an error is returned on any GetAcrTags call an error should be returned.
@@ -27,7 +28,8 @@ func TestListTags(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(OneTagResult, nil).Once()
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "latest").Return(nil, errors.New("unauthorized")).Once()
-		err := listTags(testCtx, mockClient, testLoginURL, testRepo)
+		tagList, err := listTags(testCtx, mockClient, testRepo)
+		assert.Equal(0, len(tagList), "Tag list should be empty")
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
 	})
@@ -38,8 +40,9 @@ func TestListTags(t *testing.T) {
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "").Return(OneTagResult, nil).Once()
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "latest").Return(FourTagsResult, nil).Once()
 		mockClient.On("GetAcrTags", testCtx, testRepo, "", "v4").Return(EmptyListTagsResult, nil).Once()
-		err := listTags(testCtx, mockClient, testLoginURL, testRepo)
+		tagList, err := listTags(testCtx, mockClient, testRepo)
 		assert.Equal(nil, err, "Error should be nil")
+		assert.Equal(5, len(tagList), "Tag list should have 5 tags")
 		mockClient.AssertExpectations(t)
 	})
 }
