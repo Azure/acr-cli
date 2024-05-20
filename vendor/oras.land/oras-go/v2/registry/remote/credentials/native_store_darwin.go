@@ -13,9 +13,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package docker
+package credentials
 
-// docker media types
-const (
-	MediaTypeManifest = "application/vnd.docker.distribution.manifest.v2+json"
-)
+// getPlatformDefaultHelperSuffix returns the platform default credential
+// helper suffix.
+// Reference: https://docs.docker.com/engine/reference/commandline/login/#default-behavior
+func getPlatformDefaultHelperSuffix() string {
+	return "osxkeychain"
+}

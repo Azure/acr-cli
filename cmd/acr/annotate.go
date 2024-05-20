@@ -207,8 +207,10 @@ func annotateTags(ctx context.Context,
 					// For every tag that would be annotated, first check if it exists in the map. If it doesn't, add a new key
 					// with value 1 and if it does, just add 1 to the existent value.
 					annotatedTags[tag]++
-					// fmt.Printf("%s/%s:%s\n", loginURL, repoName, *tag.Name)
 					annotatedTagsCount++
+					// ref := fmt.Sprintf("%s/%s@%s", loginURL, repoName, tag)
+					// orasRegistry.
+
 				}
 			}
 		}
