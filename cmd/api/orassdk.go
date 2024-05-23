@@ -5,6 +5,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"io"
 
 	orasauth "github.com/Azure/acr-cli/auth/oras"
@@ -202,6 +203,103 @@ type GraphTarget interface {
 // }
 
 func (o *ORASClient) Annotate(ctx context.Context, reference string, artifactType string, annotationsArg map[string]string) error {
+	// discoverCmd()
+
+	// registry.Referrers(ctx, repo, desc, artifactType)
+
+	// var opts discoverOptions
+	// cmd := &cobra.Command{
+	// 	// Args: oerrors.CheckArgs(argument.Exactly(1)),
+	// 	RunE: func(cmd *cobra.Command, args []string) error {
+	// 		return Discover(cmd, &opts)
+	// 	},
+	// }
+
+	// var opts discoverOptions
+	// _ = &cobra.Command{
+	// 	Use: "discover [flags] <name>{:<tag>|@<digest>}",
+	// 	// Args: oerrors.CheckArgs(argument.Exactly(1), "the target artifact to discover referrers from"),
+	// 	PreRunE: func(cmd *cobra.Command, args []string) error {
+	// 		if err := oerrors.CheckMutuallyExclusiveFlags(cmd.Flags(), "format", "output"); err != nil {
+	// 			return err
+	// 		}
+	// 		opts.RawReference = args[0]
+	// 		if err := option.Parse(cmd, &opts); err != nil {
+	// 			return err
+	// 		}
+	// 		if cmd.Flags().Changed("output") {
+	// 			switch opts.Format.Type {
+	// 			case "tree", "json", "table":
+	// 				fmt.Fprintf(cmd.ErrOrStderr(), "[DEPRECATED] --output is deprecated, try `--format %s` instead\n", opts.Template)
+	// 			default:
+	// 				return errors.New("output type can only be tree, table or json")
+	// 			}
+	// 		}
+	// 		return nil
+	// 	},
+	// 	RunE: func(cmd *cobra.Command, args []string) error {
+	// 		ctx, logger := command.GetLogger(cmd, &opts.Common)
+	// 		repo, err := opts.NewReadonlyTarget(ctx, opts.Common, logger)
+	// 		if err != nil {
+	// 			return err
+	// 		}
+	// 		resolveOpts := oras.DefaultResolveOptions
+	// 		desc, err := oras.Resolve(ctx, repo, opts.Reference, resolveOpts)
+	// 		if err != nil {
+	// 			return err
+	// 		}
+	// 		handler, err := display.NewDiscoverHandler(cmd.OutOrStdout(), opts.Format, opts.Path, opts.RawReference, desc, opts.Verbose)
+	// 		if err != nil {
+	// 			return err
+	// 		}
+	// 		refs, err := registry.Referrers(ctx, repo, desc, opts.artifactType)
+	// 		if err != nil {
+	// 			return err
+	// 		}
+	// 		for _, ref := range refs {
+	// 			// fmt.Printf("ref = %s", ref.Digest)
+	// 			fmt.Print("HERE")
+	// 			if err := handler.OnDiscovered(ref, desc); err != nil {
+	// 				return err
+	// 			}
+	// 		}
+
+	// 		return handler.OnCompleted()
+	// 	},
+	// 	// return Discover(cmd, &opts)
+	// }
+
+	// cmd.Flags().StringVarP(&opts.artifactType, "artifact-type", "", "", "artifact type")
+
+	// if cmd.Context() == nil {
+	// 	fmt.Printf("NIL")
+	// }
+
+	// ctxD, logger := command.GetLogger(cmd, &opts.Common)
+	// repo, err := opts.NewReadonlyTarget(ctxD, opts.Common, logger)
+	// if err != nil {
+	// 	return err
+	// }
+	// resolveOpts := oras.DefaultResolveOptions
+	// desc, err := oras.Resolve(ctxD, repo, opts.Reference, resolveOpts)
+	// if err != nil {
+	// 	return err
+	// }
+	// handler, err := display.NewDiscoverHandler(cmd.OutOrStdout(), opts.Format, opts.Path, opts.RawReference, desc, opts.Verbose)
+	// if err != nil {
+	// 	return err
+	// }
+	// refs, err := registry.Referrers(ctxD, repo, desc, opts.artifactType)
+	// if err != nil {
+	// 	return err
+	// }
+	// for _, ref := range refs {
+	// 	fmt.Printf("ref = %s", ref.Digest)
+	// 	if err := handler.OnDiscovered(ref, desc); err != nil {
+	// 		return err
+	// 	}
+	// }
+
 	dst, err := o.getTarget(reference)
 	if err != nil {
 		return err
@@ -280,7 +378,18 @@ func (o *ORASClient) getTarget(reference string) (repo *remote.Repository, err e
 	return repo, nil
 }
 
-func (o *ORASClient) Discover(cmd *cobra.Command, opts *discoverOptions) error {
+func discoverCmd() *cobra.Command {
+	var opts discoverOptions
+	cmd := &cobra.Command{
+		// Args: oerrors.CheckArgs(argument.Exactly(1)),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return Discover(cmd, &opts)
+		},
+	}
+	return cmd
+}
+
+func Discover(cmd *cobra.Command, opts *discoverOptions) error {
 	ctx, logger := command.GetLogger(cmd, &opts.Common)
 	repo, err := opts.NewReadonlyTarget(ctx, opts.Common, logger)
 	if err != nil {
@@ -300,6 +409,7 @@ func (o *ORASClient) Discover(cmd *cobra.Command, opts *discoverOptions) error {
 		return err
 	}
 	for _, ref := range refs {
+		fmt.Printf("ref = ", ref.Digest)
 		if err := handler.OnDiscovered(ref, desc); err != nil {
 			return err
 		}
