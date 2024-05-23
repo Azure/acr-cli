@@ -44,11 +44,6 @@ func TestApplyFilterAndGetFilteredList(t *testing.T) {
 					Tags:       nil,
 					Enabled:    boolPtr(true),
 				},
-				{
-					Repository: common.RepoName2,
-					Tags:       []string{""},
-					Enabled:    boolPtr(true),
-				},
 			},
 		}
 		filteredRepositories, err := ApplyFilterAndGetFilteredList(context.Background(), mockAcrClient, filter)

@@ -116,7 +116,7 @@ func ApplyFilterAndGetFilteredList(ctx context.Context, acrClient api.AcrCLIClie
 		if filterRepo.Enabled != nil && !*filterRepo.Enabled {
 			continue
 		}
-		if filterRepo.Repository == "" || filterRepo.Tags == nil || len(filterRepo.Tags) == 0 || filterRepo.Tags[0] == "" {
+		if filterRepo.Repository == "" || filterRepo.Tags == nil || len(filterRepo.Tags) == 0 {
 			continue
 		}
 

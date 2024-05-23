@@ -94,7 +94,7 @@ func newPatchFilterCmd(csscParams *csscParameters) *cobra.Command {
 			} else if !csscParams.dryRun && csscParams.filterfilePath != "" {
 				return errors.New("flag --filter-file-path can only be used in combination with --dry-run")
 			} else if !csscParams.dryRun && csscParams.filterPolicy != "" {
-				return errors.New("patch command without --dry-run is not fully operational and will be enabled in future releases")
+				return errors.New("patch command without --dry-run is not operational at the moment and will be enabled in future releases")
 			} else if csscParams.dryRun {
 				fmt.Println("DRY RUN mode enabled...")
 				if csscParams.filterPolicy == "" && csscParams.filterfilePath == "" {
