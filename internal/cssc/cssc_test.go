@@ -10,6 +10,7 @@ import (
 
 	"github.com/Azure/acr-cli/cmd/mocks"
 	"github.com/Azure/acr-cli/internal/common"
+	"github.com/Azure/acr-cli/internal/tag"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 )
@@ -33,7 +34,7 @@ func TestApplyFilterAndGetFilteredList(t *testing.T) {
 		assert.Nil(t, filteredRepositories)
 		assert.Len(t, filteredRepositories, 0)
 	})
-	//2.  If Tags are not specified for any repository in the filter, nothing will match the filter and an empty list should be returned
+	// 2. If Tags are not specified for any repository in the filter, nothing will match the filter and an empty list should be returned
 	t.Run("TagsNotSpecifiedTest", func(t *testing.T) {
 		filter := Filter{
 			Version: "v1",
@@ -55,8 +56,9 @@ func TestApplyFilterAndGetFilteredList(t *testing.T) {
 		assert.Nil(t, filteredRepositories)
 		assert.Len(t, filteredRepositories, 0)
 	})
-	//3. Error should be returned when GetAcrTags fails for a repository
-	t.Run("GetAcrTagsFailsTest", func(t *testing.T) {
+
+	// 3. No error should be returned when GetAcrTags fails with ListTagsError
+	t.Run("GetAcrTagsFailsWithListTagsErrorTest", func(t *testing.T) {
 		filter := Filter{
 			Version: "v1",
 			Repositories: []Repository{
@@ -67,13 +69,13 @@ func TestApplyFilterAndGetFilteredList(t *testing.T) {
 				},
 			},
 		}
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName1, "", "").Return(nil, errors.New("failed getting the tags")).Once()
+		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName1, "", "").Return(nil, errors.Wrap(&tag.ListTagsError{}, "failed to list tags")).Once()
 		filteredRepositories, err := ApplyFilterAndGetFilteredList(context.Background(), mockAcrClient, filter)
-		assert.Error(t, err)
-		assert.ErrorContains(t, err, "failed getting the tags")
+		assert.NoError(t, err)
 		assert.Nil(t, filteredRepositories)
 	})
-	//4. If filter has a tag that doesn't exist in the repository, ignore it and return whatever exists that matches the filter
+
+	// 4. If filter has a tag that doesn't exist in the repository, ignore it and return whatever exists that matches the filter
 	t.Run("TagSpecifiedInFilterDoesNotExistTest", func(t *testing.T) {
 		filter := Filter{
 			Version: "v1",
@@ -155,33 +157,43 @@ func TestApplyFilterAndGetFilteredList(t *testing.T) {
 func TestGetFilterFromFilterPolicy(t *testing.T) {
 	username := "username"
 	password := "password"
-	//1. Error should be returned when filter policy is not in the correct format
+	// 1. Error should be returned when filter policy is not in the correct format
 	t.Run("FilterPolicyNotCorrectFormatTest", func(t *testing.T) {
 		filterPolicy := "notcorrectformat"
 		filter, err := GetFilterFromFilterPolicy(context.Background(), filterPolicy, common.TestLoginURL, username, password)
 		assert.NotEqual(nil, err, "Error should not be nil")
-		assert.Equal(t, "filter-policy should be in the format repo:tag", err.Error())
+		assert.Equal(t, "filter-policy should be in the format repository:tag e.g. continuouspatchpolicy:latest", err.Error())
 		assert.Equal(t, Filter{}, filter)
 	})
-	//2. Error should be returned when fetching repository manifest fails
+
+	// 2. Error should be returned when filter policy has more than one colon
+	t.Run("FilterPolicyMoreThanOneColonTest", func(t *testing.T) {
+		filterPolicy := "repo1:something:anotherthing"
+		filter, err := GetFilterFromFilterPolicy(context.Background(), filterPolicy, common.TestLoginURL, username, password)
+		assert.NotEqual(nil, err, "Error should not be nil")
+		assert.Equal(t, "filter-policy should be in the format repository:tag e.g. continuouspatchpolicy:latest", err.Error())
+		assert.Equal(t, Filter{}, filter)
+	})
+
+	// 3. Error should be returned when fetching repository manifest fails
 	t.Run("FetchBytesFailsTest", func(t *testing.T) {
 		filterPolicy := "repo1:tag1"
 		filter, err := GetFilterFromFilterPolicy(context.Background(), filterPolicy, common.TestLoginURL, username, password)
 		assert.NotEqual(nil, err, "Error should not be nil")
-		assert.ErrorContains(t, err, "error fetching manifest content when reading the filter policy")
+		assert.ErrorContains(t, err, "error fetching filter manifest content when reading the filter policy")
 		assert.Equal(t, Filter{}, filter)
 	})
 }
 
 func TestGetFilterFromFilePath(t *testing.T) {
-	//1. Error should be returned when filter file does not exist
+	// 1. Error should be returned when filter file does not exist
 	t.Run("FileDoesNotExistTest", func(t *testing.T) {
 		filter, err := GetFilterFromFilePath("idontexist")
 		assert.NotEqual(nil, err, "Error should not be nil")
 		assert.ErrorContains(t, err, "error reading the filter json file from file path")
 		assert.Equal(t, Filter{}, filter)
 	})
-	//2. Error should be returned when filter file is not in the correct format
+	// 2. Error should be returned when filter file is not in the correct format
 	t.Run("FileNotCorrectFormatTest", func(t *testing.T) {
 		var filterFile = []byte(`i am not a json file`)
 		err := os.WriteFile("filter-wrongformat.json", filterFile, 0600)
@@ -193,7 +205,7 @@ func TestGetFilterFromFilePath(t *testing.T) {
 		err = os.Remove("filter-wrongformat.json")
 		assert.Nil(t, err, "Error should be nil")
 	})
-	//3. Success scenario with correct filter file
+	// 3. Success scenario with correct filter file
 	t.Run("SuccessTest", func(t *testing.T) {
 		var filterFile = []byte(`{
 			"version": "v1",

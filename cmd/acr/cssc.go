@@ -16,14 +16,14 @@ import (
 )
 
 const (
-	newCsscCmdLongMessage  = `acr cssc: CSSC (Container Secure Supply Chain) operations for a registry. Use subcommands for more specific operations.`
-	newPatchCmdLongMessage = `acr cssc patch: List all repositories and tags that match the filter.
-	Use the --filter-policy flag to specify the repository:tag where the filter exists. For v1, it should be continuouspatchpolicy:latest
-	Example: acr cssc patch -r example --filter-policy continuouspatchpolicy:latest
-	Use the --show-patch-tags flag to get patch tag (if it exists) for repositories and tags that match the filter.
-	Example: acr cssc patch -r example --filter-policy continuouspatchpolicy:latest --show-patch-tags
-	Use the --dry-run flag in combination with --file-path flag to read filter from a local file path instead of filter policy.	Use this to validate the filter file before using it as filter policy.
-	Example: acr cssc patch -r example --dry-run --file-path /path/to/filter.json
+	newCsscCmdLongMessage  = `[Preview] acr cssc: Run cssc operations for a registry. Use subcommands for more specific operations.`
+	newPatchCmdLongMessage = `[Preview] acr cssc patch: Run cssc patch operation for a registry. Use flags for more specific operations.
+	
+	Use the --filter-policy flag to specify the repository:tag where the filter json exists as an OCI artifact and --dry-run flag to list the filtered repositories and tags that match the filter.
+	Example: acr cssc patch -r example --filter-policy continuouspatchpolicy:latest --dry-run
+	
+	Use the --filter-file-path flag to specify the local file path where the filter json exists and --dry-run flag to list the filtered repositories and tags that match the filter.
+	Example: acr cssc patch -r example --filter-file-path /path/to/filter.json --dry-run
 	
 	Filter JSON file format:
 	{
@@ -41,18 +41,18 @@ const (
 
 type csscParameters struct {
 	*rootParameters
-	filterPolicy  string
-	showPatchTags bool
-	dryRun        bool
-	filePath      string
+	filterPolicy   string
+	showPatchTags  bool
+	dryRun         bool
+	filterfilePath string
 }
 
-// The cssc command can be used to list cssc configurations for a registry.
+// The cssc command can be used to run various cssc operations for a registry.
 func newCsscCmd(rootParams *rootParameters) *cobra.Command {
 	csscParams := csscParameters{rootParameters: rootParams}
 	cmd := &cobra.Command{
 		Use:   "cssc",
-		Short: "cssc operations for a registry",
+		Short: "[Preview] Run cssc operations for a registry",
 		Long:  newCsscCmdLongMessage,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.Help()
@@ -69,11 +69,11 @@ func newCsscCmd(rootParams *rootParameters) *cobra.Command {
 	return cmd
 }
 
-// The patch subcommand can be used to list cssc continuous patch filters for a registry.
+// The patch subcommand can be used to run various patch operations for a registry.
 func newPatchFilterCmd(csscParams *csscParameters) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "patch",
-		Short: "Manage cssc patch operations for a registry",
+		Short: "[Preview] Run cssc patch operations for a registry",
 		Long:  newPatchCmdLongMessage,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			ctx := context.Background()
@@ -82,29 +82,35 @@ func newPatchFilterCmd(csscParams *csscParameters) *cobra.Command {
 				return err
 			}
 			loginURL := api.LoginURL(registryName)
-			getRegistryCredsFromStore(csscParams, loginURL)
+			resolveRegistryCredentials(csscParams, loginURL)
 			acrClient, err := api.GetAcrCLIClientWithAuth(loginURL, csscParams.username, csscParams.password, csscParams.configs)
 			if err != nil {
 				return err
 			}
 
 			filter := cssc.Filter{}
-			if !csscParams.dryRun && csscParams.filePath != "" {
-				return errors.New("flag --file-path can only be used in combination with --dry-run")
+			if csscParams.filterPolicy != "" && csscParams.filterfilePath != "" {
+				return errors.New("flag --filter-policy and --filter-file-path cannot be used together")
+			} else if !csscParams.dryRun && csscParams.filterfilePath != "" {
+				return errors.New("flag --filter-file-path can only be used in combination with --dry-run")
+			} else if !csscParams.dryRun && csscParams.filterPolicy != "" {
+				return errors.New("patch command without --dry-run is not fully operational and will be enabled in future releases")
 			} else if csscParams.dryRun {
-				if csscParams.filePath == "" {
-					return errors.New("flag --file-path is required when using --dry-run")
-				}
-				fmt.Println("DRY RUN mode enabled. Reading filter from file path...")
-				filter, err = cssc.GetFilterFromFilePath(csscParams.filePath)
-				if err != nil {
-					return err
-				}
-			} else if csscParams.filterPolicy != "" {
-				fmt.Println("Reading filter from filter policy...")
-				filter, err = cssc.GetFilterFromFilterPolicy(ctx, csscParams.filterPolicy, loginURL, csscParams.username, csscParams.password)
-				if err != nil {
-					return err
+				fmt.Println("DRY RUN mode enabled...")
+				if csscParams.filterPolicy == "" && csscParams.filterfilePath == "" {
+					return errors.New("flag --filter-policy or --filter-file-path is required when using --dry-run")
+				} else if csscParams.filterfilePath != "" {
+					fmt.Println("Reading filter from filter file path...")
+					filter, err = cssc.GetFilterFromFilePath(csscParams.filterfilePath)
+					if err != nil {
+						return err
+					}
+				} else if csscParams.filterPolicy != "" {
+					fmt.Println("Reading filter from filter policy...")
+					filter, err = cssc.GetFilterFromFilterPolicy(ctx, csscParams.filterPolicy, loginURL, csscParams.username, csscParams.password)
+					if err != nil {
+						return err
+					}
 				}
 			}
 
@@ -122,13 +128,13 @@ func newPatchFilterCmd(csscParams *csscParameters) *cobra.Command {
 	}
 
 	cmd.PersistentFlags().StringVar(&csscParams.filterPolicy, "filter-policy", "", "The filter policy defined by the filter json file uploaded in a repo:tag. For v1, it should be continuouspatchpolicy:latest")
-	cmd.PersistentFlags().BoolVar(&csscParams.dryRun, "dry-run", false, "Use this in combination with --file-path to read filter from file path instead of filter policy. This allows to validate the filter file without uploading it to the registry.")
-	cmd.PersistentFlags().StringVar(&csscParams.filePath, "file-path", "", "The file path of the JSON filter file. Use this in combination with --dry-run to simulate the operation without making any changes on the registry.")
+	cmd.PersistentFlags().BoolVar(&csscParams.dryRun, "dry-run", false, "Use this to list the filtered repositories and tags that match the filter either from a filter policy or a filter file path. ")
+	cmd.PersistentFlags().StringVar(&csscParams.filterfilePath, "filter-file-path", "", "The filter file path of the JSON filter file.")
 	cmd.Flags().BoolVar(&csscParams.showPatchTags, "show-patch-tags", false, "Use this flag to get patch tag (if it exists) for repositories and tags that match the filter. Example: acr cssc patch --filter-policy continuouspatchpolicy:latest --show-patch-tags")
 	return cmd
 }
 
-func getRegistryCredsFromStore(csscParams *csscParameters, loginURL string) {
+func resolveRegistryCredentials(csscParams *csscParameters, loginURL string) {
 	// If both username and password are empty then the docker config file will be used, it can be found in the default
 	// location or in a location specified by the configs string array
 	if csscParams.username == "" || csscParams.password == "" {

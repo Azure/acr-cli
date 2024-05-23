@@ -35,7 +35,7 @@ func TestGetRegistryCredsFromStore(t *testing.T) {
 	t.Run("CredsProvidedTest", func(t *testing.T) {
 		rootParams.username = "username"
 		rootParams.password = "password"
-		getRegistryCredsFromStore(&csscParams, common.TestLoginURL)
+		resolveRegistryCredentials(&csscParams, common.TestLoginURL)
 		assert.Equal(t, "username", csscParams.username)
 		assert.Equal(t, "password", csscParams.password)
 	})
@@ -43,7 +43,7 @@ func TestGetRegistryCredsFromStore(t *testing.T) {
 	t.Run("CredsNotProvidedTest", func(t *testing.T) {
 		rootParams.username = ""
 		rootParams.password = ""
-		getRegistryCredsFromStore(&csscParams, common.TestLoginURL)
+		resolveRegistryCredentials(&csscParams, common.TestLoginURL)
 		assert.Equal(t, "", csscParams.username)
 		assert.Equal(t, "", csscParams.password)
 	})
