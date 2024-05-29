@@ -177,12 +177,17 @@ func PrintFilteredResult(filteredResult []FilteredRepository, showPatchTags bool
 
 // Appends the element to the slice if it does not already exist in the slice
 func AppendElement(slice []FilteredRepository, element FilteredRepository) []FilteredRepository {
+	isFirstElement := len(slice) == 0
+	alreadyInSlice := false
 	for i, existing := range slice {
 		if existing.Repository == element.Repository && existing.Tag == element.Tag {
-			slice = append(slice[:i], slice[i+1:]...)
+			slice[i].PatchTag = element.PatchTag
+			alreadyInSlice = true
 			break
 		}
 	}
-	// Append the new element to the slice
-	return append(slice, element)
+	if isFirstElement || !alreadyInSlice {
+		slice = append(slice, element)
+	}
+	return slice
 }
