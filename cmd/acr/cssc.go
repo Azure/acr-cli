@@ -20,7 +20,7 @@ const (
 	newPatchCmdLongMessage = `[Preview] acr cssc patch: Run cssc patch operation for a registry. Use flags for more specific operations.
 	
 	Use the --filter-policy flag to specify the repository:tag where the filter json exists as an OCI artifact and --dry-run flag to list the filtered repositories and tags that match the filter.
-	Example: acr cssc patch -r example --filter-policy continuouspatchpolicy:latest --dry-run
+	Example: acr cssc patch -r example --filter-policy csscpolicies/patchpolicy:v1 --dry-run
 	
 	Use the --filter-file-path flag to specify the local file path where the filter json exists and --dry-run flag to list the filtered repositories and tags that match the filter.
 	Example: acr cssc patch -r example --filter-file-path /path/to/filter.json --dry-run
@@ -128,10 +128,10 @@ func newPatchFilterCmd(csscParams *csscParameters) *cobra.Command {
 		},
 	}
 
-	cmd.PersistentFlags().StringVar(&csscParams.filterPolicy, "filter-policy", "", "The filter policy defined by the filter json file uploaded in a repo:tag. For v1, it should be continuouspatchpolicy:latest")
+	cmd.PersistentFlags().StringVar(&csscParams.filterPolicy, "filter-policy", "", "The filter policy defined by the filter json file uploaded in a repo:tag. For v1, it should be csscpolicies/patchpolicy:v1")
 	cmd.PersistentFlags().BoolVar(&csscParams.dryRun, "dry-run", false, "Use this to list the filtered repositories and tags that match the filter either from a filter policy or a filter file path. ")
 	cmd.PersistentFlags().StringVar(&csscParams.filterfilePath, "filter-file-path", "", "The filter file path of the JSON filter file.")
-	cmd.Flags().BoolVar(&csscParams.showPatchTags, "show-patch-tags", false, "Use this flag to get patch tag (if it exists) for repositories and tags that match the filter. Example: acr cssc patch --filter-policy continuouspatchpolicy:latest --show-patch-tags")
+	cmd.Flags().BoolVar(&csscParams.showPatchTags, "show-patch-tags", false, "Use this flag to get patch tag (if it exists) for repositories and tags that match the filter. Example: acr cssc patch --filter-policy csscpolicies/patchpolicy:v1 --show-patch-tags")
 	return cmd
 }
 
