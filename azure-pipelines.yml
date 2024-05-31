@@ -37,5 +37,5 @@ steps:
 - task: Docker@2
   inputs:
     command: build
-    Dockerfile: Dockerfile
+    Dockerfile: **/Dockerfile
   displayName: Build container image
