@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/Azure/acr-cli/acr"
-	"github.com/Azure/acr-cli/cmd/api"
+	"github.com/Azure/acr-cli/internal/api"
 )
 
 // Purger purges tags or manifests concurrently.
