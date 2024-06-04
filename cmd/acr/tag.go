@@ -8,7 +8,7 @@ import (
 	"fmt"
 
 	"github.com/Azure/acr-cli/internal/api"
-	"github.com/pkg/errors"
+	"github.com/Azure/acr-cli/internal/tag"
 	"github.com/spf13/cobra"
 )
 
@@ -71,42 +71,19 @@ func newTagListCmd(tagParams *tagParameters) *cobra.Command {
 				return err
 			}
 			ctx := context.Background()
-			err = listTags(ctx, acrClient, loginURL, tagParams.repoName)
+			tagList, err := tag.ListTags(ctx, acrClient, tagParams.repoName)
 			if err != nil {
 				return err
 			}
+			fmt.Printf("Listing tags for the %q repository:\n", tagParams.repoName)
+			for _, tag := range tagList {
+				fmt.Printf("%s/%s:%s\n", loginURL, tagParams.repoName, *tag.Name)
+			}
+
 			return nil
 		},
 	}
 	return cmd
-}
-
-// listTagss will do the http requests and print the digest of all the tags in the selected repository.
-func listTags(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string) error {
-	lastTag := ""
-	resultTags, err := acrClient.GetAcrTags(ctx, repoName, "", lastTag)
-	if err != nil {
-		return errors.Wrap(err, "failed to list tags")
-	}
-
-	fmt.Printf("Listing tags for the %q repository:\n", repoName)
-	// A for loop is used because the GetAcrTags method returns by default only 100 tags and their attributes.
-	for resultTags != nil && resultTags.TagsAttributes != nil {
-		tags := *resultTags.TagsAttributes
-		for _, tag := range tags {
-			tagName := *tag.Name
-			fmt.Printf("%s/%s:%s\n", loginURL, repoName, tagName)
-		}
-		// Since the GetAcrTags supports pagination when supplied with the last digest that was returned the last tag name
-		// digest is saved, the tag array contains at least one element because if it was empty the API would return
-		// a nil pointer instead of a pointer to a length 0 array.
-		lastTag = *tags[len(tags)-1].Name
-		resultTags, err = acrClient.GetAcrTags(ctx, repoName, "", lastTag)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // newTagDeleteCmd defines the tag delete subcommand, it receives as an argument an array of tag digests.
@@ -127,7 +104,7 @@ func newTagDeleteCmd(tagParams *tagParameters) *cobra.Command {
 				return err
 			}
 			ctx := context.Background()
-			err = deleteTags(ctx, acrClient, loginURL, tagParams.repoName, args)
+			err = tag.DeleteTags(ctx, acrClient, loginURL, tagParams.repoName, args)
 			if err != nil {
 				return err
 			}
@@ -136,17 +113,4 @@ func newTagDeleteCmd(tagParams *tagParameters) *cobra.Command {
 	}
 
 	return cmd
-}
-
-// deleteTags receives an array of tags digest and deletes them using the supplied acrClient.
-func deleteTags(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string, args []string) error {
-	for i := 0; i < len(args); i++ {
-		_, err := acrClient.DeleteAcrTag(ctx, repoName, args[i])
-		if err != nil {
-			// If there is an error (this includes not found and not allowed operations) the deletion of the tags is stopped and an error is returned.
-			return errors.Wrap(err, "failed to delete tags")
-		}
-		fmt.Printf("%s/%s:%s\n", loginURL, repoName, args[i])
-	}
-	return nil
 }
