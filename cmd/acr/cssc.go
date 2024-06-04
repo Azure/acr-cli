@@ -8,9 +8,8 @@ import (
 	"fmt"
 
 	orasauth "github.com/Azure/acr-cli/auth/oras"
+	"github.com/Azure/acr-cli/internal/api"
 	"github.com/Azure/acr-cli/internal/cssc"
-
-	"github.com/Azure/acr-cli/cmd/api"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )

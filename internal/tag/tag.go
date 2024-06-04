@@ -8,7 +8,7 @@ import (
 	"fmt"
 
 	"github.com/Azure/acr-cli/acr"
-	"github.com/Azure/acr-cli/cmd/api"
+	"github.com/Azure/acr-cli/internal/api"
 	"github.com/pkg/errors"
 )
 

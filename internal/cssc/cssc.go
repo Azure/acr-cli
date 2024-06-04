@@ -11,9 +11,9 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/Azure/acr-cli/internal/api"
 	"github.com/Azure/acr-cli/internal/tag"
 
-	"github.com/Azure/acr-cli/cmd/api"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 

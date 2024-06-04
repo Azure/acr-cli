@@ -7,7 +7,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/Azure/acr-cli/cmd/api"
+	"github.com/Azure/acr-cli/internal/api"
 	"github.com/Azure/acr-cli/internal/tag"
 	"github.com/spf13/cobra"
 )
