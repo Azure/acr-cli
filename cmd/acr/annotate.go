@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/Azure/acr-cli/acr"
 	"github.com/Azure/acr-cli/cmd/api"
+	"github.com/Azure/acr-cli/cmd/api/option"
 	"github.com/Azure/acr-cli/cmd/worker"
 	"github.com/dlclark/regexp2"
 	"github.com/spf13/cobra"
@@ -56,12 +58,19 @@ type annotateParameters struct {
 // newAnnotateCmd defines the annotate command
 func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 	annotateParams := annotateParameters{rootParameters: rootParams}
+	var opts api.DiscoverOptions
 	cmd := &cobra.Command{
 		Use:     "annotate",
 		Short:   "[Preview] Annotate images in a registry",
 		Long:    newAnnotateCmdLongMessage,
 		Example: annotateExampleMessage,
-		RunE: func(_ *cobra.Command, _ []string) error {
+		PreRunE: func(cmd *cobra.Command, args []string) error {
+			if err := option.Parse(cmd, &opts); err != nil {
+				_ = fmt.Errorf("failed to parse discover options: %w", err)
+			}
+			return nil
+		},
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			// This context is used for all the http requests
 			ctx := context.Background()
 			registryName, err := annotateParams.GetRegistryName()
@@ -102,7 +111,7 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 				fmt.Printf("Specified concurrency value too large. Set to maximum value: %d \n", maxPoolSize)
 			}
 			for repoName, tagRegex := range tagFilters {
-				singleAnnotatedTagsCount, err := annotateTags(ctx, acrClient, orasClient, poolSize, loginURL, repoName, annotateParams.artifactType, annotateParams.annotations, tagRegex, annotateParams.filterTimeout, annotateParams.dryRun)
+				singleAnnotatedTagsCount, err := annotateTags(ctx, acrClient, orasClient, poolSize, loginURL, repoName, annotateParams.artifactType, annotateParams.annotations, tagRegex, annotateParams.filterTimeout, annotateParams.dryRun, cmd, opts)
 				if err != nil {
 					return fmt.Errorf("failed to annotate tags: %w", err)
 				}
@@ -159,12 +168,12 @@ func annotateTags(ctx context.Context,
 	annotations []string,
 	tagFilter string,
 	regexpMatchTimeoutSeconds uint64,
-	dryRun bool) (int, error) {
+	dryRun bool, cmd *cobra.Command, opts api.DiscoverOptions) (int, error) {
 
 	if !dryRun {
-		fmt.Printf("Annotating tags for repository: %s\n", repoName)
+		fmt.Printf("\nAnnotating tags for repository: %s\n", repoName)
 	} else {
-		fmt.Printf("Tags for this repository would be annotated: %s\n", repoName)
+		fmt.Printf("\nTags for this repository would be annotated: %s\n", repoName)
 	}
 
 	// In order to keep track if a manifest would get annotated during a dry-run, a map is defined that as a key has the manifest
@@ -190,14 +199,14 @@ func annotateTags(ctx context.Context,
 
 	for {
 		// GetTagsToAnnotate will return an empty lastTag when there are no more tags.
-		tagsToAnnotate, newLastTag, err := getTagsToAnnotate(ctx, acrClient, loginURL, repoName, tagRegex, lastTag, dryRun)
+		tagsToAnnotate, newLastTag, err := getTagsToAnnotate(ctx, acrClient, loginURL, repoName, tagRegex, lastTag, dryRun, cmd, opts)
 		if err != nil {
 			return -1, err
 		}
 		lastTag = newLastTag
 		if tagsToAnnotate != nil {
 			if !dryRun {
-				count, annotateErr := annotator.Annotate(ctx, tagsToAnnotate)
+				count, annotateErr := annotator.AnnotateTags(ctx, tagsToAnnotate)
 				if annotateErr != nil {
 					return -1, annotateErr
 				}
@@ -206,10 +215,8 @@ func annotateTags(ctx context.Context,
 				for _, tag := range *tagsToAnnotate {
 					// For every tag that would be annotated, first check if it exists in the map. If it doesn't, add a new key
 					// with value 1 and if it does, just add 1 to the existent value.
-					annotatedTags[tag]++
+					annotatedTags[*tag.Digest]++
 					annotatedTagsCount++
-					// ref := fmt.Sprintf("%s/%s@%s", loginURL, repoName, tag)
-					// orasRegistry.
 
 				}
 			}
@@ -230,7 +237,7 @@ func getTagsToAnnotate(ctx context.Context,
 	loginURL string,
 	repoName string,
 	filter *regexp2.Regexp,
-	lastTag string, dryRun bool) (*[]string, string, error) {
+	lastTag string, dryRun bool, cmd *cobra.Command, opts api.DiscoverOptions) (*[]acr.TagAttributesBase, string, error) {
 
 	var matches bool
 	resultTags, err := acrClient.GetAcrTags(ctx, repoName, "timedesc", lastTag)
@@ -242,11 +249,11 @@ func getTagsToAnnotate(ctx context.Context,
 		return nil, "", err
 	}
 
+	// var skipped bool
 	newLastTag := ""
 	if resultTags != nil && resultTags.TagsAttributes != nil && len(*resultTags.TagsAttributes) > 0 {
 		tags := *resultTags.TagsAttributes
-		// tagsToAnnotate := []acr.TagAttributesBase{}
-		tagsToAnnotate := []string{}
+		tagsToAnnotate := []acr.TagAttributesBase{}
 		for _, tag := range tags {
 			matches, err = filter.MatchString(*tag.Name)
 			if err != nil {
@@ -257,12 +264,21 @@ func getTagsToAnnotate(ctx context.Context,
 				// If a tag does not match the regex then it's not added to the list
 				continue
 			}
+
 			// If a tag is changable, then it is returned as a tag to annotate
 			if *tag.ChangeableAttributes.WriteEnabled {
-				if dryRun {
-					fmt.Printf("%s/%s:%s\n", loginURL, repoName, *tag.Name)
+				ref := fmt.Sprintf("%s/%s:%s", loginURL, repoName, *tag.Name)
+				opts.RawReference = ref
+				skipped, err := api.RunDiscover(cmd, &opts)
+				if err != nil {
+					return nil, "", err
 				}
-				tagsToAnnotate = append(tagsToAnnotate, *tag.Digest)
+				if !skipped {
+					if dryRun {
+						fmt.Printf("%s/%s:%s\n", loginURL, repoName, *tag.Name)
+					}
+					tagsToAnnotate = append(tagsToAnnotate, tag)
+				}
 			}
 		}
 
@@ -274,12 +290,20 @@ func getTagsToAnnotate(ctx context.Context,
 
 // annotateDanglingManifests annotates all manifests that do not have any tags associated with them except the ones
 // that are referenced by a multiarch manifest
-func annotateDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, orasClient api.ORASClientInterface, poolSize int, loginURL string, repoName string, artifactType string, annotations []string, dryRun bool) (int, error) {
+func annotateDanglingManifests(ctx context.Context,
+	acrClient api.AcrCLIClientInterface,
+	orasClient api.ORASClientInterface,
+	poolSize int, loginURL string,
+	repoName string, artifactType string,
+	annotations []string,
+	dryRun bool) (int, error) {
 	if !dryRun {
 		fmt.Printf("Annotating manifests for repository: %s\n", repoName)
 	} else {
 		fmt.Printf("Manifests for this repository would be annotated: %s\n", repoName)
 	}
+
+	// var opts api.DiscoverOptions
 
 	// Contrary to getTagsToAnnotate, getManifests gets all the manifests at once.
 	// This was done because if there is a manifest that has no tag but is referenced by a multiarch manifest that has tags then it
@@ -297,7 +321,7 @@ func annotateDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientIn
 		if err != nil {
 			return -1, err
 		}
-		manifestsCount, annotateErr := annotator.Annotate(ctx, manifestsToAnnotate)
+		manifestsCount, annotateErr := annotator.AnnotateManifests(ctx, manifestsToAnnotate)
 		if annotateErr != nil {
 			return manifestsCount, annotateErr
 		}

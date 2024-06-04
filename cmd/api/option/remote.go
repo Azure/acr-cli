@@ -44,6 +44,11 @@ const (
 	identityTokenFromStdinFlag = "identity-token-stdin"
 )
 
+var (
+	plainHTTPFlag = false
+	enhanced      = false
+)
+
 // Remote options struct contains flags and arguments specifying one registry.
 // Remote implements oerrors.Handler and interface.
 type Remote struct {
@@ -63,7 +68,7 @@ type Remote struct {
 	headerFlags           []string
 	headers               http.Header
 	warned                map[string]*sync.Map
-	plainHTTP             func() (plainHTTP bool, enforced bool)
+	plainHTTP             func() (plainHTTPFlag bool, enforced bool)
 	store                 credentials.Store
 }
 
@@ -173,6 +178,7 @@ func (opts *Remote) tlsConfig() (*tls.Config, error) {
 
 // isPlainHttp returns the plain http flag for a given registry.
 func (opts *Remote) isPlainHttp(registry string) bool {
+	fmt.Printf("plainHTTP = %t\n", opts.plainHTTP)
 	plainHTTP, enforced := opts.plainHTTP()
 	if enforced {
 		return plainHTTP
@@ -244,6 +250,7 @@ func (opts *Remote) ApplyFlagsWithPrefix(fs *pflag.FlagSet, prefix, description 
 	plainHTTPFlagName := opts.flagPrefix + "plain-http"
 	plainHTTP := fs.Bool(plainHTTPFlagName, false, "allow insecure connections to "+notePrefix+"registry without SSL check")
 	opts.plainHTTP = func() (bool, bool) {
+		// fmt.Printf("flag plainHTTP = %t, enforced = %s\n", plainHTTP, plainHTTPFlagName)
 		return *plainHTTP, fs.Changed(plainHTTPFlagName)
 	}
 	fs.StringVar(&opts.CACertFilePath, opts.flagPrefix+caFileFlag, "", "server certificate authority file for the remote "+notePrefix+"registry")
@@ -303,25 +310,30 @@ func (opts *Remote) ConfigPath() (string, error) {
 
 // NewRepository assembles a oras remote repository.
 func (opts *Remote) NewRepository(reference string, common Common, logger logrus.FieldLogger) (repo *remote.Repository, err error) {
+	// fmt.Printf("NewRepository reference = %s\n", reference)
 	repo, err = remote.NewRepository(reference)
 	if err != nil {
 		if errors.Unwrap(err) == errdef.ErrInvalidReference {
+			// fmt.Println("Invalid reference")
 			return nil, fmt.Errorf("%q: %v", reference, err)
 		}
 		return nil, err
 	}
+	// fmt.Println("HERE")
 	registry := repo.Reference.Registry
-	repo.PlainHTTP = opts.isPlainHttp(registry)
+	// repo.PlainHTTP = opts.isPlainHttp(registry)
 	repo.HandleWarning = opts.handleWarning(registry, logger)
 	if repo.Client, err = opts.authClient(common.Debug); err != nil {
 		return nil, err
 	}
+	// fmt.Println("HERE 2")
 	repo.SkipReferrersGC = true
 	if opts.ReferrersAPI != nil {
 		if err := repo.SetReferrersCapability(*opts.ReferrersAPI); err != nil {
 			return nil, err
 		}
 	}
+	// fmt.Println("HERE 3")
 	return
 }
 

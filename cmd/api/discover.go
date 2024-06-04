@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"errors"
@@ -14,7 +14,7 @@ import (
 	"oras.land/oras-go/v2/registry"
 )
 
-type discoverOptions struct {
+type DiscoverOptions struct {
 	option.Common
 	option.Platform
 	option.Target
@@ -23,8 +23,8 @@ type discoverOptions struct {
 	artifactType string
 }
 
-func newDiscoverCmd() *cobra.Command {
-	var opts discoverOptions
+func useDiscoverCmd() *cobra.Command {
+	var opts DiscoverOptions
 	cmd := &cobra.Command{
 		Use:   "discover [flags] <name>{:<tag>|@<digest>}",
 		Short: "[Preview] Discover referrers of a manifest in a registry or an OCI image layout",
@@ -60,7 +60,6 @@ Example - Discover referrers of the manifest tagged 'v1' in an OCI image layout 
 				return err
 			}
 			opts.RawReference = args[0]
-			fmt.Printf("RawReference = %s\n", opts.RawReference)
 			if err := option.Parse(cmd, &opts); err != nil {
 				return err
 			}
@@ -76,7 +75,8 @@ Example - Discover referrers of the manifest tagged 'v1' in an OCI image layout 
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runDiscover(cmd, &opts)
+			_, err := RunDiscover(cmd, &opts)
+			return err
 		},
 	}
 
@@ -94,29 +94,50 @@ Example - Discover referrers of the manifest tagged 'v1' in an OCI image layout 
 	return oerrors.Command(cmd, &opts.Target)
 }
 
-func runDiscover(cmd *cobra.Command, opts *discoverOptions) error {
+func RunDiscover(cmd *cobra.Command, opts *DiscoverOptions) (bool, error) {
+	skipAnnotate := false
+	// fmt.Println("MADE IT")
 	ctx, logger := command.GetLogger(cmd, &opts.Common)
+	// fmt.Println("MADE IT 0.5")
 	repo, err := opts.NewReadonlyTarget(ctx, opts.Common, logger)
 	if err != nil {
-		return err
+		// fmt.Println("ERR TRUE")
+		return true, err
 	}
+	// fmt.Println("MADE IT 1")
 	resolveOpts := oras.DefaultResolveOptions
 	desc, err := oras.Resolve(ctx, repo, opts.Reference, resolveOpts)
 	if err != nil {
-		return err
+		return true, err
 	}
+	// fmt.Println("MADE IT 2")
 	_, err = display.NewDiscoverHandler(cmd.OutOrStdout(), opts.Format, opts.Path, opts.RawReference, desc, opts.Verbose)
 	if err != nil {
-		return err
+		return true, err
 	}
+	// fmt.Println("MADE IT 3")
 	refs, err := registry.Referrers(ctx, repo, desc, opts.artifactType)
 	if err != nil {
-		return err
+		return true, err
 	}
+	// fmt.Println("MADE IT")
+	// fmt.Printf("refs length = %d\n", len(refs))
 	for _, ref := range refs {
-		fmt.Printf("ref = %s\n", ref.ArtifactType)
+		// if err := handler.OnDiscovered(ref, desc); err != nil {
+		// 	return true, err
+		// } else
+		// fmt.Printf("ref digest = %s\n", ref.Digest)
+		if ref.ArtifactType == "application/vnd.microsoft.artifact.lifecycle" {
+			// fmt.Printf("ref = %s\n", ref.ArtifactType)
+			skipAnnotate = true
+			// fmt.Printf("skipAnnotate = %t\n", skipAnnotate)
+			// If the artifact type is a lifecycle annotation one, do not annotate the image any further
+		}
 	}
 
-	// return handler.OnCompleted()
-	return nil
+	// fmt.Println("BEFORE")
+	// err = handler.OnCompleted()
+	// fmt.Println("MADE IT")
+
+	return skipAnnotate, err
 }

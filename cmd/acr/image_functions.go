@@ -142,9 +142,9 @@ func getLastTagFromResponse(resultTags *acr.RepositoryTagsType) string {
 // getManifests gets all the manifests for the command to be executed on. The command will be executed on this manifest if it does not
 // have any tag and does not form part of a manifest list that has tags referencing it. If the purge command is to be executed,
 // the manifest should also not have a tag and not have a subject manifest.
-func getManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string, dryRun bool, purge bool) (*[]string, error) {
+func getManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string, dryRun bool, purge bool) (*[]acr.ManifestAttributesBase, error) {
 	lastManifestDigest := ""
-	var manifestsForCommand []string
+	var manifestsForCommand []acr.ManifestAttributesBase
 	resultManifests, err := acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
 	if err != nil {
 		if resultManifests != nil && resultManifests.Response.Response != nil && resultManifests.StatusCode == http.StatusNotFound {
@@ -153,6 +153,7 @@ func getManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, logi
 		}
 		return nil, err
 	}
+
 	// This will act as a set. If a key is present, then the command shouldn't be executed because it is referenced by a multiarch manifest
 	// or the manifest has subjects attached
 	doNotAffect := set.New[string]()
@@ -176,7 +177,9 @@ func getManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, logi
 						return nil, err
 					}
 				} else {
-					candidates = append(candidates, manifest)
+					if *manifest.MediaType != "application/vnd.oci.image.manifest.v1+json" {
+						candidates = append(candidates, manifest)
+					}
 				}
 			}
 		}
@@ -195,7 +198,7 @@ func getManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, logi
 			// if a manifest has no tags, is not part of a manifest list and can be deleted then it is added to the
 			// manifestsForCommand array.
 			if *(*candidates[i].ChangeableAttributes).DeleteEnabled && *(*candidates[i].ChangeableAttributes).WriteEnabled {
-				manifestsForCommand = append(manifestsForCommand, *candidates[i].Digest)
+				manifestsForCommand = append(manifestsForCommand, candidates[i])
 				if dryRun && !purge {
 					fmt.Printf("%s/%s@%s\n", loginURL, repoName, *candidates[i].Digest)
 				}
