@@ -8,9 +8,13 @@ import (
 	"io"
 
 	orasauth "github.com/Azure/acr-cli/auth/oras"
+	"github.com/Azure/acr-cli/cmd/api/command"
+	"github.com/Azure/acr-cli/cmd/api/option"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/spf13/cobra"
 	"oras.land/oras-go/v2"
 	"oras.land/oras-go/v2/content/file"
+	"oras.land/oras-go/v2/registry"
 	"oras.land/oras-go/v2/registry/remote"
 )
 
@@ -26,6 +30,15 @@ type GraphTarget interface {
 	io.Closer
 	Prompt(desc ocispec.Descriptor, prompt string) error
 	Inner() oras.GraphTarget
+}
+
+type DiscoverOptions struct {
+	option.Common
+	option.Platform
+	option.Target
+	// option.Format
+
+	artifactType string
 }
 
 func (o *ORASClient) Annotate(ctx context.Context, reference string, artifactType string, annotationsArg map[string]string) error {
@@ -124,6 +137,32 @@ func GetORASClientWithAuth(username string, password string, configs []string) (
 		client: c,
 	}
 	return &orasClient, nil
+}
+
+func RunDiscover(cmd *cobra.Command, opts *DiscoverOptions) (bool, error) {
+	skipAnnotate := false
+	ctx, logger := command.GetLogger(cmd, &opts.Common)
+	repo, err := opts.NewReadonlyTarget(ctx, opts.Common, logger)
+	if err != nil {
+		return true, err
+	}
+	resolveOpts := oras.DefaultResolveOptions
+	desc, err := oras.Resolve(ctx, repo, opts.Reference, resolveOpts)
+	if err != nil {
+		return true, err
+	}
+	refs, err := registry.Referrers(ctx, repo, desc, opts.artifactType)
+	if err != nil {
+		return true, err
+	}
+
+	for _, ref := range refs {
+
+		if ref.ArtifactType == "application/vnd.microsoft.artifact.lifecycle" {
+			skipAnnotate = true
+		}
+	}
+	return skipAnnotate, err
 }
 
 // ORASClientInterface defines the required methods that the acr-cli will need to use with ORAS.

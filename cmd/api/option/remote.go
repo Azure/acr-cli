@@ -13,14 +13,12 @@ import (
 	"strings"
 	"sync"
 
-	// "github.com/docker/docker-credential-helpers/credentials"
 	"github.com/Azure/acr-cli/cmd/api/credential"
 	"github.com/Azure/acr-cli/cmd/api/crypto"
 	oerrors "github.com/Azure/acr-cli/cmd/api/errors"
 	onet "github.com/Azure/acr-cli/cmd/api/net"
 	"github.com/Azure/acr-cli/cmd/api/trace"
 
-	// "github.com/Azure/acr-cli/cmd/api/option"
 	"github.com/Azure/acr-cli/cmd/api/version"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -42,11 +40,6 @@ const (
 	passwordFromStdinFlag      = "password-stdin"
 	identityTokenFlag          = "identity-token"
 	identityTokenFromStdinFlag = "identity-token-stdin"
-)
-
-var (
-	plainHTTPFlag = false
-	enhanced      = false
 )
 
 // Remote options struct contains flags and arguments specifying one registry.
@@ -176,21 +169,6 @@ func (opts *Remote) tlsConfig() (*tls.Config, error) {
 	return config, nil
 }
 
-// isPlainHttp returns the plain http flag for a given registry.
-func (opts *Remote) isPlainHttp(registry string) bool {
-	fmt.Printf("plainHTTP = %t\n", opts.plainHTTP)
-	plainHTTP, enforced := opts.plainHTTP()
-	if enforced {
-		return plainHTTP
-	}
-	host, _, _ := net.SplitHostPort(registry)
-	if host == "localhost" || registry == "localhost" {
-		// not specified, defaults to plain http for localhost
-		return true
-	}
-	return plainHTTP
-}
-
 func (opts *Remote) handleWarning(registry string, logger logrus.FieldLogger) func(warning remote.Warning) {
 	if opts.warned == nil {
 		opts.warned = make(map[string]*sync.Map)
@@ -250,7 +228,6 @@ func (opts *Remote) ApplyFlagsWithPrefix(fs *pflag.FlagSet, prefix, description 
 	plainHTTPFlagName := opts.flagPrefix + "plain-http"
 	plainHTTP := fs.Bool(plainHTTPFlagName, false, "allow insecure connections to "+notePrefix+"registry without SSL check")
 	opts.plainHTTP = func() (bool, bool) {
-		// fmt.Printf("flag plainHTTP = %t, enforced = %s\n", plainHTTP, plainHTTPFlagName)
 		return *plainHTTP, fs.Changed(plainHTTPFlagName)
 	}
 	fs.StringVar(&opts.CACertFilePath, opts.flagPrefix+caFileFlag, "", "server certificate authority file for the remote "+notePrefix+"registry")
@@ -314,26 +291,21 @@ func (opts *Remote) NewRepository(reference string, common Common, logger logrus
 	repo, err = remote.NewRepository(reference)
 	if err != nil {
 		if errors.Unwrap(err) == errdef.ErrInvalidReference {
-			// fmt.Println("Invalid reference")
 			return nil, fmt.Errorf("%q: %v", reference, err)
 		}
 		return nil, err
 	}
-	// fmt.Println("HERE")
 	registry := repo.Reference.Registry
-	// repo.PlainHTTP = opts.isPlainHttp(registry)
 	repo.HandleWarning = opts.handleWarning(registry, logger)
 	if repo.Client, err = opts.authClient(common.Debug); err != nil {
 		return nil, err
 	}
-	// fmt.Println("HERE 2")
 	repo.SkipReferrersGC = true
 	if opts.ReferrersAPI != nil {
 		if err := repo.SetReferrersCapability(*opts.ReferrersAPI); err != nil {
 			return nil, err
 		}
 	}
-	// fmt.Println("HERE 3")
 	return
 }
 

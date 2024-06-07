@@ -37,10 +37,10 @@ func (p *Purger) PurgeTags(ctx context.Context, tags *[]acr.TagAttributesBase) (
 }
 
 // PurgeManifests purges a list of manifests concurrently, and returns a count of deleted manifests and the first error occurred.
-func (p *Purger) PurgeManifests(ctx context.Context, manifests *[]acr.ManifestAttributesBase) (int, error) {
+func (p *Purger) PurgeManifests(ctx context.Context, manifests *[]string) (int, error) {
 	jobs := make([]job, len(*manifests))
 	for i, manifest := range *manifests {
-		jobs[i] = newPurgeManifestJob(p.loginURL, p.repoName, p.acrClient, *manifest.Digest)
+		jobs[i] = newPurgeManifestJob(p.loginURL, p.repoName, p.acrClient, manifest)
 	}
 
 	return p.process(ctx, &jobs)

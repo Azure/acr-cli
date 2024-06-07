@@ -142,9 +142,9 @@ func getLastTagFromResponse(resultTags *acr.RepositoryTagsType) string {
 // getManifests gets all the manifests for the command to be executed on. The command will be executed on this manifest if it does not
 // have any tag and does not form part of a manifest list that has tags referencing it. If the purge command is to be executed,
 // the manifest should also not have a tag and not have a subject manifest.
-func getManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string, dryRun bool, purge bool) (*[]acr.ManifestAttributesBase, error) {
+func getManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string, dryRun bool, purge bool) (*[]string, error) {
 	lastManifestDigest := ""
-	var manifestsForCommand []acr.ManifestAttributesBase
+	var manifestsForCommand []string
 	resultManifests, err := acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
 	if err != nil {
 		if resultManifests != nil && resultManifests.Response.Response != nil && resultManifests.StatusCode == http.StatusNotFound {
@@ -198,7 +198,7 @@ func getManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, logi
 			// if a manifest has no tags, is not part of a manifest list and can be deleted then it is added to the
 			// manifestsForCommand array.
 			if *(*candidates[i].ChangeableAttributes).DeleteEnabled && *(*candidates[i].ChangeableAttributes).WriteEnabled {
-				manifestsForCommand = append(manifestsForCommand, candidates[i])
+				manifestsForCommand = append(manifestsForCommand, *candidates[i].Digest)
 				if dryRun && !purge {
 					fmt.Printf("%s/%s@%s\n", loginURL, repoName, *candidates[i].Digest)
 				}

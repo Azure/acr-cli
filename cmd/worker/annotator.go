@@ -52,10 +52,10 @@ func (a *Annotator) AnnotateTags(ctx context.Context, tags *[]acr.TagAttributesB
 }
 
 // AnnotateManifests annotates a list of digests (tags and manifests) concurrently and returns a count of annotated tags & manifests and the first error occurred.
-func (a *Annotator) AnnotateManifests(ctx context.Context, digests *[]acr.ManifestAttributesBase) (int, error) {
+func (a *Annotator) Annotate(ctx context.Context, digests *[]string) (int, error) {
 	jobs := make([]job, len(*digests))
-	for i, tag := range *digests {
-		jobs[i] = newAnnotateJob(a.loginURL, a.repoName, a.artifactType, a.annotations, a.orasClient, *tag.Digest)
+	for i, digest := range *digests {
+		jobs[i] = newAnnotateJob(a.loginURL, a.repoName, a.artifactType, a.annotations, a.orasClient, digest)
 	}
 
 	return a.process(ctx, &jobs)

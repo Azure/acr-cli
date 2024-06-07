@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/Azure/acr-cli/acr"
 	"github.com/Azure/acr-cli/cmd/api"
 	"github.com/Azure/acr-cli/cmd/api/option"
 	"github.com/Azure/acr-cli/cmd/worker"
@@ -206,7 +205,7 @@ func annotateTags(ctx context.Context,
 		lastTag = newLastTag
 		if tagsToAnnotate != nil {
 			if !dryRun {
-				count, annotateErr := annotator.AnnotateTags(ctx, tagsToAnnotate)
+				count, annotateErr := annotator.Annotate(ctx, tagsToAnnotate)
 				if annotateErr != nil {
 					return -1, annotateErr
 				}
@@ -215,7 +214,7 @@ func annotateTags(ctx context.Context,
 				for _, tag := range *tagsToAnnotate {
 					// For every tag that would be annotated, first check if it exists in the map. If it doesn't, add a new key
 					// with value 1 and if it does, just add 1 to the existent value.
-					annotatedTags[*tag.Digest]++
+					annotatedTags[tag]++
 					annotatedTagsCount++
 
 				}
@@ -237,7 +236,7 @@ func getTagsToAnnotate(ctx context.Context,
 	loginURL string,
 	repoName string,
 	filter *regexp2.Regexp,
-	lastTag string, dryRun bool, cmd *cobra.Command, opts api.DiscoverOptions) (*[]acr.TagAttributesBase, string, error) {
+	lastTag string, dryRun bool, cmd *cobra.Command, opts api.DiscoverOptions) (*[]string, string, error) {
 
 	var matches bool
 	resultTags, err := acrClient.GetAcrTags(ctx, repoName, "timedesc", lastTag)
@@ -253,7 +252,7 @@ func getTagsToAnnotate(ctx context.Context,
 	newLastTag := ""
 	if resultTags != nil && resultTags.TagsAttributes != nil && len(*resultTags.TagsAttributes) > 0 {
 		tags := *resultTags.TagsAttributes
-		tagsToAnnotate := []acr.TagAttributesBase{}
+		tagsToAnnotate := []string{}
 		for _, tag := range tags {
 			matches, err = filter.MatchString(*tag.Name)
 			if err != nil {
@@ -269,15 +268,18 @@ func getTagsToAnnotate(ctx context.Context,
 			if *tag.ChangeableAttributes.WriteEnabled {
 				ref := fmt.Sprintf("%s/%s:%s", loginURL, repoName, *tag.Name)
 				opts.RawReference = ref
-				skipped, err := api.RunDiscover(cmd, &opts)
-				if err != nil {
-					return nil, "", err
+				skipped := false
+				if cmd != nil {
+					skipped, err = api.RunDiscover(cmd, &opts)
+					if err != nil {
+						return nil, "", err
+					}
 				}
 				if !skipped {
 					if dryRun {
 						fmt.Printf("%s/%s:%s\n", loginURL, repoName, *tag.Name)
 					}
-					tagsToAnnotate = append(tagsToAnnotate, tag)
+					tagsToAnnotate = append(tagsToAnnotate, *tag.Digest)
 				}
 			}
 		}
@@ -321,7 +323,7 @@ func annotateDanglingManifests(ctx context.Context,
 		if err != nil {
 			return -1, err
 		}
-		manifestsCount, annotateErr := annotator.AnnotateManifests(ctx, manifestsToAnnotate)
+		manifestsCount, annotateErr := annotator.Annotate(ctx, manifestsToAnnotate)
 		if annotateErr != nil {
 			return manifestsCount, annotateErr
 		}

@@ -39,7 +39,6 @@ import (
 	"oras.land/oras-go/v2/registry/remote"
 	"oras.land/oras-go/v2/registry/remote/auth"
 	"oras.land/oras-go/v2/registry/remote/errcode"
-	// "oras.land/oras/cmd/oras/internal/fileref"
 )
 
 const (
@@ -209,10 +208,8 @@ type ReadOnlyGraphTagFinderTarget interface {
 
 // NewReadonlyTargets generates a new read only target based on opts.
 func (opts *Target) NewReadonlyTarget(ctx context.Context, common Common, logger logrus.FieldLogger) (ReadOnlyGraphTagFinderTarget, error) {
-	// fmt.Printf("opts.Type = %s\n", opts.Type)
 	switch opts.Type {
 	case TargetTypeOCILayout:
-		// fmt.Println("TargetTypeOCILayout")
 		info, err := os.Stat(opts.Path)
 		if err != nil {
 			if errors.Is(err, fs.ErrNotExist) {
@@ -232,7 +229,6 @@ func (opts *Target) NewReadonlyTarget(ctx context.Context, common Common, logger
 		}
 		return store, nil
 	case TargetTypeRemote:
-		// fmt.Println("TargetTypeRemote")
 		repo, err := opts.NewRepository(opts.RawReference, common, logger)
 		if err != nil {
 			return nil, err
