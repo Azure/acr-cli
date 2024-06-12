@@ -39,8 +39,11 @@ To start working with the CLI, run acr --help`,
 		newLogoutCmd(),
 		newTagCmd(&rootParams),
 		newManifestCmd(&rootParams),
-		newCsscCmd(&rootParams),
 	)
+	// If environment variable ACR_EXPERIMENTAL_CSSC is set to true, add the cssc command to the command list
+	if isExperimentalCssc, exists := os.LookupEnv("ACR_EXPERIMENTAL_CSSC"); exists && isExperimentalCssc == "true" {
+		cmd.AddCommand(newCsscCmd(&rootParams))
+	}
 	cmd.PersistentFlags().StringVarP(&rootParams.registryName, "registry", "r", "", "Registry name")
 	cmd.PersistentFlags().StringVarP(&rootParams.username, "username", "u", "", "Registry username")
 	cmd.PersistentFlags().StringVarP(&rootParams.password, "password", "p", "", "Registry password")
