@@ -21,8 +21,8 @@ const (
 	Use the --filter-policy flag to specify the repository:tag where the filter json exists as an OCI artifact and --dry-run flag to list the filtered repositories and tags that match the filter.
 	Example: acr cssc patch -r example --filter-policy csscpolicies/patchpolicy:v1 --dry-run
 	
-	Use the --filter-file-path flag to specify the local file path where the filter json exists and --dry-run flag to list the filtered repositories and tags that match the filter.
-	Example: acr cssc patch -r example --filter-file-path /path/to/filter.json --dry-run
+	Use the --filter-policy-file flag to specify the local file path where the filter json exists and --dry-run flag to list the filtered repositories and tags that match the filter.
+	Example: acr cssc patch -r example --filter-policy-file /path/to/filter.json --dry-run
 	
 	Filter JSON file format:
 	{
@@ -89,16 +89,16 @@ func newPatchFilterCmd(csscParams *csscParameters) *cobra.Command {
 
 			filter := cssc.Filter{}
 			if csscParams.filterPolicy != "" && csscParams.filterfilePath != "" {
-				return errors.New("flag --filter-policy and --filter-file-path cannot be used together")
+				return errors.New("flag --filter-policy and --filter-policy-file cannot be used together")
 			} else if !csscParams.dryRun && csscParams.filterfilePath != "" {
-				return errors.New("flag --filter-file-path can only be used in combination with --dry-run")
+				return errors.New("flag --filter-policy-file can only be used in combination with --dry-run")
 			} else if !csscParams.dryRun && csscParams.filterPolicy != "" {
 				return errors.New("patch command without --dry-run is not operational at the moment and will be enabled in future releases")
 			} else if csscParams.dryRun {
 				fmt.Println("DRY RUN mode enabled...")
 				fmt.Println("DRY RUN mode will only list all the repositories and tags that match the filter and are eligible for continuous scan and patch. During the actual patch operation, each of the eligible images will first be scanned using trivy and if there are any vulnerabilities found, a new patched image will be generated with tag <originaltag>-patched.")
 				if csscParams.filterPolicy == "" && csscParams.filterfilePath == "" {
-					return errors.New("flag --filter-policy or --filter-file-path is required when using --dry-run")
+					return errors.New("flag --filter-policy or --filter-policy-file is required when using --dry-run")
 				} else if csscParams.filterfilePath != "" {
 					fmt.Println("Reading filter from filter file path...")
 					filter, err = cssc.GetFilterFromFilePath(csscParams.filterfilePath)
@@ -129,7 +129,7 @@ func newPatchFilterCmd(csscParams *csscParameters) *cobra.Command {
 
 	cmd.PersistentFlags().StringVar(&csscParams.filterPolicy, "filter-policy", "", "The filter policy defined by the filter json file uploaded in a repo:tag. For v1, it should be csscpolicies/patchpolicy:v1")
 	cmd.PersistentFlags().BoolVar(&csscParams.dryRun, "dry-run", false, "Use this to list the filtered repositories and tags that match the filter either from a filter policy or a filter file path. ")
-	cmd.PersistentFlags().StringVar(&csscParams.filterfilePath, "filter-file-path", "", "The filter file path of the JSON filter file.")
+	cmd.PersistentFlags().StringVar(&csscParams.filterfilePath, "filter-policy-file", "", "The filter policy JSON file path.")
 	cmd.Flags().BoolVar(&csscParams.showPatchTags, "show-patch-tags", false, "Use this flag to get patch tag (if it exists) for repositories and tags that match the filter. Example: acr cssc patch --filter-policy csscpolicies/patchpolicy:v1 --show-patch-tags")
 	return cmd
 }
