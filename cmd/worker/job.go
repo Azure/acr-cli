@@ -76,7 +76,7 @@ func (e *Executer) process(ctx context.Context, jobs *[]job) (int, error) {
 	var succ int64
 	errChan := make(chan error)
 
-	// Start purge jobs in worker pool.
+	// Start jobs in worker pool.
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -97,6 +97,7 @@ func (e *Executer) process(ctx context.Context, jobs *[]job) (int, error) {
 		if firstErr == nil {
 			firstErr = err
 			cancel()
+			break
 		}
 	}
 

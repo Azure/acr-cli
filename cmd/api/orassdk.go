@@ -5,7 +5,6 @@ package api
 
 import (
 	"context"
-	"fmt"
 	"io"
 
 	orasauth "github.com/Azure/acr-cli/auth/oras"
@@ -43,11 +42,9 @@ func (o *ORASClient) Discover(ctx context.Context, reference string, artifactTyp
 	if err != nil {
 		return false, err
 	}
-	fmt.Printf("got %d referrers type %s\n", len(descriptors), artifactType)
 
 	for _, desc := range descriptors {
 		if desc.ArtifactType == "application/vnd.microsoft.artifact.lifecycle" {
-			fmt.Println("is lifecycle annotation")
 			return true, nil
 		}
 	}
