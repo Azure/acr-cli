@@ -97,7 +97,6 @@ func (e *Executer) process(ctx context.Context, jobs *[]job) (int, error) {
 		if firstErr == nil {
 			firstErr = err
 			cancel()
-			break
 		}
 	}
 
