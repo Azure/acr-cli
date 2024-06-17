@@ -7,9 +7,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/Azure/acr-cli/cmd/api"
 	"github.com/Azure/acr-cli/cmd/mocks"
-	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -97,7 +95,7 @@ func TestAnnotateTags(t *testing.T) {
 	})
 
 	// The following tests involve annotating tags.
-	// There is only one tag and it should be annotated. The AnnotateAcrTag method should be called once.
+	// There is only one tag and it should be annotated. The Annotate method should be called once.
 	t.Run("OneTagAnnotationTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
@@ -115,13 +113,14 @@ func TestAnnotateTags(t *testing.T) {
 	})
 
 	// All tags should be annotated, 5 tags in total, separated into two GetAcrTags calls. There should be
-	// 5 AnnotateAcrTag calls.
+	// 5 Annotate calls.
 	t.Run("FiveAnnotationTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(OneTagResultWithNext, nil).Once()
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "latest").Return(FourTagsResult, nil).Once()
+
 		ref := fmt.Sprintf("%s/%s:%s", testLoginURL, testRepo, tagName)
 		mockOrasClient.On("Discover", mock.Anything, ref, testArtifactType).Return(false, nil).Once()
 		ref = fmt.Sprintf("%s/%s:%s", testLoginURL, testRepo, tagName1)
@@ -132,16 +131,16 @@ func TestAnnotateTags(t *testing.T) {
 		mockOrasClient.On("Discover", mock.Anything, ref, testArtifactType).Return(false, nil).Once()
 		ref = fmt.Sprintf("%s/%s:%s", testLoginURL, testRepo, tagName4)
 		mockOrasClient.On("Discover", mock.Anything, ref, testArtifactType).Return(false, nil).Once()
+
 		digestRef := fmt.Sprintf("%s/%s@%s", testLoginURL, testRepo, digest)
 		mockOrasClient.On("Annotate", mock.Anything, digestRef, testArtifactType, annotationMap).Return(nil).Once()
-		// digestRef = fmt.Sprintf("%s/%s@%s", testLoginURL, testRepo, digest)
 		mockOrasClient.On("Annotate", mock.Anything, digestRef, testArtifactType, annotationMap).Return(nil).Once()
-		// digestRef = fmt.Sprintf("%s/%s@%s", testLoginURL, testRepo, digest)
 		mockOrasClient.On("Annotate", mock.Anything, digestRef, testArtifactType, annotationMap).Return(nil).Once()
 		digestRef = fmt.Sprintf("%s/%s@%s", testLoginURL, testRepo, multiArchDigest)
 		mockOrasClient.On("Annotate", mock.Anything, digestRef, testArtifactType, annotationMap).Return(nil).Once()
 		digestRef = fmt.Sprintf("%s/%s@%s", testLoginURL, testRepo, digest)
 		mockOrasClient.On("Annotate", mock.Anything, digestRef, testArtifactType, annotationMap).Return(nil).Once()
+
 		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], testRegex, defaultRegexpMatchTimeoutSeconds, false)
 		assert.Equal(5, annotatedTags, "Number of annotated elements should be 5")
 		assert.Equal(nil, err, "Error should be nil")
@@ -166,13 +165,14 @@ func TestAnnotateTags(t *testing.T) {
 		mockOrasClient.AssertExpectations(t)
 	})
 
-	// There are 5 tags, but only 4 match the filter. There should be 4 AnnotateAcrTag calls.
+	// There are 5 tags, but only 4 match the filter. There should be 4 Annotate calls.
 	t.Run("FourAnnotationTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(OneTagResultWithNext, nil).Once()
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "latest").Return(FourTagsResult, nil).Once()
+
 		ref := fmt.Sprintf("%s/%s:%s", testLoginURL, testRepo, tagName1)
 		mockOrasClient.On("Discover", mock.Anything, ref, testArtifactType).Return(false, nil).Once()
 		ref = fmt.Sprintf("%s/%s:%s", testLoginURL, testRepo, tagName2)
@@ -181,6 +181,7 @@ func TestAnnotateTags(t *testing.T) {
 		mockOrasClient.On("Discover", mock.Anything, ref, testArtifactType).Return(false, nil).Once()
 		ref = fmt.Sprintf("%s/%s:%s", testLoginURL, testRepo, tagName4)
 		mockOrasClient.On("Discover", mock.Anything, ref, testArtifactType).Return(false, nil).Once()
+
 		digestRef := fmt.Sprintf("%s/%s@%s", testLoginURL, testRepo, digest)
 		mockOrasClient.On("Annotate", mock.Anything, digestRef, testArtifactType, annotationMap).Return(nil).Once()
 		digestRef = fmt.Sprintf("%s/%s@%s", testLoginURL, testRepo, digest)
@@ -189,6 +190,7 @@ func TestAnnotateTags(t *testing.T) {
 		mockOrasClient.On("Annotate", mock.Anything, digestRef, testArtifactType, annotationMap).Return(nil).Once()
 		digestRef = fmt.Sprintf("%s/%s@%s", testLoginURL, testRepo, digest)
 		mockOrasClient.On("Annotate", mock.Anything, digestRef, testArtifactType, annotationMap).Return(nil).Once()
+
 		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], "^v.*", defaultRegexpMatchTimeoutSeconds, false)
 		assert.Equal(4, annotatedTags, "Number of annotated elements should be 4")
 		assert.Equal(nil, err, "Error should be nil")
@@ -196,7 +198,7 @@ func TestAnnotateTags(t *testing.T) {
 		mockOrasClient.AssertExpectations(t)
 	})
 
-	// There are 5 tags and none match the filter. There are no AnnotateAcrTag calls.
+	// There are 5 tags and none match the filter. There are no Annotate calls.
 	t.Run("NoAnnotationTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
@@ -263,7 +265,7 @@ func TestGetTagstoAnnotate(t *testing.T) {
 
 }
 
-// TestAnnotateManifests contains the tests for the annotateDanglingManifests method, which calls the getManifestsToAnnotate method.
+// TestAnnotateManifests contains the tests for the annotateDanglingManifests method, which calls the getManifests method.
 // It is invoked when the --untagged flag is set and the --dry-run flag is not set
 func TestAnnotateManifests(t *testing.T) {
 	// If a repository is not known, annotateDanglingManifests should only call GetAcrManifests once and return no error.
@@ -365,7 +367,7 @@ func TestAnnotateManifests(t *testing.T) {
 
 	// The following tests involve annotating manifests.
 	// There are three manifests split into two GetAcrManifests calls, and one is linked to a tag so there should
-	// only be 2 annotations, hence the 2 AnnotateManifest calls
+	// only be 2 annotations, hence the 2 Annotate calls
 	t.Run("AnnotateTwoManifestsTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
@@ -443,7 +445,7 @@ func TestAnnotateManifests(t *testing.T) {
 	})
 
 	// There are three manifests, two of them have tags, but one of them belongs to a multiarch image that has tags so it should
-	// not be annotated. Only one call to AnnotateManifest should be made because the manifest that does not belong to the
+	// not be annotated. Only one call to Annotate should be made because the manifest that does not belong to the
 	// multiarch manifest and has no tags should be annotated.
 	t.Run("MultiArchAnnotateTest", func(t *testing.T) {
 		assert := assert.New(t)
@@ -695,11 +697,4 @@ var (
 	annotationMap      = map[string]string{
 		"vnd.microsoft.artifact.lifecycle.end-of-life.date": "2024-03-21",
 	}
-	opts api.DiscoverOptions
-	cmd  *cobra.Command
-
-	// cmd = newRootCmd(input)
-	// _   = option.Parse(cmd, &opts)
-
-	// input = []string{"annotate", "--registry", "upstream", "--filter", "oss/envoyproxy/envoy-fips:\\w*linux\\w*", "--annotations", "vnd.microsoft.artifact.lifecycle.end-of-life-date=2024-06-13", "--artifact-type", "application/vnd.microsoft.artifact.lifecycle.test"}
 )

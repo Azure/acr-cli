@@ -9,7 +9,6 @@ import (
 	"net/http"
 
 	"github.com/Azure/acr-cli/cmd/api"
-	"github.com/Azure/acr-cli/cmd/api/option"
 	"github.com/Azure/acr-cli/cmd/worker"
 	"github.com/dlclark/regexp2"
 	"github.com/spf13/cobra"
@@ -57,18 +56,11 @@ type annotateParameters struct {
 // newAnnotateCmd defines the annotate command
 func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 	annotateParams := annotateParameters{rootParameters: rootParams}
-	var opts api.DiscoverOptions
 	cmd := &cobra.Command{
 		Use:     "annotate",
 		Short:   "[Preview] Annotate images in a registry",
 		Long:    newAnnotateCmdLongMessage,
 		Example: annotateExampleMessage,
-		PreRunE: func(cmd *cobra.Command, args []string) error {
-			if err := option.Parse(cmd, &opts); err != nil {
-				_ = fmt.Errorf("failed to parse discover options: %w", err)
-			}
-			return nil
-		},
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			// This context is used for all the http requests
 			ctx := context.Background()
@@ -272,16 +264,6 @@ func getTagsToAnnotate(ctx context.Context,
 				if err != nil {
 					return nil, "", err
 				}
-				// opts.RawReference = ref
-				// // skipped := false
-				// // if cmd != nil {
-				// registry.Referrers()
-				// skipped, err := api.RunDiscover(cmd, &opts)
-				// if err != nil {
-				// 	return nil, "", err
-				// }
-				// }
-				// if !skipped {
 				if !skip {
 					if dryRun {
 						fmt.Printf("%s/%s:%s\n", loginURL, repoName, *tag.Name)
@@ -311,8 +293,6 @@ func annotateDanglingManifests(ctx context.Context,
 	} else {
 		fmt.Printf("Manifests for this repository would be annotated: %s\n", repoName)
 	}
-
-	// var opts api.DiscoverOptions
 
 	// Contrary to getTagsToAnnotate, getManifests gets all the manifests at once.
 	// This was done because if there is a manifest that has no tag but is referenced by a multiarch manifest that has tags then it
