@@ -27,6 +27,30 @@ func (_m *ORASClientInterface) Annotate(ctx context.Context, reference string, a
 	return r0
 }
 
+// Discover provides a mock function with given fields: ctx, reference, artifactType
+func (_m *ORASClientInterface) Discover(ctx context.Context, reference string, artifactType string) (bool, error) {
+	ret := _m.Called(ctx, reference, artifactType)
+
+	var r0 bool
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) (bool, error)); ok {
+		return rf(ctx, reference, artifactType)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) bool); ok {
+		r0 = rf(ctx, reference, artifactType)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
+		r1 = rf(ctx, reference, artifactType)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 type mockConstructorTestingTNewORASClientInterface interface {
 	mock.TestingT
 	Cleanup(func())

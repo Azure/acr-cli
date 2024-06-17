@@ -5,7 +5,6 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/Azure/acr-cli/acr"
 	"github.com/Azure/acr-cli/cmd/api"
 )
 
@@ -40,15 +39,6 @@ func NewAnnotator(poolSize int, orasClient api.ORASClientInterface, loginURL str
 		artifactType: artifactType,
 		annotations:  annotationsMap,
 	}, nil
-}
-
-// AnnotateTags annotates a list of digests (tags and manifests) concurrently and returns a count of annotated tags & manifests and the first error occurred.
-func (a *Annotator) AnnotateTags(ctx context.Context, tags *[]acr.TagAttributesBase) (int, error) {
-	var jobs []job
-	for _, tag := range *tags {
-		jobs = append(jobs, newAnnotateJob(a.loginURL, a.repoName, a.artifactType, a.annotations, a.orasClient, *tag.Digest))
-	}
-	return a.process(ctx, &jobs)
 }
 
 // AnnotateManifests annotates a list of digests (tags and manifests) concurrently and returns a count of annotated tags & manifests and the first error occurred.

@@ -5,13 +5,13 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"io"
 
 	orasauth "github.com/Azure/acr-cli/auth/oras"
-	"github.com/Azure/acr-cli/cmd/api/command"
 	"github.com/Azure/acr-cli/cmd/api/option"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
-	"github.com/spf13/cobra"
+	log "github.com/sirupsen/logrus"
 	"oras.land/oras-go/v2"
 	"oras.land/oras-go/v2/content/file"
 	"oras.land/oras-go/v2/registry"
@@ -41,6 +41,30 @@ type DiscoverOptions struct {
 	artifactType string
 }
 
+func (o *ORASClient) Discover(ctx context.Context, reference string, artifactType string) (bool, error) {
+	ref, err := o.getTarget(reference)
+	if err != nil {
+		return false, err
+	}
+	subject, err := ref.Resolve(ctx, reference)
+	if err != nil {
+		return false, err
+	}
+	descriptors, err := registry.Referrers(context.Background(), ref, subject, artifactType)
+	if err != nil {
+		return false, err
+	}
+	fmt.Printf("got %d referrers type %s\n", len(descriptors), artifactType)
+
+	for _, desc := range descriptors {
+		if desc.ArtifactType == "application/vnd.microsoft.artifact.lifecycle" {
+			fmt.Println("is lifecycle annotation")
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
 func (o *ORASClient) Annotate(ctx context.Context, reference string, artifactType string, annotationsArg map[string]string) error {
 
 	dst, err := o.getTarget(reference)
@@ -139,9 +163,13 @@ func GetORASClientWithAuth(username string, password string, configs []string) (
 	return &orasClient, nil
 }
 
-func RunDiscover(cmd *cobra.Command, opts *DiscoverOptions) (bool, error) {
+// func RunDiscover(cmd *cobra.Command, opts *DiscoverOptions) (bool, error) {
+func RunDiscover(opts *DiscoverOptions) (bool, error) {
 	skipAnnotate := false
-	ctx, logger := command.GetLogger(cmd, &opts.Common)
+	//ctx, logger := command.GetLogger(cmd, &opts.Common)
+	ctx := context.Background()
+
+	logger := log.WithContext(ctx)
 	repo, err := opts.NewReadonlyTarget(ctx, opts.Common, logger)
 	if err != nil {
 		return true, err
@@ -168,4 +196,5 @@ func RunDiscover(cmd *cobra.Command, opts *DiscoverOptions) (bool, error) {
 // ORASClientInterface defines the required methods that the acr-cli will need to use with ORAS.
 type ORASClientInterface interface {
 	Annotate(ctx context.Context, reference string, artifactType string, annotations map[string]string) error
+	Discover(ctx context.Context, reference string, artifactType string) (bool, error)
 }

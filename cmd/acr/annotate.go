@@ -110,7 +110,7 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 				fmt.Printf("Specified concurrency value too large. Set to maximum value: %d \n", maxPoolSize)
 			}
 			for repoName, tagRegex := range tagFilters {
-				singleAnnotatedTagsCount, err := annotateTags(ctx, acrClient, orasClient, poolSize, loginURL, repoName, annotateParams.artifactType, annotateParams.annotations, tagRegex, annotateParams.filterTimeout, annotateParams.dryRun, cmd, opts)
+				singleAnnotatedTagsCount, err := annotateTags(ctx, acrClient, orasClient, poolSize, loginURL, repoName, annotateParams.artifactType, annotateParams.annotations, tagRegex, annotateParams.filterTimeout, annotateParams.dryRun)
 				if err != nil {
 					return fmt.Errorf("failed to annotate tags: %w", err)
 				}
@@ -167,7 +167,7 @@ func annotateTags(ctx context.Context,
 	annotations []string,
 	tagFilter string,
 	regexpMatchTimeoutSeconds uint64,
-	dryRun bool, cmd *cobra.Command, opts api.DiscoverOptions) (int, error) {
+	dryRun bool) (int, error) {
 
 	if !dryRun {
 		fmt.Printf("\nAnnotating tags for repository: %s\n", repoName)
@@ -198,7 +198,7 @@ func annotateTags(ctx context.Context,
 
 	for {
 		// GetTagsToAnnotate will return an empty lastTag when there are no more tags.
-		tagsToAnnotate, newLastTag, err := getTagsToAnnotate(ctx, acrClient, loginURL, repoName, tagRegex, lastTag, dryRun, cmd, opts)
+		tagsToAnnotate, newLastTag, err := getTagsToAnnotate(ctx, acrClient, orasClient, loginURL, repoName, tagRegex, lastTag, artifactType, dryRun)
 		if err != nil {
 			return -1, err
 		}
@@ -233,10 +233,11 @@ func annotateTags(ctx context.Context,
 // Returns a pointer to a slice that contains the tags that will be annotated and an error in case it occurred.
 func getTagsToAnnotate(ctx context.Context,
 	acrClient api.AcrCLIClientInterface,
+	orasClient api.ORASClientInterface,
 	loginURL string,
 	repoName string,
 	filter *regexp2.Regexp,
-	lastTag string, dryRun bool, cmd *cobra.Command, opts api.DiscoverOptions) (*[]string, string, error) {
+	lastTag string, artifactType string, dryRun bool) (*[]string, string, error) {
 
 	var matches bool
 	resultTags, err := acrClient.GetAcrTags(ctx, repoName, "timedesc", lastTag)
@@ -267,15 +268,21 @@ func getTagsToAnnotate(ctx context.Context,
 			// If a tag is changable, then it is returned as a tag to annotate
 			if *tag.ChangeableAttributes.WriteEnabled {
 				ref := fmt.Sprintf("%s/%s:%s", loginURL, repoName, *tag.Name)
-				opts.RawReference = ref
-				skipped := false
-				if cmd != nil {
-					skipped, err = api.RunDiscover(cmd, &opts)
-					if err != nil {
-						return nil, "", err
-					}
+				skip, err := orasClient.Discover(ctx, ref, artifactType)
+				if err != nil {
+					return nil, "", err
 				}
-				if !skipped {
+				// opts.RawReference = ref
+				// // skipped := false
+				// // if cmd != nil {
+				// registry.Referrers()
+				// skipped, err := api.RunDiscover(cmd, &opts)
+				// if err != nil {
+				// 	return nil, "", err
+				// }
+				// }
+				// if !skipped {
+				if !skip {
 					if dryRun {
 						fmt.Printf("%s/%s:%s\n", loginURL, repoName, *tag.Name)
 					}

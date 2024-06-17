@@ -19,6 +19,10 @@ type rootParameters struct {
 }
 
 func newRootCmd(args []string) *cobra.Command {
+	// for _, arg := range args {
+	// 	fmt.Printf("arg = %s\n", arg)
+	// }
+
 	var rootParams rootParameters
 
 	cmd := &cobra.Command{
