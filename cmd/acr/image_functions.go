@@ -21,6 +21,8 @@ import (
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
+const OCIMediaType = "application/vnd.oci.image.manifest.v1+json"
+
 func getAllRepositoryNames(ctx context.Context, client acrapi.BaseClientAPI) ([]string, error) {
 	allRepoNames := make([]string, 0)
 	lastName := ""
@@ -164,7 +166,7 @@ func getManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, logi
 			if manifest.Tags != nil {
 				// If a manifest has Tags and its media type supports multiarch manifest, we will
 				// iterate all its dependent manifests and mark them to not have the command execute on them.
-				err = doNotAffectDependantManifests(ctx, manifest, doNotAffect, acrClient, repoName) // **** TODO: CHANGE FUNCTION
+				err = doNotAffectDependantManifests(ctx, manifest, doNotAffect, acrClient, repoName)
 				if err != nil {
 					return nil, err
 				}
@@ -177,7 +179,7 @@ func getManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, logi
 						return nil, err
 					}
 				} else {
-					if *manifest.MediaType != "application/vnd.oci.image.manifest.v1+json" {
+					if *manifest.MediaType != OCIMediaType {
 						candidates = append(candidates, manifest)
 					}
 				}

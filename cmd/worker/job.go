@@ -5,8 +5,6 @@ package worker
 
 import (
 	"context"
-	"fmt"
-	"net/http"
 	"sync"
 	"time"
 )
@@ -19,52 +17,6 @@ type jobBase struct {
 	loginURL    string
 	repoName    string
 	timeCreated time.Time
-}
-
-// execute calls acrClient to delete a manifest.
-func (job *purgeManifestJob) execute(ctx context.Context) error {
-	resp, err := job.client.DeleteManifest(ctx, job.repoName, job.digest)
-	if err == nil {
-		fmt.Printf("Deleted %s/%s@%s\n", job.loginURL, job.repoName, job.digest)
-		return nil
-	}
-
-	if resp != nil && resp.Response != nil && resp.StatusCode == http.StatusNotFound {
-		// If the manifest is not found it can be assumed to have been deleted.
-		fmt.Printf("Skipped %s/%s@%s, HTTP status: %d\n", job.loginURL, job.repoName, job.digest, resp.StatusCode)
-		return nil
-	}
-
-	return err
-}
-
-// execute calls acrClient to delete a tag.
-func (job *purgeTagJob) execute(ctx context.Context) error {
-	resp, err := job.client.DeleteAcrTag(ctx, job.repoName, job.tag)
-	if err == nil {
-		fmt.Printf("Deleted %s/%s:%s\n", job.loginURL, job.repoName, job.tag)
-		return nil
-	}
-
-	if resp != nil && resp.Response != nil && resp.StatusCode == http.StatusNotFound {
-		// If the tag is not found it can be assumed to have been deleted.
-		fmt.Printf("Skipped %s/%s:%s, HTTP status: %d\n", job.loginURL, job.repoName, job.tag, resp.StatusCode)
-		return nil
-	}
-
-	return err
-}
-
-// execute calls acrClient to annotate a manifest or tag.
-func (job *annotateJob) execute(ctx context.Context) error {
-	ref := fmt.Sprintf("%s/%s@%s", job.loginURL, job.repoName, job.ref)
-	err := job.client.Annotate(ctx, ref, job.artifactType, job.annotations)
-	if err == nil {
-		fmt.Printf("Annotated %s/%s@%s\n", job.loginURL, job.repoName, job.ref)
-		return nil
-	}
-
-	return err
 }
 
 // process starts jobs in worker pool, and returns a count of successful jobs and the first error occurred.

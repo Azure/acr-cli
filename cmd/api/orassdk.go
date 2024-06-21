@@ -15,6 +15,8 @@ import (
 	"oras.land/oras-go/v2/registry/remote"
 )
 
+const lifecycleAnnotation = "application/vnd.microsoft.artifact.lifecycle"
+
 // The ORASClient wraps the oras-go sdk and is used for interacting with artifacts in a registry.
 // it implements the ORASClientInterface.
 type ORASClient struct {
@@ -44,7 +46,7 @@ func (o *ORASClient) Discover(ctx context.Context, reference string, artifactTyp
 	}
 
 	for _, desc := range descriptors {
-		if desc.ArtifactType == "application/vnd.microsoft.artifact.lifecycle" {
+		if desc.ArtifactType == lifecycleAnnotation {
 			return true, nil
 		}
 	}

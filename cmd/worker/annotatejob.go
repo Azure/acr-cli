@@ -4,6 +4,8 @@
 package worker
 
 import (
+	"context"
+	"fmt"
 	"time"
 
 	"github.com/Azure/acr-cli/cmd/api"
@@ -31,4 +33,16 @@ func newAnnotateJob(loginURL string, repoName string, artifactType string, annot
 		annotations:  annotations,
 		ref:          ref,
 	}
+}
+
+// execute calls acrClient to annotate a manifest or tag.
+func (job *annotateJob) execute(ctx context.Context) error {
+	ref := fmt.Sprintf("%s/%s@%s", job.loginURL, job.repoName, job.ref)
+	err := job.client.Annotate(ctx, ref, job.artifactType, job.annotations)
+	if err == nil {
+		fmt.Printf("Annotated %s/%s@%s\n", job.loginURL, job.repoName, job.ref)
+		return nil
+	}
+
+	return err
 }
