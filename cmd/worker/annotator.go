@@ -56,11 +56,13 @@ func (a *Annotator) Annotate(ctx context.Context, digests *[]string) (int, error
 
 // convertListToMap takes a list of annotations and converts it into a map, where the keys are the contents before the = and the values
 // are the contents after the =. This is done so ORAS can be used to annotate.
+// Example: If the annotation is "vnd.microsoft.artifact.lifecycle.end-of-life-date=2024-06-17" , this function will return a map that
+// looks like ["vnd.microsoft.artifact.lifecycle.end-of-life-date": "2024-06-17"]
 func convertListToMap(annotations []string) (map[string]string, error) {
 	annotationMap := map[string]string{}
 	for _, annotation := range annotations {
 		arr := strings.Split(annotation, "=")
-		if len(arr) == 1 {
+		if len(arr) != 2 {
 			return nil, errors.New("annotation is not a key-value pair")
 		}
 		annotationMap[arr[0]] = arr[1]

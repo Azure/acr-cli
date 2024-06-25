@@ -31,7 +31,7 @@ type GraphTarget interface {
 	Inner() oras.GraphTarget
 }
 
-func (o *ORASClient) Discover(ctx context.Context, reference string, artifactType string) (bool, error) {
+func (o *ORASClient) DiscoverLifecycleAnotation(ctx context.Context, reference string, artifactType string) (bool, error) {
 	ref, err := o.getTarget(reference)
 	if err != nil {
 		return false, err
@@ -40,7 +40,7 @@ func (o *ORASClient) Discover(ctx context.Context, reference string, artifactTyp
 	if err != nil {
 		return false, err
 	}
-	descriptors, err := registry.Referrers(context.Background(), ref, subject, artifactType)
+	descriptors, err := registry.Referrers(ctx, ref, subject, artifactType)
 	if err != nil {
 		return false, err
 	}
@@ -53,6 +53,10 @@ func (o *ORASClient) Discover(ctx context.Context, reference string, artifactTyp
 
 	return false, nil
 }
+
+// type packFunc func() (ocispec.Descriptor, error)
+// type copyFunc func(desc ocispec.Descriptor) error
+
 func (o *ORASClient) Annotate(ctx context.Context, reference string, artifactType string, annotationsArg map[string]string) error {
 
 	dst, err := o.getTarget(reference)
@@ -88,36 +92,20 @@ func (o *ORASClient) Annotate(ctx context.Context, reference string, artifactTyp
 	}
 
 	// Attach
-	_, err = doPush(dst, pack, copyFunc)
+	targetDst := oras.Target(dst)
+	if tracked, ok := targetDst.(GraphTarget); ok {
+		defer tracked.Close()
+	}
+	// Push
+	root, err := pack()
 	if err != nil {
 		return err
 	}
 
+	if err = copyFunc(root); err != nil {
+		return err
+	}
 	return nil
-}
-
-func doPush(dst oras.Target, pack packFunc, copy copyFunc) (ocispec.Descriptor, error) {
-	if tracked, ok := dst.(GraphTarget); ok {
-		defer tracked.Close()
-	}
-	// Push
-	return pushArtifact(pack, copy)
-}
-
-type packFunc func() (ocispec.Descriptor, error)
-type copyFunc func(desc ocispec.Descriptor) error
-
-func pushArtifact(pack packFunc, copy copyFunc) (ocispec.Descriptor, error) {
-	root, err := pack()
-	if err != nil {
-		return ocispec.Descriptor{}, err
-	}
-
-	// push
-	if err = copy(root); err != nil {
-		return ocispec.Descriptor{}, err
-	}
-	return root, nil
 }
 
 // getTarget gets an oras remote.Repository object that refers to the target of our annotation request
@@ -154,5 +142,5 @@ func GetORASClientWithAuth(username string, password string, configs []string) (
 // ORASClientInterface defines the required methods that the acr-cli will need to use with ORAS.
 type ORASClientInterface interface {
 	Annotate(ctx context.Context, reference string, artifactType string, annotations map[string]string) error
-	Discover(ctx context.Context, reference string, artifactType string) (bool, error)
+	DiscoverLifecycleAnotation(ctx context.Context, reference string, artifactType string) (bool, error)
 }

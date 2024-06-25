@@ -166,16 +166,14 @@ func getManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, logi
 			if manifest.Tags != nil {
 				// If a manifest has Tags and its media type supports multiarch manifest, we will
 				// iterate all its dependent manifests and mark them to not have the command execute on them.
-				err = doNotAffectDependantManifests(ctx, manifest, doNotAffect, acrClient, repoName)
-				if err != nil {
+				if err = doNotAffectDependantManifests(ctx, manifest, doNotAffect, acrClient, repoName); err != nil {
 					return nil, err
 				}
 			} else {
 				if purge {
 					// If a manifest does not have Tags and its media type supports subject, we will
 					// check if the subject exists. If so, the manifest is marked not to be affected by the command.
-					candidates, err = getManifestWithoutSubjectToDelete(ctx, manifest, doNotAffect, candidates, acrClient, repoName)
-					if err != nil {
+					if candidates, err = getManifestWithoutSubjectToDelete(ctx, manifest, doNotAffect, candidates, acrClient, repoName); err != nil {
 						return nil, err
 					}
 				} else {

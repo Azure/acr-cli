@@ -121,7 +121,7 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 				annotatedManifestsCount += singleAnnotatedManifestsCount
 			}
 
-			// After all repos have been purged, the summary is printed
+			// After all repos have been annotated, the summary is printed
 			if annotateParams.dryRun {
 				fmt.Printf("\nNumber of tags to be annotated: %d", annotatedTagsCount)
 				fmt.Printf("\nNumber of manifests to be annotated: %d\n", annotatedManifestsCount)
@@ -215,9 +215,7 @@ func annotateTags(ctx context.Context,
 		if len(lastTag) == 0 {
 			break
 		}
-
 	}
-
 	return annotatedTagsCount, nil
 }
 
@@ -241,7 +239,6 @@ func getTagsToAnnotate(ctx context.Context,
 		return nil, "", err
 	}
 
-	// var skipped bool
 	newLastTag := ""
 	if resultTags != nil && resultTags.TagsAttributes != nil && len(*resultTags.TagsAttributes) > 0 {
 		tags := *resultTags.TagsAttributes
@@ -260,7 +257,7 @@ func getTagsToAnnotate(ctx context.Context,
 			// If a tag is changable, then it is returned as a tag to annotate
 			if *tag.ChangeableAttributes.WriteEnabled {
 				ref := fmt.Sprintf("%s/%s:%s", loginURL, repoName, *tag.Name)
-				skip, err := orasClient.Discover(ctx, ref, artifactType)
+				skip, err := orasClient.DiscoverLifecycleAnotation(ctx, ref, artifactType)
 				if err != nil {
 					return nil, "", err
 				}
