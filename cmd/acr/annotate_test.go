@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/Azure/acr-cli/cmd/common"
 	"github.com/Azure/acr-cli/cmd/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -215,8 +216,8 @@ func TestAnnotateTags(t *testing.T) {
 }
 
 // Contains all the tests for the getTagstoAnnotate method
-func TestGetTagstoAnnotate(t *testing.T) {
-	tagRegex, _ := buildRegexFilter("[\\s\\S]*", defaultRegexpMatchTimeoutSeconds)
+func TestGetManifeststoAnnotate(t *testing.T) {
+	tagRegex, _ := common.BuildRegexFilter("[\\s\\S]*", defaultRegexpMatchTimeoutSeconds)
 
 	// If an error (other than a 404 error) occurs while calling GetAcrTags, an error should be returned.
 	t.Run("GetAcrTagsErrorTest", func(t *testing.T) {
@@ -224,7 +225,7 @@ func TestGetTagstoAnnotate(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(nil, errors.New("error fetching tags")).Once()
-		_, testLastTag, err := getTagsToAnnotate(testCtx, mockClient, mockOrasClient, testLoginURL, testRepo, tagRegex, "", testArtifactType, false)
+		_, testLastTag, err := getManifestsToAnnotate(testCtx, mockClient, mockOrasClient, testLoginURL, testRepo, tagRegex, "", testArtifactType, false)
 		assert.Equal("", testLastTag, "Last tag should be empty")
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
@@ -236,7 +237,7 @@ func TestGetTagstoAnnotate(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(notFoundTagResponse, errors.New("testRepo not found")).Once()
-		_, testLastTag, err := getTagsToAnnotate(testCtx, mockClient, mockOrasClient, testLoginURL, testRepo, tagRegex, "", testArtifactType, false)
+		_, testLastTag, err := getManifestsToAnnotate(testCtx, mockClient, mockOrasClient, testLoginURL, testRepo, tagRegex, "", testArtifactType, false)
 		assert.Equal("", testLastTag, "Last tag should be empty")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -256,7 +257,7 @@ func TestGetTagstoAnnotate(t *testing.T) {
 		mockOrasClient.On("Discover", mock.Anything, ref, testArtifactType).Return(false, nil).Once()
 		ref = fmt.Sprintf("%s/%s:%s", testLoginURL, testRepo, tagNameWithLoad)
 		mockOrasClient.On("Discover", mock.Anything, ref, testArtifactType).Return(false, nil).Once()
-		tagsToAnnotate, testLastTag, err := getTagsToAnnotate(testCtx, mockClient, mockOrasClient, testLoginURL, testRepo, tagRegex, "", testArtifactType, false)
+		tagsToAnnotate, testLastTag, err := getManifestsToAnnotate(testCtx, mockClient, mockOrasClient, testLoginURL, testRepo, tagRegex, "", testArtifactType, false)
 		assert.Equal(4, len(*tagsToAnnotate), "Number of tags to annotate should be 1")
 		assert.Equal("", testLastTag, "Last tag should be empty")
 		assert.Equal(nil, err, "Error should be nil")
