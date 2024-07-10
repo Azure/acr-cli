@@ -22,7 +22,6 @@ import (
 )
 
 const (
-	OCIMediaType                                          = "application/vnd.oci.image.manifest.v1+json"
 	headerLink                                            = "Link"
 	mediaTypeDockerManifestList                           = "application/vnd.docker.distribution.manifest.list.v2+json"
 	defaultRegexpOptions             regexp2.RegexOptions = regexp2.RE2 // This option will turn on compatibility mode so that it uses the group rules in regexp
@@ -48,7 +47,7 @@ func GetAllRepositoryNames(ctx context.Context, client acrapi.BaseClientAPI) ([]
 	return allRepoNames, nil
 }
 
-// getMatchingRepos get all repositories in current registry, that match the provided regular expression
+// GetMatchingRepos get all repositories in current registry, that match the provided regular expression
 func GetMatchingRepos(repoNames []string, repoRegex string, regexMatchTimeout uint64) ([]string, error) {
 	filter, err := BuildRegexFilter(repoRegex, regexMatchTimeout)
 	if err != nil {
@@ -69,7 +68,7 @@ func GetMatchingRepos(repoNames []string, repoRegex string, regexMatchTimeout ui
 	return matchedRepos, nil
 }
 
-// getRepositoryAndTagRegex splits the strings that are in the form <repository>:<regex filter>
+// GetRepositoryAndTagRegex splits the strings that are in the form <repository>:<regex filter>
 func GetRepositoryAndTagRegex(filter string) (string, string, error) {
 	// This only selects colons that are not apart of a non-capture group
 	// Note: regexp2 doesn't have .Split support yet, so we just replace the colon with another delimitter \r\n
@@ -97,7 +96,7 @@ func GetRepositoryAndTagRegex(filter string) (string, string, error) {
 	return repoAndRegex[0], repoAndRegex[1], nil
 }
 
-// collectTagFilters collects all matching repos and collects the associated tag filters
+// CollectTagFilters collects all matching repos and collects the associated tag filters
 func CollectTagFilters(ctx context.Context, rawFilters []string, client acrapi.BaseClientAPI, regexMatchTimeout uint64) (map[string]string, error) {
 	allRepoNames, err := GetAllRepositoryNames(ctx, client)
 	if err != nil {
@@ -180,11 +179,11 @@ func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterfa
 				if ignoreReferrerManifests {
 					// If a manifest does not have Tags and its media type supports subject, we will
 					// check if the subject exists. If so, the manifest is marked not to be affected by the command.
-					if candidates, err = GetManifestWithoutSubjectToDelete(ctx, manifest, ignoreList, candidates, acrClient, repoName); err != nil {
+					if candidates, err = UpdateForManifestWithoutSubjectToDelete(ctx, manifest, ignoreList, candidates, acrClient, repoName); err != nil {
 						return nil, err
 					}
 				} else {
-					if *manifest.MediaType != OCIMediaType {
+					if *manifest.MediaType != v1.MediaTypeImageManifest {
 						candidates = append(candidates, manifest)
 					}
 				}
@@ -216,8 +215,7 @@ func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterfa
 	return &manifestsForCommand, nil
 }
 
-// doNotAffectDependantManifests adds the dependant manifest to doNotAffect
-// if the referred manifest has tags.
+// AddDependentManifestsToIgnoreList adds the dependant manifest to doNotAffect if the referred manifest has tags.
 func AddDependentManifestsToIgnoreList(ctx context.Context, manifest acr.ManifestAttributesBase, doNotAffect set.Set[string], acrClient api.AcrCLIClientInterface, repoName string) error {
 	switch *manifest.MediaType {
 	case mediaTypeDockerManifestList, v1.MediaTypeImageIndex:
@@ -242,9 +240,9 @@ func AddDependentManifestsToIgnoreList(ctx context.Context, manifest acr.Manifes
 	return nil
 }
 
-// getManifestWithoutSubjectToDelete adds the manifest to candidatesToDelete
+// GetManifestWithoutSubjectToDelete adds the manifest to candidatesToDelete
 // if the manifest does not have subject, otherwise add it to doNotDelete.
-func GetManifestWithoutSubjectToDelete(ctx context.Context, manifest acr.ManifestAttributesBase, doNotDelete set.Set[string], candidatesToDelete []acr.ManifestAttributesBase, acrClient api.AcrCLIClientInterface, repoName string) ([]acr.ManifestAttributesBase, error) {
+func UpdateForManifestWithoutSubjectToDelete(ctx context.Context, manifest acr.ManifestAttributesBase, doNotDelete set.Set[string], candidatesToDelete []acr.ManifestAttributesBase, acrClient api.AcrCLIClientInterface, repoName string) ([]acr.ManifestAttributesBase, error) {
 	switch *manifest.MediaType {
 	case mediaTypeArtifactManifest, v1.MediaTypeImageManifest, v1.MediaTypeImageIndex:
 		var manifestBytes []byte
@@ -271,7 +269,7 @@ func GetManifestWithoutSubjectToDelete(ctx context.Context, manifest acr.Manifes
 	return candidatesToDelete, nil
 }
 
-// buildRegexFilter compiles a regex state machine from a regex expression
+// BSuildRegexFilter compiles a regex state machine from a regex expression
 func BuildRegexFilter(expression string, regexpMatchTimeoutSeconds uint64) (*regexp2.Regexp, error) {
 	regexp, err := regexp2.Compile(expression, defaultRegexpOptions)
 	if err != nil {

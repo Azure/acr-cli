@@ -61,11 +61,12 @@ func (a *Annotator) Annotate(ctx context.Context, digests *[]string) (int, error
 func convertListToMap(annotations []string) (map[string]string, error) {
 	annotationMap := map[string]string{}
 	for _, annotation := range annotations {
-		arr := strings.Split(annotation, "=")
-		if len(arr) != 2 {
+		// arr := strings.Split(annotation, "=")
+		before, after, found := strings.Cut(annotation, "=")
+		if !found {
 			return nil, errors.New("annotation is not a key-value pair")
 		}
-		annotationMap[arr[0]] = arr[1]
+		annotationMap[before] = after
 	}
 
 	return annotationMap, nil

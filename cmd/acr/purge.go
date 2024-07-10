@@ -407,7 +407,7 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 					// Otherwise the manifest have no tag left after purgeTags.
 					// we will need to find if the manifest has subject. If so,
 					// we will mark the manifest to not be deleted.
-					candidatesToDelete, err = common.GetManifestWithoutSubjectToDelete(ctx, manifest, doNotDelete, candidatesToDelete, acrClient, repoName)
+					candidatesToDelete, err = common.UpdateForManifestWithoutSubjectToDelete(ctx, manifest, doNotDelete, candidatesToDelete, acrClient, repoName)
 					if err != nil {
 						return -1, -1, err
 					}
@@ -432,35 +432,6 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 
 	return deletedTagsCount, deletedManifestsCount, nil
 }
-
-// // getManifestWithoutSubjectToDelete adds the manifest to candidatesToDelete
-// // if the manifest does not have subject, otherwise add it to doNotDelete.
-// func getManifestWithoutSubjectToDelete(ctx context.Context, manifest acr.ManifestAttributesBase, doNotDelete set.Set[string], candidatesToDelete []acr.ManifestAttributesBase, acrClient api.AcrCLIClientInterface, repoName string) ([]acr.ManifestAttributesBase, error) {
-// 	switch *manifest.MediaType {
-// 	case mediaTypeArtifactManifest, v1.MediaTypeImageManifest, v1.MediaTypeImageIndex:
-// 		var manifestBytes []byte
-// 		manifestBytes, err := acrClient.GetManifest(ctx, repoName, *manifest.Digest)
-// 		if err != nil {
-// 			return nil, err
-// 		}
-// 		// this struct defines a customized struct for manifests which
-// 		// is used to parse the content of a manifest references a subject
-// 		mws := struct {
-// 			Subject *v1.Descriptor `json:"subject,omitempty"`
-// 		}{}
-// 		if err = json.Unmarshal(manifestBytes, &mws); err != nil {
-// 			return nil, err
-// 		}
-// 		if mws.Subject != nil {
-// 			doNotDelete.Add(*manifest.Digest)
-// 		} else {
-// 			candidatesToDelete = append(candidatesToDelete, manifest)
-// 		}
-// 	default:
-// 		candidatesToDelete = append(candidatesToDelete, manifest)
-// 	}
-// 	return candidatesToDelete, nil
-// }
 
 // countTagsByManifest returns a map that for a given manifest digest contains the number of tags associated to it.
 func countTagsByManifest(ctx context.Context, acrClient api.AcrCLIClientInterface, repoName string) (map[string]int, error) {

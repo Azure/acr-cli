@@ -31,7 +31,7 @@ type GraphTarget interface {
 	Inner() oras.GraphTarget
 }
 
-func (o *ORASClient) DiscoverLifecycleAnotation(ctx context.Context, reference string, artifactType string) (bool, error) {
+func (o *ORASClient) DiscoverLifecycleAnnotation(ctx context.Context, reference string, artifactType string) (bool, error) {
 	ref, err := o.getTarget(reference)
 	if err != nil {
 		return false, err
@@ -142,5 +142,5 @@ func GetORASClientWithAuth(username string, password string, configs []string) (
 // ORASClientInterface defines the required methods that the acr-cli will need to use with ORAS.
 type ORASClientInterface interface {
 	Annotate(ctx context.Context, reference string, artifactType string, annotations map[string]string) error
-	DiscoverLifecycleAnotation(ctx context.Context, reference string, artifactType string) (bool, error)
+	DiscoverLifecycleAnnotation(ctx context.Context, reference string, artifactType string) (bool, error)
 }

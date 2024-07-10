@@ -111,7 +111,7 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 				singleAnnotatedManifestsCount := 0
 				// If the untagged flag is set, then manifests with no tags are also annotated..
 				if annotateParams.untagged {
-					singleAnnotatedManifestsCount, err = annotateDanglingManifests(ctx, acrClient, orasClient, poolSize, loginURL, repoName, annotateParams.artifactType, annotateParams.annotations, annotateParams.dryRun)
+					singleAnnotatedManifestsCount, err = annotateUntaggedManifests(ctx, acrClient, orasClient, poolSize, loginURL, repoName, annotateParams.artifactType, annotateParams.annotations, annotateParams.dryRun)
 					if err != nil {
 						return fmt.Errorf("failed to annotate manifests: %w", err)
 					}
@@ -168,10 +168,6 @@ func annotateTags(ctx context.Context,
 		fmt.Printf("\nTags for this repository would be annotated: %s\n", repoName)
 	}
 
-	// In order to keep track if a manifest would get annotated during a dry-run, a map is defined that as a key has the manifest
-	// digest and as the value, the number of tags (referencing said manifest) that were annotated.
-	annotatedTags := map[string]int{}
-
 	tagRegex, err := common.BuildRegexFilter(tagFilter, regexpMatchTimeoutSeconds)
 	if err != nil {
 		return -1, err
@@ -197,21 +193,14 @@ func annotateTags(ctx context.Context,
 		}
 		lastTag = newLastTag
 		if manifestsToAnnotate != nil {
+			count := len(*manifestsToAnnotate)
 			if !dryRun {
-				count, annotateErr := annotator.Annotate(ctx, manifestsToAnnotate)
+				_, annotateErr := annotator.Annotate(ctx, manifestsToAnnotate)
 				if annotateErr != nil {
 					return -1, annotateErr
 				}
-				annotatedTagsCount += count
-			} else {
-				for _, digest := range *manifestsToAnnotate {
-					// For every tag that would be annotated, first check if it exists in the map. If it doesn't, add a new key
-					// with value 1 and if it does, just add 1 to the existent value.
-					annotatedTags[digest]++
-					annotatedTagsCount++
-
-				}
 			}
+			annotatedTagsCount += count
 		}
 		if len(lastTag) == 0 {
 			break
@@ -222,6 +211,8 @@ func annotateTags(ctx context.Context,
 
 // getManifestsToAnnotate gets all manifests that should be annotated according to the filter flag.
 // Returns a pointer to a slice that contains the manifests that will be annotated and an error in case it occurred.
+// Only manifests that would be annotated during a dry-run are printed here. If it's not a dry-run, there will
+// be a print after a digest has been successfully annotated.
 func getManifestsToAnnotate(ctx context.Context,
 	acrClient api.AcrCLIClientInterface,
 	orasClient api.ORASClientInterface,
@@ -257,11 +248,13 @@ func getManifestsToAnnotate(ctx context.Context,
 			// If a tag is changable, then it is returned as a tag to annotate
 			if *tag.ChangeableAttributes.WriteEnabled {
 				ref := fmt.Sprintf("%s/%s:%s", loginURL, repoName, *tag.Name)
-				skip, err := orasClient.DiscoverLifecycleAnotation(ctx, ref, artifactType)
+				skip, err := orasClient.DiscoverLifecycleAnnotation(ctx, ref, artifactType)
 				if err != nil {
 					return nil, "", err
 				}
 				if !skip {
+					// Only print what would be annotated during a dry-run. Successfully annotated manifests
+					// will be logged after the annotation.
 					if dryRun {
 						fmt.Printf("%s/%s:%s\n", loginURL, repoName, *tag.Name)
 					}
@@ -276,9 +269,9 @@ func getManifestsToAnnotate(ctx context.Context,
 	return nil, "", nil
 }
 
-// annotateDanglingManifests annotates all manifests that do not have any tags associated with them except the ones
+// annotateUntaggedManifests annotates all manifests that do not have any tags associated with them except the ones
 // that are referenced by a multiarch manifest
-func annotateDanglingManifests(ctx context.Context,
+func annotateUntaggedManifests(ctx context.Context,
 	acrClient api.AcrCLIClientInterface,
 	orasClient api.ORASClientInterface,
 	poolSize int, loginURL string,

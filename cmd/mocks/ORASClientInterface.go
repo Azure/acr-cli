@@ -27,8 +27,8 @@ func (_m *ORASClientInterface) Annotate(ctx context.Context, reference string, a
 	return r0
 }
 
-// DiscoverLifecycleAnotation provides a mock function with given fields: ctx, reference, artifactType
-func (_m *ORASClientInterface) DiscoverLifecycleAnotation(ctx context.Context, reference string, artifactType string) (bool, error) {
+// DiscoverLifecycleAnnotation provides a mock function with given fields: ctx, reference, artifactType
+func (_m *ORASClientInterface) DiscoverLifecycleAnnotation(ctx context.Context, reference string, artifactType string) (bool, error) {
 	ret := _m.Called(ctx, reference, artifactType)
 
 	var r0 bool
