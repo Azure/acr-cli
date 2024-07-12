@@ -61,7 +61,6 @@ func (a *Annotator) Annotate(ctx context.Context, digests *[]string) (int, error
 func convertListToMap(annotations []string) (map[string]string, error) {
 	annotationMap := map[string]string{}
 	for _, annotation := range annotations {
-		// arr := strings.Split(annotation, "=")
 		before, after, found := strings.Cut(annotation, "=")
 		if !found {
 			return nil, errors.New("annotation is not a key-value pair")

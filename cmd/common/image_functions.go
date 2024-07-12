@@ -240,7 +240,7 @@ func AddDependentManifestsToIgnoreList(ctx context.Context, manifest acr.Manifes
 	return nil
 }
 
-// GetManifestWithoutSubjectToDelete adds the manifest to candidatesToDelete
+// UpdateForManifestWithoutSubjectToDelete adds the manifest to candidatesToDelete
 // if the manifest does not have subject, otherwise add it to doNotDelete.
 func UpdateForManifestWithoutSubjectToDelete(ctx context.Context, manifest acr.ManifestAttributesBase, doNotDelete set.Set[string], candidatesToDelete []acr.ManifestAttributesBase, acrClient api.AcrCLIClientInterface, repoName string) ([]acr.ManifestAttributesBase, error) {
 	switch *manifest.MediaType {
@@ -269,7 +269,7 @@ func UpdateForManifestWithoutSubjectToDelete(ctx context.Context, manifest acr.M
 	return candidatesToDelete, nil
 }
 
-// BSuildRegexFilter compiles a regex state machine from a regex expression
+// BuildRegexFilter compiles a regex state machine from a regex expression
 func BuildRegexFilter(expression string, regexpMatchTimeoutSeconds uint64) (*regexp2.Regexp, error) {
 	regexp, err := regexp2.Compile(expression, defaultRegexpOptions)
 	if err != nil {
