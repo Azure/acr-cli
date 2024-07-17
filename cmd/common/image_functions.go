@@ -15,7 +15,7 @@ import (
 
 	"github.com/Azure/acr-cli/acr"
 	"github.com/Azure/acr-cli/acr/acrapi"
-	"github.com/Azure/acr-cli/cmd/api"
+	"github.com/Azure/acr-cli/internal/api"
 	"github.com/Azure/acr-cli/internal/container/set"
 	"github.com/dlclark/regexp2"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"

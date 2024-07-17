@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/Azure/acr-cli/cmd/api"
 	"github.com/Azure/acr-cli/cmd/common"
-	"github.com/Azure/acr-cli/cmd/worker"
+	"github.com/Azure/acr-cli/internal/api"
+	"github.com/Azure/acr-cli/internal/worker"
 	"github.com/dlclark/regexp2"
 	"github.com/spf13/cobra"
 )

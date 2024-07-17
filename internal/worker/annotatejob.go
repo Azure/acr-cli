@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Azure/acr-cli/cmd/api"
+	"github.com/Azure/acr-cli/internal/api"
 )
 
 type annotateJob struct {

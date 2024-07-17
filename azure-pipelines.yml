@@ -15,7 +15,7 @@ steps:
 
 - task: GoTool@0
   inputs:
-    version: '1.21.9'
+    version: '1.22.2'
 
 - script: |
     set -e
@@ -33,3 +33,9 @@ steps:
     GOOS=linux make
   workingDirectory: '$(ModulePath)'
   displayName: 'Build'
+
+- task: Docker@2
+  inputs:
+    command: build
+    Dockerfile: '**/Dockerfile'
+  displayName: 'Build container image'

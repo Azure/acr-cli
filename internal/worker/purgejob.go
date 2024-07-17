@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Azure/acr-cli/cmd/api"
+	"github.com/Azure/acr-cli/internal/api"
 )
 
 type purgeManifestJob struct {

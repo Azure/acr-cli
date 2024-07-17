@@ -8,7 +8,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/Azure/acr-cli/cmd/api"
+	"github.com/Azure/acr-cli/internal/api"
 )
 
 type Executer struct {
