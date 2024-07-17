@@ -62,7 +62,7 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 		Short:   "[Preview] Annotate images in a registry",
 		Long:    newAnnotateCmdLongMessage,
 		Example: annotateExampleMessage,
-		RunE: func(cmd *cobra.Command, _ []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			// This context is used for all the http requests
 			ctx := context.Background()
 			registryName, err := annotateParams.GetRegistryName()
