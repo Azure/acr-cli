@@ -111,18 +111,21 @@ gopkg.in/yaml.v3
 ## explicit; go 1.21
 oras.land/oras-go/v2
 oras.land/oras-go/v2/content
+oras.land/oras-go/v2/content/file
 oras.land/oras-go/v2/errdef
 oras.land/oras-go/v2/internal/cas
 oras.land/oras-go/v2/internal/container/set
 oras.land/oras-go/v2/internal/copyutil
 oras.land/oras-go/v2/internal/descriptor
 oras.land/oras-go/v2/internal/docker
+oras.land/oras-go/v2/internal/graph
 oras.land/oras-go/v2/internal/httputil
 oras.land/oras-go/v2/internal/interfaces
 oras.land/oras-go/v2/internal/ioutil
 oras.land/oras-go/v2/internal/manifestutil
 oras.land/oras-go/v2/internal/platform
 oras.land/oras-go/v2/internal/registryutil
+oras.land/oras-go/v2/internal/resolver
 oras.land/oras-go/v2/internal/spec
 oras.land/oras-go/v2/internal/status
 oras.land/oras-go/v2/internal/syncutil

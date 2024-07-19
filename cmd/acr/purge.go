@@ -5,21 +5,18 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
 	"runtime"
 	"strings"
 	"time"
 
 	"github.com/Azure/acr-cli/acr"
-	"github.com/Azure/acr-cli/acr/acrapi"
+	"github.com/Azure/acr-cli/cmd/common"
 	"github.com/Azure/acr-cli/internal/api"
 	"github.com/Azure/acr-cli/internal/container/set"
 	"github.com/Azure/acr-cli/internal/worker"
 	"github.com/dlclark/regexp2"
-	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )
@@ -50,10 +47,8 @@ const (
   - Delete all tags older than 1 day in the example.azurecr.io registry inside the hello-world repository, with 4 purge tasks running concurrently
 	acr purge -r example --filter "hello-world:.*" --ago 1d --concurrency 4
 	`
-	maxPoolSize                 = 32 // The max number of parallel delete requests recommended by ACR server
-	mediaTypeDockerManifestList = "application/vnd.docker.distribution.manifest.list.v2+json"
-	mediaTypeArtifactManifest   = "application/vnd.oci.artifact.manifest.v1+json"
-	headerLink                  = "Link"
+	maxPoolSize = 32 // The max number of parallel delete requests recommended by ACR server
+	headerLink  = "Link"
 )
 
 var (
@@ -63,8 +58,7 @@ var (
 
 // Default settings for regexp2
 const (
-	defaultRegexpOptions             regexp2.RegexOptions = regexp2.RE2 // This option will turn on compatibility mode so that it uses the group rules in regexp
-	defaultRegexpMatchTimeoutSeconds uint64               = 60
+	defaultRegexpMatchTimeoutSeconds uint64 = 60
 )
 
 // purgeParameters defines the parameters that the purge command uses (including the registry name, username and password).
@@ -101,7 +95,7 @@ func newPurgeCmd(rootParams *rootParameters) *cobra.Command {
 				return err
 			}
 			// A map is used to collect the regex tags for every repository.
-			tagFilters, err := collectTagFilters(ctx, purgeParams.filters, acrClient.AutorestClient, purgeParams.filterTimeout)
+			tagFilters, err := common.CollectTagFilters(ctx, purgeParams.filters, acrClient.AutorestClient, purgeParams.filterTimeout)
 			if err != nil {
 				return err
 			}
@@ -186,7 +180,7 @@ func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, poolSiz
 	// with the LastUpdatedTime attribute a tag has.
 	timeToCompare = timeToCompare.Add(agoDuration)
 
-	tagRegex, err := buildRegexFilter(tagFilter, regexpMatchTimeoutSeconds)
+	tagRegex, err := common.BuildRegexFilter(tagFilter, regexpMatchTimeoutSeconds)
 	if err != nil {
 		return -1, err
 	}
@@ -216,103 +210,6 @@ func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, poolSiz
 	}
 
 	return deletedTagsCount, nil
-}
-
-// collectTagFilters collects all matching repos and collects the associated tag filters
-func collectTagFilters(ctx context.Context, rawFilters []string, client acrapi.BaseClientAPI, regexMatchTimeout uint64) (map[string]string, error) {
-	allRepoNames, err := getAllRepositoryNames(ctx, client)
-	if err != nil {
-		return nil, err
-	}
-
-	tagFilters := map[string]string{}
-	for _, filter := range rawFilters {
-		repoRegex, tagRegex, err := getRepositoryAndTagRegex(filter)
-		if err != nil {
-			return nil, err
-		}
-		repoNames, err := getMatchingRepos(allRepoNames, "^"+repoRegex+"$", regexMatchTimeout)
-		if err != nil {
-			return nil, err
-		}
-		for _, repoName := range repoNames {
-			if _, ok := tagFilters[repoName]; ok {
-				// To only iterate through a repo once a big regex filter is made of all the filters of a particular repo.
-				tagFilters[repoName] = tagFilters[repoName] + "|" + tagRegex
-			} else {
-				tagFilters[repoName] = tagRegex
-			}
-		}
-	}
-
-	return tagFilters, nil
-}
-
-func getAllRepositoryNames(ctx context.Context, client acrapi.BaseClientAPI) ([]string, error) {
-	allRepoNames := make([]string, 0)
-	lastName := ""
-	var batchSize int32 = 100
-	for {
-		repos, err := client.GetRepositories(ctx, lastName, &batchSize)
-		if err != nil {
-			return nil, err
-		}
-		if repos.Names == nil || len(*repos.Names) == 0 {
-			break
-		}
-		allRepoNames = append(allRepoNames, *repos.Names...)
-		lastName = allRepoNames[len(allRepoNames)-1]
-	}
-	return allRepoNames, nil
-}
-
-// getMatchingRepos get all repositories in current registry, that match the provided regular expression
-func getMatchingRepos(repoNames []string, repoRegex string, regexMatchTimeout uint64) ([]string, error) {
-	filter, err := buildRegexFilter(repoRegex, regexMatchTimeout)
-	if err != nil {
-		return nil, err
-	}
-	var matchedRepos []string
-	for _, repo := range repoNames {
-		matched, err := filter.MatchString(repo)
-		if err != nil {
-			// The only error regexp2 can throw is a timeout error
-			return nil, err
-		}
-
-		if matched {
-			matchedRepos = append(matchedRepos, repo)
-		}
-	}
-	return matchedRepos, nil
-}
-
-// getRepositoryAndTagRegex splits the strings that are in the form <repository>:<regex filter>
-func getRepositoryAndTagRegex(filter string) (string, string, error) {
-	// This only selects colons that are not apart of a non-capture group
-	// Note: regexp2 doesn't have .Split support yet, so we just replace the colon with another delimitter \r\n
-	// We choose \r\n since it is an escape sequence that cannot be a part of repo name or a tag
-	// For information on how this expression was written, see https://regexr.com/6jqp3
-	noncaptureGroupSupport := regexp2.MustCompile(`(?<!\(\?[imsU-]{0,5}|\[*\^*\[\^*):(?!\]\]*)`, defaultRegexpOptions)
-
-	// Note: We could just find the first 1, however we want to know if there are more than 1 colon that is not part of a non-capture group
-	newlineDelimitted, err := noncaptureGroupSupport.Replace(filter, "\r\n", -1, -1)
-	if err != nil {
-		return "", "", errors.New("could not replace split filter by repo and tag")
-	}
-
-	repoAndRegex := strings.Split(newlineDelimitted, "\r\n")
-	if len(repoAndRegex) != 2 {
-		return "", "", errors.New("unable to correctly parse filter flag")
-	}
-
-	if repoAndRegex[0] == "" {
-		return "", "", errors.New("missing repository name/expression")
-	}
-	if repoAndRegex[1] == "" {
-		return "", "", errors.New("missing tag name/expression")
-	}
-	return repoAndRegex[0], repoAndRegex[1], nil
 }
 
 // parseDuration analog to time.ParseDuration() but with days added.
@@ -391,7 +288,7 @@ func getTagsToDelete(ctx context.Context,
 			}
 		}
 
-		newLastTag = getLastTagFromResponse(resultTags)
+		newLastTag = common.GetLastTagFromResponse(resultTags)
 		// No more tags to keep
 		if keep == 0 || skippedTagsCount == keep {
 			return &tagsEligibleForDeletion, newLastTag, skippedTagsCount, nil
@@ -412,27 +309,6 @@ func getTagsToDelete(ctx context.Context,
 	return nil, "", skippedTagsCount, nil
 }
 
-func getLastTagFromResponse(resultTags *acr.RepositoryTagsType) string {
-	// The lastTag is updated to keep the for loop going.
-	if resultTags.Header == nil {
-		return ""
-	}
-	link := resultTags.Header.Get(headerLink)
-	if len(link) == 0 {
-		return ""
-	}
-	queryString := strings.Split(link, "?")
-	if len(queryString) <= 1 {
-		return ""
-	}
-	queryStringToParse := strings.Split(queryString[1], ">")
-	vals, err := url.ParseQuery(queryStringToParse[0])
-	if err != nil {
-		return ""
-	}
-	return vals.Get("last")
-}
-
 // purgeDanglingManifests deletes all manifests that do not have any tags associated with them.
 // except the ones that are referenced by a multiarch manifest or that have subject.
 func purgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, poolSize int, loginURL string, repoName string) (int, error) {
@@ -440,7 +316,7 @@ func purgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInter
 	// Contrary to getTagsToDelete, getManifestsToDelete gets all the Manifests at once, this was done because if there is a manifest that has no
 	// tag but is referenced by a multiarch manifest that has tags then it should not be deleted. Or if a manifest has no tag, but it has subject,
 	// then it should not be deleted.
-	manifestsToDelete, err := getManifestsToDelete(ctx, acrClient, repoName)
+	manifestsToDelete, err := common.GetUntaggedManifests(ctx, acrClient, loginURL, repoName, false, true)
 	if err != nil {
 		return -1, err
 	}
@@ -451,64 +327,6 @@ func purgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInter
 		return -1, purgeErr
 	}
 	return deletedManifestsCount, nil
-}
-
-// getManifestsToDelete gets all the manifests that should be deleted under two scenarios. One, they do not have any tag and do not form part
-// of a manifest list that has tags referencing it. Two, they do not have any tag and do not have subject manifest.
-func getManifestsToDelete(ctx context.Context, acrClient api.AcrCLIClientInterface, repoName string) (*[]acr.ManifestAttributesBase, error) {
-	lastManifestDigest := ""
-	var manifestsToDelete []acr.ManifestAttributesBase
-	resultManifests, err := acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
-	if err != nil {
-		if resultManifests != nil && resultManifests.Response.Response != nil && resultManifests.StatusCode == http.StatusNotFound {
-			fmt.Printf("%s repository not found\n", repoName)
-			return &manifestsToDelete, nil
-		}
-		return nil, err
-	}
-	// This will act as a set if a key is present then it should not be deleted because it is referenced by a multiarch manifest
-	// or the manifest has subjects attached
-	doNotDelete := set.New[string]()
-	var candidatesToDelete []acr.ManifestAttributesBase
-	for resultManifests != nil && resultManifests.ManifestsAttributes != nil {
-		manifests := *resultManifests.ManifestsAttributes
-		for _, manifest := range manifests {
-			if manifest.Tags != nil {
-				// If a manifest has Tags and its media type supports multiarch manifest, we will
-				// iterate all its dependent manifests and mark them as not to be deleted.
-				err = doNotDeleteDependantManifests(ctx, manifest, doNotDelete, acrClient, repoName)
-				if err != nil {
-					return nil, err
-				}
-			} else {
-				// If a manifest does not have Tags and its media type supports subject, we will
-				// check if the subject exists. If so, the manifest is marked not to be deleted.
-				candidatesToDelete, err = getManifestWithoutSubjectToDelete(ctx, manifest, doNotDelete, candidatesToDelete, acrClient, repoName)
-				if err != nil {
-					return nil, err
-				}
-			}
-		}
-
-		// Get the last manifest digest from the last manifest from manifests.
-		lastManifestDigest = *manifests[len(manifests)-1].Digest
-		// Use this new digest to find next batch of manifests.
-		resultManifests, err = acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
-		if err != nil {
-			return nil, err
-		}
-	}
-	// Remove all manifests that should not be deleted
-	for i := 0; i < len(candidatesToDelete); i++ {
-		if !doNotDelete.Contains(*candidatesToDelete[i].Digest) {
-			// if a manifest has no tags, is not part of a manifest list and can be deleted then it is added to the
-			// manifestToDelete array.
-			if *(*candidatesToDelete[i].ChangeableAttributes).DeleteEnabled && *(*candidatesToDelete[i].ChangeableAttributes).WriteEnabled {
-				manifestsToDelete = append(manifestsToDelete, candidatesToDelete[i])
-			}
-		}
-	}
-	return &manifestsToDelete, nil
 }
 
 // dryRunPurge outputs everything that would be deleted if the purge command was executed
@@ -525,7 +343,7 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 	}
 	timeToCompare := time.Now().UTC()
 	timeToCompare = timeToCompare.Add(agoDuration)
-	regex, err := buildRegexFilter(filter, regexMatchTimeout)
+	regex, err := common.BuildRegexFilter(filter, regexMatchTimeout)
 	if err != nil {
 		return -1, -1, err
 	}
@@ -581,7 +399,7 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 					// If the number of the tags associated with the manifest is  not equal to
 					// the number of tags to be deleted, the said manifest will still have
 					// tags remaining and we will consider if it has any dependant manifests
-					err = doNotDeleteDependantManifests(ctx, manifest, doNotDelete, acrClient, repoName)
+					err = common.AddDependentManifestsToIgnoreList(ctx, manifest, doNotDelete, acrClient, repoName)
 					if err != nil {
 						return -1, -1, err
 					}
@@ -589,7 +407,7 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 					// Otherwise the manifest have no tag left after purgeTags.
 					// we will need to find if the manifest has subject. If so,
 					// we will mark the manifest to not be deleted.
-					candidatesToDelete, err = getManifestWithoutSubjectToDelete(ctx, manifest, doNotDelete, candidatesToDelete, acrClient, repoName)
+					candidatesToDelete, err = common.UpdateForManifestWithoutSubjectToDelete(ctx, manifest, doNotDelete, candidatesToDelete, acrClient, repoName)
 					if err != nil {
 						return -1, -1, err
 					}
@@ -613,61 +431,6 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 	}
 
 	return deletedTagsCount, deletedManifestsCount, nil
-}
-
-// doNotDeleteDependantManifests adds the dependant manifest to doNotDelete
-// if the referred manifest has tags.
-func doNotDeleteDependantManifests(ctx context.Context, manifest acr.ManifestAttributesBase, doNotDelete set.Set[string], acrClient api.AcrCLIClientInterface, repoName string) error {
-	switch *manifest.MediaType {
-	case mediaTypeDockerManifestList, v1.MediaTypeImageIndex:
-		var manifestBytes []byte
-		manifestBytes, err := acrClient.GetManifest(ctx, repoName, *manifest.Digest)
-		if err != nil {
-			return err
-		}
-		// this struct defines a customized struct for manifests
-		// which is used to parse the content of a multiarch manifest
-		mam := struct {
-			Manifests []v1.Descriptor `json:"manifests"`
-		}{}
-
-		if err = json.Unmarshal(manifestBytes, &mam); err != nil {
-			return err
-		}
-		for _, dependentManifest := range mam.Manifests {
-			doNotDelete.Add(dependentManifest.Digest.String())
-		}
-	}
-	return nil
-}
-
-// getManifestWithoutSubjectToDelete adds the manifest to candidatesToDelete
-// if the manifest does not have subject, otherwise add it to doNotDelete.
-func getManifestWithoutSubjectToDelete(ctx context.Context, manifest acr.ManifestAttributesBase, doNotDelete set.Set[string], candidatesToDelete []acr.ManifestAttributesBase, acrClient api.AcrCLIClientInterface, repoName string) ([]acr.ManifestAttributesBase, error) {
-	switch *manifest.MediaType {
-	case mediaTypeArtifactManifest, v1.MediaTypeImageManifest, v1.MediaTypeImageIndex:
-		var manifestBytes []byte
-		manifestBytes, err := acrClient.GetManifest(ctx, repoName, *manifest.Digest)
-		if err != nil {
-			return nil, err
-		}
-		// this struct defines a customized struct for manifests which
-		// is used to parse the content of a manifest references a subject
-		mws := struct {
-			Subject *v1.Descriptor `json:"subject,omitempty"`
-		}{}
-		if err = json.Unmarshal(manifestBytes, &mws); err != nil {
-			return nil, err
-		}
-		if mws.Subject != nil {
-			doNotDelete.Add(*manifest.Digest)
-		} else {
-			candidatesToDelete = append(candidatesToDelete, manifest)
-		}
-	default:
-		candidatesToDelete = append(candidatesToDelete, manifest)
-	}
-	return candidatesToDelete, nil
 }
 
 // countTagsByManifest returns a map that for a given manifest digest contains the number of tags associated to it.
@@ -697,20 +460,4 @@ func countTagsByManifest(ctx context.Context, acrClient api.AcrCLIClientInterfac
 		}
 	}
 	return tagsCount, nil
-}
-
-// buildRegexFilter compiles a regex state machine from a regex expression
-func buildRegexFilter(expression string, regexpMatchTimeoutSeconds uint64) (*regexp2.Regexp, error) {
-	regexp, err := regexp2.Compile(expression, defaultRegexpOptions)
-	if err != nil {
-		return nil, err
-	}
-
-	// A timeout value must always be set
-	if regexpMatchTimeoutSeconds <= 0 {
-		regexpMatchTimeoutSeconds = defaultRegexpMatchTimeoutSeconds
-	}
-	regexp.MatchTimeout = time.Duration(regexpMatchTimeoutSeconds) * time.Second
-
-	return regexp, nil
 }

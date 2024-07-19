@@ -12,55 +12,49 @@ import (
 	"github.com/Azure/acr-cli/internal/api"
 )
 
-type purgeJob interface {
-	process(context.Context, api.AcrCLIClientInterface) error
-}
-
-type purgeJobBase struct {
-	loginURL    string
-	repoName    string
-	timeCreated time.Time
-}
-
 type purgeManifestJob struct {
-	purgeJobBase
+	jobBase
+	client api.AcrCLIClientInterface
 	digest string
 }
 
 type purgeTagJob struct {
-	purgeJobBase
-	tag string
+	jobBase
+	client api.AcrCLIClientInterface
+	tag    string
 }
 
-func newPurgeManifestJob(loginURL string, repoName string, digest string) *purgeManifestJob {
-	base := purgeJobBase{
+func newPurgeManifestJob(loginURL string, repoName string, client api.AcrCLIClientInterface, digest string) *purgeManifestJob {
+	base := jobBase{
 		loginURL:    loginURL,
 		repoName:    repoName,
 		timeCreated: time.Now().UTC(),
 	}
 
 	return &purgeManifestJob{
-		purgeJobBase: base,
-		digest:       digest,
+		jobBase: base,
+		client:  client,
+		digest:  digest,
 	}
 }
 
-func newPurgeTagJob(loginURL string, repoName string, tag string) *purgeTagJob {
-	base := purgeJobBase{
+func newPurgeTagJob(loginURL string, repoName string, client api.AcrCLIClientInterface, tag string) *purgeTagJob {
+	base := jobBase{
 		loginURL:    loginURL,
 		repoName:    repoName,
 		timeCreated: time.Now().UTC(),
 	}
 
 	return &purgeTagJob{
-		purgeJobBase: base,
-		tag:          tag,
+		jobBase: base,
+		client:  client,
+		tag:     tag,
 	}
 }
 
-// process calls acrClient to delete a manifest.
-func (job *purgeManifestJob) process(ctx context.Context, acrClient api.AcrCLIClientInterface) error {
-	resp, err := acrClient.DeleteManifest(ctx, job.repoName, job.digest)
+// execute calls acrClient to delete a manifest.
+func (job *purgeManifestJob) execute(ctx context.Context) error {
+	resp, err := job.client.DeleteManifest(ctx, job.repoName, job.digest)
 	if err == nil {
 		fmt.Printf("Deleted %s/%s@%s\n", job.loginURL, job.repoName, job.digest)
 		return nil
@@ -75,9 +69,9 @@ func (job *purgeManifestJob) process(ctx context.Context, acrClient api.AcrCLICl
 	return err
 }
 
-// process calls acrClient to delete a tag.
-func (job *purgeTagJob) process(ctx context.Context, acrClient api.AcrCLIClientInterface) error {
-	resp, err := acrClient.DeleteAcrTag(ctx, job.repoName, job.tag)
+// execute calls acrClient to delete a tag.
+func (job *purgeTagJob) execute(ctx context.Context) error {
+	resp, err := job.client.DeleteAcrTag(ctx, job.repoName, job.tag)
 	if err == nil {
 		fmt.Printf("Deleted %s/%s:%s\n", job.loginURL, job.repoName, job.tag)
 		return nil
