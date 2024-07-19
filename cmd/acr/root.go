@@ -48,7 +48,7 @@ To start working with the CLI, run acr --help`,
 	if isExperimentalCssc, exists := os.LookupEnv("ACR_EXPERIMENTAL_CSSC"); exists && isExperimentalCssc == "true" {
 		cmd.AddCommand(newCsscCmd(&rootParams))
 	}
-	// If environment variable ACR_EXPERIMENTAL_ANNOTATE is set to true, add the cssc command to the command list
+	// If environment variable ACR_EXPERIMENTAL_ANNOTATE is set to true, add the annotate command to the command list
 	if isExperimentalAnnotate, exists := os.LookupEnv("ACR_EXPERIMENTAL_ANNOTATE"); exists && isExperimentalAnnotate == "true" {
 		cmd.AddCommand(newAnnotateCmd(&rootParams))
 	}
