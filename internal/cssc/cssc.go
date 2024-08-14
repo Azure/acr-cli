@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/Azure/acr-cli/internal/api"
@@ -24,19 +26,36 @@ import (
 	"oras.land/oras-go/v2/registry/remote/retry"
 )
 
-// Filter struct to hold the filter policy
-type Filter struct {
-	Version      string       `json:"version"`
-	Repositories []Repository `json:"repositories"`
+type TagConvention string
+
+const (
+	Semver   TagConvention = "semver"
+	Floating TagConvention = "floating"
+)
+
+func (tc TagConvention) IsValid() error {
+	switch tc {
+	case Semver, Floating:
+		return nil
+	}
+	return errors.New("TagConvention should be either semver or floating")
 }
 
+// Filter struct to hold the filter policy
+type Filter struct {
+	Version       string        `json:"version"`
+	TagConvention TagConvention `json:"tag-convention"`
+	Repositories  []Repository  `json:"repositories"`
+}
+
+// Repository struct to hold the repository, tags and enabled flag
 type Repository struct {
 	Repository string   `json:"repository"`
 	Tags       []string `json:"tags"`
 	Enabled    *bool    `json:"enabled"`
 }
 
-// Repository struct to hold the filtered repository, tag and patch tag if any
+// FilteredRepository struct to hold the filtered repository, tag and patch tag if any
 type FilteredRepository struct {
 	Repository string
 	Tag        string
@@ -111,8 +130,18 @@ func GetFilterFromFilePath(filePath string) (Filter, error) {
 // Applies filter to filter out the repositories and tags from the ACR according to the specified criteria and returns the FilteredRepository struct
 func ApplyFilterAndGetFilteredList(ctx context.Context, acrClient api.AcrCLIClientInterface, filter Filter) ([]FilteredRepository, error) {
 	var filteredRepos []FilteredRepository
+	floatingTagRegex := regexp.MustCompile(`^(.+)-patched`)
+	semverTagRegex := regexp.MustCompile(`^(.+)-(\d+)$`)
+
+	// Default is floating tag regex, only if version is greater than 1.0 and tag convention is semver, then use semver tag regex
+	patchTagRegex := floatingTagRegex
+	if filter.Version > "1.0" && filter.TagConvention == "semver" {
+		patchTagRegex = semverTagRegex
+	}
 
 	for _, filterRepo := range filter.Repositories {
+		// Create a tag map for each repository, where the key will be the base tag and the value will be the list of tags matching the tag convention from the filter
+		tagMap := make(map[string][]string)
 		if filterRepo.Enabled != nil && !*filterRepo.Enabled {
 			continue
 		}
@@ -128,33 +157,81 @@ func ApplyFilterAndGetFilteredList(ctx context.Context, acrClient api.AcrCLIClie
 			}
 			return nil, errors.Wrap(err, "Some unexpected error occurred while listing tags for repository-"+filterRepo.Repository)
 		}
-
 		if len(filterRepo.Tags) == 1 && filterRepo.Tags[0] == "*" { // If the repo has * as tags defined in the filter, then all tags are considered for that repo
 			for _, tag := range tagList {
-				if strings.HasSuffix(*tag.Name, "-patched") {
-					originalTag := (*tag.Name)[:len(*tag.Name)-len("-patched")]
-					matchingRepo := FilteredRepository{Repository: filterRepo.Repository, Tag: originalTag, PatchTag: *tag.Name}
-					filteredRepos = AppendElement(filteredRepos, matchingRepo)
-				} else {
-					matchingRepo := FilteredRepository{Repository: filterRepo.Repository, Tag: *tag.Name, PatchTag: *tag.Name}
-					filteredRepos = AppendElement(filteredRepos, matchingRepo)
+				matches := patchTagRegex.FindStringSubmatch(*tag.Name)
+				if matches != nil {
+					baseTag := matches[1]
+					tagMap[baseTag] = append(tagMap[baseTag], *tag.Name)
+				} else if !floatingTagRegex.MatchString(*tag.Name) && !semverTagRegex.MatchString(*tag.Name) {
+					tagMap[*tag.Name] = append(tagMap[*tag.Name], *tag.Name)
 				}
 			}
 		} else {
 			for _, ftag := range filterRepo.Tags { // If the repo has specific tags defined in the filter, then only those tags are considered
 				for _, tag := range tagList {
-					if *tag.Name == ftag {
-						matchingRepo := FilteredRepository{Repository: filterRepo.Repository, Tag: *tag.Name, PatchTag: *tag.Name}
-						filteredRepos = AppendElement(filteredRepos, matchingRepo)
-					} else if *tag.Name == ftag+"-patched" {
-						matchingRepo := FilteredRepository{Repository: filterRepo.Repository, Tag: ftag, PatchTag: ftag + "-patched"}
-						filteredRepos = AppendElement(filteredRepos, matchingRepo)
+					re := regexp.MustCompile(`^` + ftag + `(-patched\d*)?$`)
+					if filter.Version > "1.0" && filter.TagConvention == "semver" {
+						re = regexp.MustCompile(`^` + ftag + `(-\d+)?$`)
+					}
+					if *tag.Name == ftag || strings.HasPrefix(*tag.Name, ftag) && re.MatchString(*tag.Name) {
+						matches := patchTagRegex.FindStringSubmatch(*tag.Name)
+						if matches != nil {
+							baseTag := matches[1]
+							tagMap[baseTag] = append(tagMap[baseTag], *tag.Name)
+						} else if !floatingTagRegex.MatchString(*tag.Name) && !semverTagRegex.MatchString(*tag.Name) {
+							tagMap[*tag.Name] = append(tagMap[*tag.Name], *tag.Name)
+						}
 					}
 				}
 			}
 		}
+
+		// Iterate over the tagMap to generate the FilteredRepository list
+		for baseTag, tags := range tagMap {
+			sort.Slice(tags, func(i, j int) bool {
+				return CompareTags(tags[i], tags[j])
+			})
+			latestTag := tags[len(tags)-1]
+			filteredRepos = append(filteredRepos, FilteredRepository{
+				Repository: filterRepo.Repository,
+				Tag:        baseTag,
+				PatchTag:   latestTag,
+			})
+		}
+		printTagMap(tagMap)
 	}
 	return filteredRepos, nil
+}
+
+// Compares two tags to determine their order while sorting
+func CompareTags(a, b string) bool {
+	// Split based on the last occurrence of '-' to separate the suffix
+	aIndex := strings.LastIndex(a, "-")
+	bIndex := strings.LastIndex(b, "-")
+
+	// Extract the suffixes
+	var aSuffix, bSuffix string
+	if aIndex != -1 {
+		aSuffix = a[aIndex+1:]
+	} else {
+		aSuffix = a
+	}
+	if bIndex != -1 {
+		bSuffix = b[bIndex+1:]
+	} else {
+		bSuffix = b
+	}
+
+	// Compare the suffixes
+	if IsNumeric(aSuffix) && IsNumeric(bSuffix) {
+		aNum, _ := strconv.Atoi(aSuffix)
+		bNum, _ := strconv.Atoi(bSuffix)
+		return aNum < bNum
+	}
+
+	// Fallback to lexicographic comparison
+	return a < b
 }
 
 // Prints the filtered result to the console
@@ -175,19 +252,16 @@ func PrintFilteredResult(filteredResult []FilteredRepository, showPatchTags bool
 	fmt.Println("Total matches found:", len(filteredResult))
 }
 
-// Appends the element to the slice if it does not already exist in the slice
-func AppendElement(slice []FilteredRepository, element FilteredRepository) []FilteredRepository {
-	isFirstElement := len(slice) == 0
-	alreadyInSlice := false
-	for i, existing := range slice {
-		if existing.Repository == element.Repository && existing.Tag == element.Tag {
-			slice[i].PatchTag = element.PatchTag
-			alreadyInSlice = true
-			break
-		}
+// Helper function to check if a string is numeric
+func IsNumeric(s string) bool {
+	_, err := strconv.Atoi(s)
+	return err == nil
+}
+
+// Function to print the tag map
+func printTagMap(tagMap map[string][]string) {
+	fmt.Println("Tag Map:")
+	for baseTag, tags := range tagMap {
+		fmt.Printf("%s: %v\n", baseTag, tags)
 	}
-	if isFirstElement || !alreadyInSlice {
-		slice = append(slice, element)
-	}
-	return slice
 }
