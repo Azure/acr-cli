@@ -10,25 +10,26 @@ import (
 )
 
 var (
-	TestCtx      = context.Background()
-	TestLoginURL = "foo.azurecr.io"
-	TestRepo     = "bar"
-
+	TestCtx             = context.Background()
+	TestLoginURL        = "foo.azurecr.io"
+	TestRepo            = "bar"
 	TagName             = "latest"
-	TagName1            = "v1"
-	TagName2            = "v2"
-	TagName3            = "v3"
-	TagName4            = "v4"
-	TagName1FloatingTag = "v1-patched"
-	TagName2FloatingTag = "v2-patched"
-	TagName1Semver1     = "v1-1"
-	TagName2Semver1     = "v2-1"
-	TagName3Semver1     = "v3-1"
-	TagName4Semver1     = "v4-1"
-	TagName1Semver2     = "v1-2"
-	TagName2Semver2     = "v2-2"
-	TagName3Semver2     = "v3-2"
-	TagName4Semver2     = "v4-2"
+	TagName1            = "jammy"
+	TagName2            = "jammy-20240808"
+	TagName3            = "jammy-20240627.1"
+	TagName4            = "20.04"
+	TagName1FloatingTag = "jammy-patched"
+	TagName2FloatingTag = "jammy-20240808-patched"
+	TagName3FloatingTag = "jammy-20240627.1-patched"
+	TagName4FloatingTag = "20.04-patched"
+	TagName1Semver1     = "jammy-1"
+	TagName2Semver1     = "jammy-20240808-1"
+	TagName3Semver1     = "jammy-20240627.1-1"
+	TagName4Semver1     = "20.04-1"
+	TagName1Semver2     = "jammy-2"
+	TagName2Semver2     = "jammy-20240808-2"
+	TagName3Semver2     = "jammy-20240627.1-2"
+	TagName4Semver2     = "20.04-2"
 	RepoName1           = "repo1"
 	RepoName2           = "repo2"
 	RepoName3           = "repo3"
@@ -112,7 +113,7 @@ var (
 		}},
 	}
 
-	EightTagResultWithPatchTags = &acr.RepositoryTagsType{
+	FourTagsResultWithPatchTags = &acr.RepositoryTagsType{
 		Response: autorest.Response{
 			Response: &http.Response{
 				StatusCode: 200,
@@ -157,6 +158,46 @@ var (
 			Digest:               &digest,
 		}, {
 			Name:                 &TagName2FloatingTag,
+			LastUpdateTime:       &lastUpdateTime,
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
+			Digest:               &digest,
+		}, {
+			Name:                 &TagName3,
+			LastUpdateTime:       &lastUpdateTime,
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
+			Digest:               &digest,
+		}, {
+			Name:                 &TagName3Semver1,
+			LastUpdateTime:       &lastUpdateTime,
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
+			Digest:               &digest,
+		}, {
+			Name:                 &TagName3Semver2,
+			LastUpdateTime:       &lastUpdateTime,
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
+			Digest:               &digest,
+		}, {
+			Name:                 &TagName3FloatingTag,
+			LastUpdateTime:       &lastUpdateTime,
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
+			Digest:               &digest,
+		}, {
+			Name:                 &TagName4,
+			LastUpdateTime:       &lastUpdateTime,
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
+			Digest:               &digest,
+		}, {
+			Name:                 &TagName4Semver1,
+			LastUpdateTime:       &lastUpdateTime,
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
+			Digest:               &digest,
+		}, {
+			Name:                 &TagName4Semver2,
+			LastUpdateTime:       &lastUpdateTime,
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
+			Digest:               &digest,
+		}, {
+			Name:                 &TagName4FloatingTag,
 			LastUpdateTime:       &lastUpdateTime,
 			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteEnabled, WriteEnabled: &writeEnabled},
 			Digest:               &digest,

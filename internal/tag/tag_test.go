@@ -40,7 +40,7 @@ func TestListTags(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", common.TestCtx, common.TestRepo, "", "").Return(common.OneTagResult, nil).Once()
 		mockClient.On("GetAcrTags", common.TestCtx, common.TestRepo, "", "latest").Return(common.FourTagsResult, nil).Once()
-		mockClient.On("GetAcrTags", common.TestCtx, common.TestRepo, "", "v4").Return(common.EmptyListTagsResult, nil).Once()
+		mockClient.On("GetAcrTags", common.TestCtx, common.TestRepo, "", common.TagName4).Return(common.EmptyListTagsResult, nil).Once()
 		tagList, err := ListTags(common.TestCtx, mockClient, common.TestRepo)
 		assert.Equal(nil, err, "Error should be nil")
 		assert.Equal(5, len(tagList), "Tag list should have 5 tags")

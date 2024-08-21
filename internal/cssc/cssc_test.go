@@ -89,6 +89,7 @@ func TestApplyFilterAndGetFilteredList(t *testing.T) {
 		assert.Len(t, filteredRepositories, 1)
 		assert.Equal(t, common.RepoName1, filteredRepositories[0].Repository)
 		assert.Equal(t, common.TagName, filteredRepositories[0].Tag)
+		assert.Equal(t, common.TagName, filteredRepositories[0].PatchTag)
 	})
 
 	// 5. Success scenario with all the combination of filters for version v1
@@ -118,17 +119,17 @@ func TestApplyFilterAndGetFilteredList(t *testing.T) {
 				},
 			},
 		}
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName1, "", "").Return(common.EightTagResultWithPatchTags, nil).Once()
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName1, "", common.TagName2FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName2, "", "").Return(common.EightTagResultWithPatchTags, nil).Once()
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName2, "", common.TagName2FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName3, "", "").Return(common.EightTagResultWithPatchTags, nil).Once()
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName3, "", common.TagName2FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName4, "", "").Return(common.EightTagResultWithPatchTags, nil).Once()
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName4, "", common.TagName2FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
+		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName1, "", "").Return(common.FourTagsResultWithPatchTags, nil).Once()
+		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName1, "", common.TagName4FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
+		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName2, "", "").Return(common.FourTagsResultWithPatchTags, nil).Once()
+		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName2, "", common.TagName4FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
+		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName3, "", "").Return(common.FourTagsResultWithPatchTags, nil).Once()
+		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName3, "", common.TagName4FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
+		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName4, "", "").Return(common.FourTagsResultWithPatchTags, nil).Once()
+		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName4, "", common.TagName4FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
 		filteredRepositories, err := ApplyFilterAndGetFilteredList(context.Background(), mockAcrClient, filter)
 		assert.NoError(t, err)
-		assert.Len(t, filteredRepositories, 6)
+		assert.Len(t, filteredRepositories, 8)
 		assert.Equal(t, common.RepoName1, filteredRepositories[0].Repository)
 		assert.Equal(t, common.TagName1, filteredRepositories[0].Tag)
 		assert.Equal(t, common.TagName1FloatingTag, filteredRepositories[0].PatchTag)
@@ -141,12 +142,18 @@ func TestApplyFilterAndGetFilteredList(t *testing.T) {
 		assert.Equal(t, common.RepoName2, filteredRepositories[3].Repository)
 		assert.Equal(t, common.TagName2, filteredRepositories[3].Tag)
 		assert.Equal(t, common.TagName2FloatingTag, filteredRepositories[3].PatchTag)
-		assert.Equal(t, common.RepoName3, filteredRepositories[4].Repository)
-		assert.Equal(t, common.TagName1, filteredRepositories[4].Tag)
-		assert.Equal(t, common.TagName1FloatingTag, filteredRepositories[4].PatchTag)
-		assert.Equal(t, common.RepoName3, filteredRepositories[5].Repository)
-		assert.Equal(t, common.TagName2, filteredRepositories[5].Tag)
-		assert.Equal(t, common.TagName2FloatingTag, filteredRepositories[5].PatchTag)
+		assert.Equal(t, common.RepoName2, filteredRepositories[4].Repository)
+		assert.Equal(t, common.TagName3, filteredRepositories[4].Tag)
+		assert.Equal(t, common.TagName3FloatingTag, filteredRepositories[4].PatchTag)
+		assert.Equal(t, common.RepoName2, filteredRepositories[5].Repository)
+		assert.Equal(t, common.TagName4, filteredRepositories[5].Tag)
+		assert.Equal(t, common.TagName4FloatingTag, filteredRepositories[5].PatchTag)
+		assert.Equal(t, common.RepoName3, filteredRepositories[6].Repository)
+		assert.Equal(t, common.TagName1, filteredRepositories[6].Tag)
+		assert.Equal(t, common.TagName1FloatingTag, filteredRepositories[6].PatchTag)
+		assert.Equal(t, common.RepoName3, filteredRepositories[7].Repository)
+		assert.Equal(t, common.TagName2, filteredRepositories[7].Tag)
+		assert.Equal(t, common.TagName2FloatingTag, filteredRepositories[7].PatchTag)
 	})
 
 	// 6. Success scenario with all the combination of filters for version v2 and semver tag convention
@@ -177,17 +184,17 @@ func TestApplyFilterAndGetFilteredList(t *testing.T) {
 				},
 			},
 		}
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName1, "", "").Return(common.EightTagResultWithPatchTags, nil).Once()
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName1, "", common.TagName2FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName2, "", "").Return(common.EightTagResultWithPatchTags, nil).Once()
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName2, "", common.TagName2FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName3, "", "").Return(common.EightTagResultWithPatchTags, nil).Once()
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName3, "", common.TagName2FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName4, "", "").Return(common.EightTagResultWithPatchTags, nil).Once()
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName4, "", common.TagName2FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
+		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName1, "", "").Return(common.FourTagsResultWithPatchTags, nil).Once()
+		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName1, "", common.TagName4FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
+		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName2, "", "").Return(common.FourTagsResultWithPatchTags, nil).Once()
+		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName2, "", common.TagName4FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
+		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName3, "", "").Return(common.FourTagsResultWithPatchTags, nil).Once()
+		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName3, "", common.TagName4FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
+		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName4, "", "").Return(common.FourTagsResultWithPatchTags, nil).Once()
+		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName4, "", common.TagName4FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
 		filteredRepos, err := ApplyFilterAndGetFilteredList(context.Background(), mockAcrClient, filter)
 		assert.NoError(t, err)
-		assert.Len(t, filteredRepos, 6)
+		assert.Len(t, filteredRepos, 8)
 		assert.Equal(t, common.RepoName1, filteredRepos[0].Repository)
 		assert.Equal(t, common.TagName1, filteredRepos[0].Tag)
 		assert.Equal(t, common.TagName1Semver2, filteredRepos[0].PatchTag)
@@ -200,12 +207,18 @@ func TestApplyFilterAndGetFilteredList(t *testing.T) {
 		assert.Equal(t, common.RepoName2, filteredRepos[3].Repository)
 		assert.Equal(t, common.TagName2, filteredRepos[3].Tag)
 		assert.Equal(t, common.TagName2Semver2, filteredRepos[3].PatchTag)
-		assert.Equal(t, common.RepoName3, filteredRepos[4].Repository)
-		assert.Equal(t, common.TagName1, filteredRepos[4].Tag)
-		assert.Equal(t, common.TagName1Semver2, filteredRepos[4].PatchTag)
-		assert.Equal(t, common.RepoName3, filteredRepos[5].Repository)
-		assert.Equal(t, common.TagName2, filteredRepos[5].Tag)
-		assert.Equal(t, common.TagName2Semver2, filteredRepos[5].PatchTag)
+		assert.Equal(t, common.RepoName2, filteredRepos[4].Repository)
+		assert.Equal(t, common.TagName3, filteredRepos[4].Tag)
+		assert.Equal(t, common.TagName3Semver2, filteredRepos[4].PatchTag)
+		assert.Equal(t, common.RepoName2, filteredRepos[5].Repository)
+		assert.Equal(t, common.TagName4, filteredRepos[5].Tag)
+		assert.Equal(t, common.TagName4Semver2, filteredRepos[5].PatchTag)
+		assert.Equal(t, common.RepoName3, filteredRepos[6].Repository)
+		assert.Equal(t, common.TagName1, filteredRepos[6].Tag)
+		assert.Equal(t, common.TagName1Semver2, filteredRepos[6].PatchTag)
+		assert.Equal(t, common.RepoName3, filteredRepos[7].Repository)
+		assert.Equal(t, common.TagName2, filteredRepos[7].Tag)
+		assert.Equal(t, common.TagName2Semver2, filteredRepos[7].PatchTag)
 	})
 
 	// 7. Success scenario with all the combination of filters for version v2 and floating tag convention
@@ -236,17 +249,17 @@ func TestApplyFilterAndGetFilteredList(t *testing.T) {
 				},
 			},
 		}
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName1, "", "").Return(common.EightTagResultWithPatchTags, nil).Once()
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName1, "", common.TagName2FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName2, "", "").Return(common.EightTagResultWithPatchTags, nil).Once()
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName2, "", common.TagName2FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName3, "", "").Return(common.EightTagResultWithPatchTags, nil).Once()
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName3, "", common.TagName2FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName4, "", "").Return(common.EightTagResultWithPatchTags, nil).Once()
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName4, "", common.TagName2FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
+		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName1, "", "").Return(common.FourTagsResultWithPatchTags, nil).Once()
+		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName1, "", common.TagName4FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
+		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName2, "", "").Return(common.FourTagsResultWithPatchTags, nil).Once()
+		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName2, "", common.TagName4FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
+		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName3, "", "").Return(common.FourTagsResultWithPatchTags, nil).Once()
+		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName3, "", common.TagName4FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
+		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName4, "", "").Return(common.FourTagsResultWithPatchTags, nil).Once()
+		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName4, "", common.TagName4FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
 		filRepos, err := ApplyFilterAndGetFilteredList(context.Background(), mockAcrClient, filter)
 		assert.NoError(t, err)
-		assert.Len(t, filRepos, 6)
+		assert.Len(t, filRepos, 8)
 		assert.Equal(t, common.RepoName1, filRepos[0].Repository)
 		assert.Equal(t, common.TagName1, filRepos[0].Tag)
 		assert.Equal(t, common.TagName1FloatingTag, filRepos[0].PatchTag)
@@ -259,12 +272,18 @@ func TestApplyFilterAndGetFilteredList(t *testing.T) {
 		assert.Equal(t, common.RepoName2, filRepos[3].Repository)
 		assert.Equal(t, common.TagName2, filRepos[3].Tag)
 		assert.Equal(t, common.TagName2FloatingTag, filRepos[3].PatchTag)
-		assert.Equal(t, common.RepoName3, filRepos[4].Repository)
-		assert.Equal(t, common.TagName1, filRepos[4].Tag)
-		assert.Equal(t, common.TagName1FloatingTag, filRepos[4].PatchTag)
-		assert.Equal(t, common.RepoName3, filRepos[5].Repository)
-		assert.Equal(t, common.TagName2, filRepos[5].Tag)
-		assert.Equal(t, common.TagName2FloatingTag, filRepos[5].PatchTag)
+		assert.Equal(t, common.RepoName2, filRepos[4].Repository)
+		assert.Equal(t, common.TagName3, filRepos[4].Tag)
+		assert.Equal(t, common.TagName3FloatingTag, filRepos[4].PatchTag)
+		assert.Equal(t, common.RepoName2, filRepos[5].Repository)
+		assert.Equal(t, common.TagName4, filRepos[5].Tag)
+		assert.Equal(t, common.TagName4FloatingTag, filRepos[5].PatchTag)
+		assert.Equal(t, common.RepoName3, filRepos[6].Repository)
+		assert.Equal(t, common.TagName1, filRepos[6].Tag)
+		assert.Equal(t, common.TagName1FloatingTag, filRepos[6].PatchTag)
+		assert.Equal(t, common.RepoName3, filRepos[7].Repository)
+		assert.Equal(t, common.TagName2, filRepos[7].Tag)
+		assert.Equal(t, common.TagName2FloatingTag, filRepos[7].PatchTag)
 	})
 }
 
@@ -326,12 +345,12 @@ func TestGetFilterFromFilePath(t *testing.T) {
 			"repositories": [
 				{
 					"repository": "repo1",
-					"tags": ["v1", "v2"],
+					"tags": ["jammy", "jammy-20240808"],
 					"enabled": true
 				},
 				{
 					"repository": "repo2",
-					"tags": ["v1"],
+					"tags": ["jammy"],
 					"enabled": true
 				}
 			]
