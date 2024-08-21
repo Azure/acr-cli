@@ -49,7 +49,7 @@ func TestListTags(t *testing.T) {
 }
 
 func TestDeleteTags(t *testing.T) {
-	args := []string{common.TagName, common.TagName1, common.TagName2, common.TagName3, common.TagName4}
+	args := []string{common.TagName, "v1", "v2", "v3", "v4"}
 	// First test, tag not found should return an error.
 	t.Run("TagNotFoundTest", func(t *testing.T) {
 		assert := assert.New(t)
