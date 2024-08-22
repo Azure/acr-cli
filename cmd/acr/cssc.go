@@ -125,10 +125,11 @@ func newPatchFilterCmd(csscParams *csscParameters) *cobra.Command {
 				fmt.Println("Filter is empty or invalid.")
 				return nil
 			}
-			filteredResult, err := cssc.ApplyFilterAndGetFilteredList(ctx, acrClient, filter)
+			filteredResult, artifactsNotFound, err := cssc.ApplyFilterAndGetFilteredList(ctx, acrClient, filter)
 			if err != nil {
 				return err
 			}
+			cssc.PrintNotFoundArtifacts(artifactsNotFound, loginURL)
 			cssc.PrintFilteredResult(filteredResult, csscParams.showPatchTags, loginURL)
 			return nil
 		},

@@ -8,6 +8,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/Azure/acr-cli/acr"
 	"github.com/Azure/acr-cli/cmd/mocks"
 	"github.com/Azure/acr-cli/internal/common"
 	"github.com/Azure/acr-cli/internal/tag"
@@ -29,8 +30,10 @@ func TestApplyFilterAndGetFilteredList(t *testing.T) {
 				},
 			},
 		}
-		filteredRepositories, err := ApplyFilterAndGetFilteredList(context.Background(), mockAcrClient, filter)
+		filteredRepositories, artifactsNotFound, err := ApplyFilterAndGetFilteredList(context.Background(), mockAcrClient, filter)
 		assert.NoError(t, err)
+		assert.Nil(t, artifactsNotFound)
+		assert.Len(t, artifactsNotFound, 0)
 		assert.Nil(t, filteredRepositories)
 		assert.Len(t, filteredRepositories, 0)
 	})
@@ -46,8 +49,10 @@ func TestApplyFilterAndGetFilteredList(t *testing.T) {
 				},
 			},
 		}
-		filteredRepositories, err := ApplyFilterAndGetFilteredList(context.Background(), mockAcrClient, filter)
+		filteredRepositories, artifactsNotFound, err := ApplyFilterAndGetFilteredList(context.Background(), mockAcrClient, filter)
 		assert.NoError(t, err)
+		assert.Nil(t, artifactsNotFound)
+		assert.Len(t, artifactsNotFound, 0)
 		assert.Nil(t, filteredRepositories)
 		assert.Len(t, filteredRepositories, 0)
 	})
@@ -65,12 +70,17 @@ func TestApplyFilterAndGetFilteredList(t *testing.T) {
 			},
 		}
 		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName1, "", "").Return(nil, errors.Wrap(&tag.ListTagsError{}, "failed to list tags")).Once()
-		filteredRepositories, err := ApplyFilterAndGetFilteredList(context.Background(), mockAcrClient, filter)
+		filteredRepositories, artifactsNotFound, err := ApplyFilterAndGetFilteredList(context.Background(), mockAcrClient, filter)
 		assert.NoError(t, err)
+		assert.Len(t, artifactsNotFound, 2)
+		assert.Equal(t, common.RepoName1, artifactsNotFound[0].Repository)
+		assert.Equal(t, common.TagName1, artifactsNotFound[0].Tag)
+		assert.Equal(t, common.RepoName1, artifactsNotFound[1].Repository)
+		assert.Equal(t, common.TagName2, artifactsNotFound[1].Tag)
 		assert.Nil(t, filteredRepositories)
 	})
 
-	// 4. If filter has a tag that doesn't exist in the repository, ignore it and return whatever exists that matches the filter
+	// 4. If filter has a tag that doesn't exist in the repository, it will be ignored and returned in the artifactsNotFound list and remaining tags will be returned in the filtered list
 	t.Run("TagSpecifiedInFilterDoesNotExistTest", func(t *testing.T) {
 		filter := Filter{
 			Version: "v1",
@@ -84,12 +94,15 @@ func TestApplyFilterAndGetFilteredList(t *testing.T) {
 		}
 		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName1, "", "").Return(common.OneTagResult, nil).Once()
 		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName1, "", common.TagName).Return(common.EmptyListTagsResult, nil).Once()
-		filteredRepositories, err := ApplyFilterAndGetFilteredList(context.Background(), mockAcrClient, filter)
+		filteredRepositories, artifactsNotFound, err := ApplyFilterAndGetFilteredList(context.Background(), mockAcrClient, filter)
 		assert.NoError(t, err)
 		assert.Len(t, filteredRepositories, 1)
 		assert.Equal(t, common.RepoName1, filteredRepositories[0].Repository)
 		assert.Equal(t, common.TagName, filteredRepositories[0].Tag)
 		assert.Equal(t, common.TagName, filteredRepositories[0].PatchTag)
+		assert.Len(t, artifactsNotFound, 1)
+		assert.Equal(t, common.RepoName1, artifactsNotFound[0].Repository)
+		assert.Equal(t, common.TagName1, artifactsNotFound[0].Tag)
 	})
 
 	// 5. Success scenario with all the combination of filters for version v1
@@ -127,8 +140,10 @@ func TestApplyFilterAndGetFilteredList(t *testing.T) {
 		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName3, "", common.TagName4FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
 		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName4, "", "").Return(common.FourTagsResultWithPatchTags, nil).Once()
 		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName4, "", common.TagName4FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
-		filteredRepositories, err := ApplyFilterAndGetFilteredList(context.Background(), mockAcrClient, filter)
+		filteredRepositories, artifactsNotFound, err := ApplyFilterAndGetFilteredList(context.Background(), mockAcrClient, filter)
 		assert.NoError(t, err)
+		assert.Nil(t, artifactsNotFound)
+		assert.Len(t, artifactsNotFound, 0)
 		assert.Len(t, filteredRepositories, 8)
 		assert.True(t, isInFilteredList(filteredRepositories, common.RepoName1, common.TagName1, common.TagName1FloatingTag))
 		assert.True(t, isInFilteredList(filteredRepositories, common.RepoName1, common.TagName2, common.TagName2FloatingTag))
@@ -176,10 +191,11 @@ func TestApplyFilterAndGetFilteredList(t *testing.T) {
 		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName3, "", common.TagName4FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
 		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName4, "", "").Return(common.FourTagsResultWithPatchTags, nil).Once()
 		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName4, "", common.TagName4FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
-		filteredRepos, err := ApplyFilterAndGetFilteredList(context.Background(), mockAcrClient, filter)
+		filteredRepos, artifactsNotFound, err := ApplyFilterAndGetFilteredList(context.Background(), mockAcrClient, filter)
 		assert.NoError(t, err)
+		assert.Nil(t, artifactsNotFound)
+		assert.Len(t, artifactsNotFound, 0)
 		assert.Len(t, filteredRepos, 8)
-
 		assert.True(t, isInFilteredList(filteredRepos, common.RepoName1, common.TagName1, common.TagName1Semver2))
 		assert.True(t, isInFilteredList(filteredRepos, common.RepoName1, common.TagName2, common.TagName2Semver2))
 		assert.True(t, isInFilteredList(filteredRepos, common.RepoName2, common.TagName1, common.TagName1Semver2))
@@ -226,8 +242,10 @@ func TestApplyFilterAndGetFilteredList(t *testing.T) {
 		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName3, "", common.TagName4FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
 		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName4, "", "").Return(common.FourTagsResultWithPatchTags, nil).Once()
 		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName4, "", common.TagName4FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
-		filRepos, err := ApplyFilterAndGetFilteredList(context.Background(), mockAcrClient, filter)
+		filRepos, artifactsNotFound, err := ApplyFilterAndGetFilteredList(context.Background(), mockAcrClient, filter)
 		assert.NoError(t, err)
+		assert.Nil(t, artifactsNotFound)
+		assert.Len(t, artifactsNotFound, 0)
 		assert.Len(t, filRepos, 8)
 		assert.True(t, isInFilteredList(filRepos, common.RepoName1, common.TagName1, common.TagName1FloatingTag))
 		assert.True(t, isInFilteredList(filRepos, common.RepoName1, common.TagName2, common.TagName2FloatingTag))
@@ -383,6 +401,41 @@ func TestIsNumeric(t *testing.T) {
 	// 2. Should return false when the string is not numeric
 	t.Run("NotNumericTest", func(t *testing.T) {
 		assert.False(t, IsNumeric("patched"))
+	})
+}
+
+func TestContainsTag(t *testing.T) {
+	tagList := []acr.TagAttributesBase{
+		{Name: &common.TagName1},
+		{Name: &common.TagName2},
+	}
+	// 1. Should return true when the list contains the tag
+	t.Run("ContainsTagTest", func(t *testing.T) {
+		assert.True(t, ContainsTag(tagList, common.TagName1))
+	})
+	// 2. Should return false when the list does not contain the tag
+	t.Run("DoesNotContainTagTest", func(t *testing.T) {
+		assert.False(t, ContainsTag(tagList, "tagnotinlist"))
+	})
+	// 3. Should return false when the list is empty
+	t.Run("EmptyListTest", func(t *testing.T) {
+		assert.False(t, ContainsTag([]acr.TagAttributesBase{}, common.TagName1))
+	})
+	//4. Should return false when the tag is nil
+	t.Run("TagIsNilTest", func(t *testing.T) {
+		tagList = []acr.TagAttributesBase{}
+		assert.False(t, ContainsTag(tagList, ""))
+	})
+}
+
+func TestEndsWithExceptionPattern(t *testing.T) {
+	// 1. Should return true when the string ends with a date
+	t.Run("EndsWithDateTest", func(t *testing.T) {
+		assert.True(t, endsWithExceptionPattern("20240808"))
+	})
+	// 2. Should return false when the string does not end with a date
+	t.Run("DoesNotEndWithDateTest", func(t *testing.T) {
+		assert.False(t, endsWithExceptionPattern("20240808-10"))
 	})
 }
 

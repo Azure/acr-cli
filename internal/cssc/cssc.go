@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Azure/acr-cli/acr"
 	"github.com/Azure/acr-cli/internal/api"
 	"github.com/Azure/acr-cli/internal/tag"
 
@@ -128,8 +129,9 @@ func GetFilterFromFilePath(filePath string) (Filter, error) {
 }
 
 // Applies filter to filter out the repositories and tags from the ACR according to the specified criteria and returns the FilteredRepository struct
-func ApplyFilterAndGetFilteredList(ctx context.Context, acrClient api.AcrCLIClientInterface, filter Filter) ([]FilteredRepository, error) {
+func ApplyFilterAndGetFilteredList(ctx context.Context, acrClient api.AcrCLIClientInterface, filter Filter) ([]FilteredRepository, []FilteredRepository, error) {
 	var filteredRepos []FilteredRepository
+	var artifactsNotFound []FilteredRepository
 	floatingTagRegex := regexp.MustCompile(`^(.+)-patched`)
 	semverTagRegex := regexp.MustCompile(`^(.+)-(\d+)$`)
 
@@ -153,14 +155,21 @@ func ApplyFilterAndGetFilteredList(ctx context.Context, acrClient api.AcrCLIClie
 		if err != nil {
 			var listTagsErr *tag.ListTagsError
 			if errors.As(err, &listTagsErr) {
+				for _, tag := range filterRepo.Tags {
+					artifactsNotFound = append(artifactsNotFound, FilteredRepository{
+						Repository: filterRepo.Repository,
+						Tag:        tag,
+					})
+				}
 				continue
 			}
-			return nil, errors.Wrap(err, "Some unexpected error occurred while listing tags for repository-"+filterRepo.Repository)
+			return nil, nil, errors.Wrap(err, "Some unexpected error occurred while listing tags for repository-"+filterRepo.Repository)
 		}
+
 		if len(filterRepo.Tags) == 1 && filterRepo.Tags[0] == "*" { // If the repo has * as tags defined in the filter, then all tags are considered for that repo
 			for _, tag := range tagList {
 				matches := patchTagRegex.FindStringSubmatch(*tag.Name)
-				if endsWithDate(*tag.Name) {
+				if endsWithExceptionPattern(*tag.Name) {
 					tagMap[*tag.Name] = append(tagMap[*tag.Name], *tag.Name)
 				} else if matches != nil {
 					baseTag := matches[1]
@@ -171,6 +180,14 @@ func ApplyFilterAndGetFilteredList(ctx context.Context, acrClient api.AcrCLIClie
 			}
 		} else {
 			for _, ftag := range filterRepo.Tags { // If the repo has specific tags defined in the filter, then only those tags are considered
+				// If tag from filter is not found in the tag list obtained for the repository, then add it to artifactsNotFound and continue
+				if !ContainsTag(tagList, ftag) {
+					artifactsNotFound = append(artifactsNotFound, FilteredRepository{
+						Repository: filterRepo.Repository,
+						Tag:        ftag,
+					})
+					continue
+				}
 				for _, tag := range tagList {
 					// This regex is needed to consider all versions of patch tags when original tag is specified in the filter
 					re := regexp.MustCompile(`^` + ftag + `(-patched\d*)?$`)
@@ -179,16 +196,15 @@ func ApplyFilterAndGetFilteredList(ctx context.Context, acrClient api.AcrCLIClie
 					}
 					if *tag.Name == ftag || re.MatchString(*tag.Name) {
 						matches := patchTagRegex.FindStringSubmatch(*tag.Name)
-						//// if endsWithDate(*tag.Name) && *tag.Name == ftag {
-						if endsWithDate(*tag.Name) && strings.HasPrefix(*tag.Name, ftag) {
-							//fmt.Println("In endsWithDate: ", *tag.Name)
+						if endsWithExceptionPattern(*tag.Name) && *tag.Name == ftag {
+							// if endsWithExceptionPattern(*tag.Name) && strings.HasPrefix(*tag.Name, ftag) {
 							tagMap[*tag.Name] = append(tagMap[*tag.Name], *tag.Name)
-						} else if matches != nil && !endsWithDate(*tag.Name) {
+						} else if !endsWithExceptionPattern(*tag.Name) && matches != nil {
 							baseTag := matches[1]
-							//fmt.Println("In matches: ", *tag.Name)
+							// fmt.Println("In matches: ", *tag.Name)
 							tagMap[baseTag] = append(tagMap[baseTag], *tag.Name)
 						} else if !floatingTagRegex.MatchString(*tag.Name) && !semverTagRegex.MatchString(*tag.Name) {
-							//fmt.Println("In ELSE: ", *tag.Name)
+							// fmt.Println("In ELSE: ", *tag.Name)
 							tagMap[*tag.Name] = append(tagMap[*tag.Name], *tag.Name)
 						}
 					}
@@ -199,7 +215,6 @@ func ApplyFilterAndGetFilteredList(ctx context.Context, acrClient api.AcrCLIClie
 		// Iterate over the tagMap to generate the FilteredRepository list
 		for baseTag, tags := range tagMap {
 			sort.Slice(tags, func(i, j int) bool {
-				// fmt.Println("In sort.Slice: ", tags[i], tags[j])
 				return CompareTags(tags[i], tags[j])
 			})
 			latestTag := tags[len(tags)-1]
@@ -211,17 +226,15 @@ func ApplyFilterAndGetFilteredList(ctx context.Context, acrClient api.AcrCLIClie
 		}
 		printTagMap(tagMap)
 	}
-	return filteredRepos, nil
+	return filteredRepos, artifactsNotFound, nil
 }
 
 // Compares two tags to determine their order while sorting
 func CompareTags(a, b string) bool {
-	// if a and b does not end with date, then split based on '-' and compare the suffix
-	if !endsWithDate(a) && !endsWithDate(b) {
+	// If a and b does not end with date, then extract suffix based on last occurrence of "-" and compare the suffixes
+	if !endsWithExceptionPattern(a) && !endsWithExceptionPattern(b) {
 		aIndex := strings.LastIndex(a, "-")
 		bIndex := strings.LastIndex(b, "-")
-
-		// Extract the suffixes
 		var aSuffix, bSuffix string
 		if aIndex != -1 {
 			aSuffix = a[aIndex+1:]
@@ -233,7 +246,6 @@ func CompareTags(a, b string) bool {
 		} else {
 			bSuffix = b
 		}
-
 		// Compare the suffixes
 		if IsNumeric(aSuffix) && IsNumeric(bSuffix) {
 			aNum, _ := strconv.Atoi(aSuffix)
@@ -241,7 +253,6 @@ func CompareTags(a, b string) bool {
 			return aNum < bNum
 		}
 	}
-
 	// Fallback to lexicographic comparison
 	return a < b
 }
@@ -264,10 +275,30 @@ func PrintFilteredResult(filteredResult []FilteredRepository, showPatchTags bool
 	fmt.Println("Total matches found:", len(filteredResult))
 }
 
+// Prints the artifacts not found to the console
+func PrintNotFoundArtifacts(artifactsNotFound []FilteredRepository, loginURL string) {
+	if len(artifactsNotFound) > 0 {
+		fmt.Printf("%s\n", "Artifacts specified in the filter that don't exist:")
+		for _, result := range artifactsNotFound {
+			fmt.Printf("%s:%s\n", result.Repository, result.Tag)
+		}
+	}
+}
+
 // Helper function to check if a string is numeric
 func IsNumeric(s string) bool {
 	_, err := strconv.Atoi(s)
 	return err == nil
+}
+
+// Helper function to check if tagList contains the tag
+func ContainsTag(tagList []acr.TagAttributesBase, tag string) bool {
+	for _, item := range tagList {
+		if *item.Name == tag {
+			return true
+		}
+	}
+	return false
 }
 
 // Function to print the tag map
@@ -278,24 +309,35 @@ func printTagMap(tagMap map[string][]string) {
 	}
 }
 
-// Function to check if a string ends with any date format
-func endsWithDate(str string) bool {
-	// Define common date patterns
-	datePatterns := []string{
-		`.*\d{4}-\d{2}-\d{2}$`, // YYYY-MM-DD
-		`.*\d{8}$`,             // YYYYMMDD
-		`.*\d{6}$`,             // YYYYMM or MMYYYY
-		`.*\d{2}-\d{2}-\d{4}$`, // DD-MM-YYYY or MM-DD-YYYY
-	}
+// // Function to check if a string ends with any date format
+// func endsWithDate(str string) bool {
+// 	// Define common date patterns
+// 	datePatterns := []string{
+// 		`.*\d{4}-\d{2}-\d{2}$`, // YYYY-MM-DD
+// 		`.*\d{8}$`,             // YYYYMMDD
+// 		`.*\d{6}$`,             // YYYYMM or MMYYYY
+// 		`.*\d{2}-\d{2}-\d{4}$`, // DD-MM-YYYY or MM-DD-YYYY
+// 	}
+// 	// Check if the string matches any of the date patterns
+// 	for _, pattern := range datePatterns {
+// 		if regexp.MustCompile(pattern).MatchString(str) {
+// 			return true
+// 		}
+// 	}
+// 	return false
+// }
 
-	// Check if the string matches any of the date patterns
-	for _, pattern := range datePatterns {
+// Function to check if a tag ends with exception pattern
+func endsWithExceptionPattern(str string) bool {
+	// Define common date patterns
+	exceptionPatterns := []string{
+		`.*\d{8}$`, // YYYYMMDD
+	}
+	// Check if the string matches any of the exception patterns
+	for _, pattern := range exceptionPatterns {
 		if regexp.MustCompile(pattern).MatchString(str) {
-			// fmt.Println("Is date", str)
 			return true
 		}
 	}
-
-	// fmt.Println("Not date", str)
 	return false
 }
