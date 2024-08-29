@@ -155,11 +155,11 @@ func TestApplyFilterAndGetFilteredList(t *testing.T) {
 		assert.True(t, isInFilteredList(filteredRepositories, common.RepoName3, common.TagName2, common.TagName2FloatingTag))
 	})
 
-	// 6. Success scenario with all the combination of filters for version v2 and semver tag convention
-	t.Run("AllFilterCombinationTestForFilterVersionv2TagConventionSemver", func(t *testing.T) {
+	// 6. Success scenario with all the combination of filters for version v2 and incremental tag convention
+	t.Run("AllFilterCombinationTestForFilterVersionv2TagConventionIncremental", func(t *testing.T) {
 		filter := Filter{
 			Version:       "v2",
-			TagConvention: "semver",
+			TagConvention: "incremental",
 			Repositories: []Repository{
 				{
 					Repository: common.RepoName1,
@@ -196,14 +196,14 @@ func TestApplyFilterAndGetFilteredList(t *testing.T) {
 		assert.Nil(t, artifactsNotFound)
 		assert.Len(t, artifactsNotFound, 0)
 		assert.Len(t, filteredRepos, 8)
-		assert.True(t, isInFilteredList(filteredRepos, common.RepoName1, common.TagName1, common.TagName1Semver2))
-		assert.True(t, isInFilteredList(filteredRepos, common.RepoName1, common.TagName2, common.TagName2Semver2))
-		assert.True(t, isInFilteredList(filteredRepos, common.RepoName2, common.TagName1, common.TagName1Semver2))
-		assert.True(t, isInFilteredList(filteredRepos, common.RepoName2, common.TagName2, common.TagName2Semver2))
-		assert.True(t, isInFilteredList(filteredRepos, common.RepoName2, common.TagName3, common.TagName3Semver2))
-		assert.True(t, isInFilteredList(filteredRepos, common.RepoName2, common.TagName4, common.TagName4Semver2))
-		assert.True(t, isInFilteredList(filteredRepos, common.RepoName3, common.TagName1, common.TagName1Semver2))
-		assert.True(t, isInFilteredList(filteredRepos, common.RepoName3, common.TagName2, common.TagName2Semver2))
+		assert.True(t, isInFilteredList(filteredRepos, common.RepoName1, common.TagName1, common.TagName1Incremental2))
+		assert.True(t, isInFilteredList(filteredRepos, common.RepoName1, common.TagName2, common.TagName2Incremental2))
+		assert.True(t, isInFilteredList(filteredRepos, common.RepoName2, common.TagName1, common.TagName1Incremental2))
+		assert.True(t, isInFilteredList(filteredRepos, common.RepoName2, common.TagName2, common.TagName2Incremental2))
+		assert.True(t, isInFilteredList(filteredRepos, common.RepoName2, common.TagName3, common.TagName3Incremental2))
+		assert.True(t, isInFilteredList(filteredRepos, common.RepoName2, common.TagName4, common.TagName4Incremental2))
+		assert.True(t, isInFilteredList(filteredRepos, common.RepoName3, common.TagName1, common.TagName1Incremental2))
+		assert.True(t, isInFilteredList(filteredRepos, common.RepoName3, common.TagName2, common.TagName2Incremental2))
 	})
 
 	// 7. Success scenario with all the combination of filters for version v2 and floating tag convention
@@ -344,6 +344,199 @@ func TestGetFilterFromFilePath(t *testing.T) {
 	})
 }
 
+func TestValidate(t *testing.T) {
+	// 1. Should return no error when the filter is valid for version v1
+	t.Run("ValidFilterTestForV1", func(t *testing.T) {
+		filter := Filter{
+			Version: "v1",
+			Repositories: []Repository{
+				{
+					Repository: common.RepoName1,
+					Tags:       []string{common.TagName1, common.TagName2},
+					Enabled:    boolPtr(true),
+				},
+			},
+		}
+		err := filter.Validate()
+		assert.Nil(t, err)
+	})
+
+	// 2. Should return no error when the filter is valid for version v2
+	t.Run("ValidFilterTestForV2", func(t *testing.T) {
+		filter := Filter{
+			Version:       "v2",
+			TagConvention: "incremental",
+			Repositories: []Repository{
+				{
+					Repository: common.RepoName1,
+					Tags:       []string{common.TagName1, common.TagName2},
+					Enabled:    boolPtr(true),
+				},
+			},
+		}
+		err := filter.Validate()
+		assert.Nil(t, err)
+	})
+
+	// 3. Should return error when the version is empty
+	t.Run("EmptyVersionTest", func(t *testing.T) {
+		filter := Filter{
+			Version: "",
+			Repositories: []Repository{
+				{
+					Repository: common.RepoName1,
+					Tags:       []string{common.TagName1, common.TagName2},
+					Enabled:    boolPtr(true),
+				},
+			},
+		}
+		err := filter.Validate()
+		assert.ErrorContains(t, err, "Version is required in the filter")
+	})
+
+	// 4. Should return error when the repositories list is empty
+	t.Run("EmptyRepositoriesListTest", func(t *testing.T) {
+		filter := Filter{
+			Version:      "v2",
+			Repositories: []Repository{},
+		}
+		err := filter.Validate()
+		assert.ErrorContains(t, err, "Repositories is required in the filter")
+	})
+	// 5. Should return error when the repository name is empty
+	t.Run("EmptyRepositoryNameTest", func(t *testing.T) {
+		filter := Filter{
+			Version:       "v2",
+			TagConvention: "incremental",
+			Repositories: []Repository{
+				{
+					Repository: "",
+					Tags:       []string{common.TagName1, common.TagName2},
+					Enabled:    boolPtr(true),
+				},
+			},
+		}
+		err := filter.Validate()
+		assert.ErrorContains(t, err, "Repository is required in the filter")
+	})
+
+	// 6. Should return error when tag convention is not incremental or floating and version is v2
+	t.Run("InvalidTagConventionTest", func(t *testing.T) {
+		filter := Filter{
+			Version:       "v2",
+			TagConvention: "invalid",
+			Repositories: []Repository{
+				{
+					Repository: common.RepoName1,
+					Tags:       []string{common.TagName1, common.TagName2},
+					Enabled:    boolPtr(true),
+				},
+			},
+		}
+		err := filter.Validate()
+		assert.ErrorContains(t, err, "tag-convention should be either incremental or floating")
+	})
+
+	// 7. Should succeed when tag convention is not specified and version is v1
+	t.Run("InvalidTagConventionTest", func(t *testing.T) {
+		filter := Filter{
+			Version: "v1",
+			Repositories: []Repository{
+				{
+					Repository: common.RepoName1,
+					Tags:       []string{common.TagName1, common.TagName2},
+					Enabled:    boolPtr(true),
+				},
+			},
+		}
+		err := filter.Validate()
+		assert.Nil(t, err)
+	})
+
+	// 8. Should return error when the tags list is empty
+	t.Run("EmptyTagsListTest", func(t *testing.T) {
+		filter := Filter{
+			Version:       "v2",
+			TagConvention: "incremental",
+			Repositories: []Repository{
+				{
+					Repository: common.RepoName1,
+					Tags:       []string{},
+					Enabled:    boolPtr(true),
+				},
+			},
+		}
+		err := filter.Validate()
+		assert.ErrorContains(t, err, "Tags is required in the filter")
+	})
+	// 9. Should return error when the tag list is empty
+	t.Run("EmptyTagTest", func(t *testing.T) {
+		filter := Filter{
+			Version:       "v2",
+			TagConvention: "incremental",
+			Repositories: []Repository{
+				{
+					Repository: common.RepoName1,
+					Enabled:    boolPtr(true),
+				},
+			},
+		}
+		err := filter.Validate()
+		assert.ErrorContains(t, err, "Tags is required in the filter")
+	})
+
+	// 10. Should return error when the tag is empty
+	t.Run("EmptyTagTest", func(t *testing.T) {
+		filter := Filter{
+			Version:       "v2",
+			TagConvention: "incremental",
+			Repositories: []Repository{
+				{
+					Repository: common.RepoName1,
+					Tags:       []string{""},
+					Enabled:    boolPtr(true),
+				},
+			},
+		}
+		err := filter.Validate()
+		assert.ErrorContains(t, err, "Tag is required in the filter")
+	})
+
+	// 11. Should return error when filter json contains tag ending with incremental or floating pattern
+	t.Run("TagEndsWithIncrementalOrFloatingPatternTest", func(t *testing.T) {
+		filter := Filter{
+			Version:       "v2",
+			TagConvention: "incremental",
+			Repositories: []Repository{
+				{
+					Repository: common.RepoName1,
+					Tags:       []string{"jammy-1", "jammy-patched"},
+					Enabled:    boolPtr(true),
+				},
+			},
+		}
+		err := filter.Validate()
+		assert.ErrorContains(t, err, "Tags in filter json should not end with -1 to -999 or -patched")
+	})
+
+	// 12. Should return error when filter json contains tag ending with number outside the range of 1-999
+	t.Run("TagEndsWithNumberOutsideRangeTest", func(t *testing.T) {
+		filter := Filter{
+			Version:       "v2",
+			TagConvention: "incremental",
+			Repositories: []Repository{
+				{
+					Repository: common.RepoName1,
+					Tags:       []string{"jammy-1000"},
+					Enabled:    boolPtr(true),
+				},
+			},
+		}
+		err := filter.Validate()
+		assert.Nil(t, err)
+	})
+}
+
 func TestCompareTags(t *testing.T) {
 	// 1. Should return true when the first tag is greater than the second tag
 	t.Run("FirstTagGreaterThanSecondTest", func(t *testing.T) {
@@ -367,9 +560,9 @@ func TestIsTagConventionValid(t *testing.T) {
 	filter := Filter{
 		Version: "v2",
 	}
-	//1. Should return no error when the tag convention is semver
-	t.Run("ValidTagConventionSemverTest", func(t *testing.T) {
-		filter.TagConvention = "semver"
+	//1. Should return no error when the tag convention is incremental
+	t.Run("ValidTagConventionIncrementalTest", func(t *testing.T) {
+		filter.TagConvention = "incremental"
 		fil := filter.TagConvention.IsValid()
 		assert.Nil(t, fil)
 	})
@@ -379,17 +572,22 @@ func TestIsTagConventionValid(t *testing.T) {
 		fil := filter.TagConvention.IsValid()
 		assert.Nil(t, fil)
 	})
-	//3. Should return error when the tag convention is not semver or floating
+	//3. Should return error when the tag convention is not incremental or floating
 	t.Run("InvalidTagConventionTest", func(t *testing.T) {
 		filter.TagConvention = "invalid"
 		fil := filter.TagConvention.IsValid()
-		assert.ErrorContains(t, fil, "TagConvention should be either semver or floating")
+		assert.ErrorContains(t, fil, "tag-convention should be either incremental or floating")
 	})
 	// 4. Should return error when the tag convention is empty
 	t.Run("EmptyTagConventionTest", func(t *testing.T) {
 		filter.TagConvention = ""
 		fil := filter.TagConvention.IsValid()
-		assert.ErrorContains(t, fil, "TagConvention should be either semver or floating")
+		assert.ErrorContains(t, fil, "tag-convention should be either incremental or floating")
+	})
+	// 5. Should return error when the tag convention is nil
+	t.Run("NilTagConventionTest", func(t *testing.T) {
+		fil := filter.TagConvention.IsValid()
+		assert.ErrorContains(t, fil, "tag-convention should be either incremental or floating")
 	})
 }
 
@@ -428,14 +626,21 @@ func TestContainsTag(t *testing.T) {
 	})
 }
 
-func TestEndsWithExceptionPattern(t *testing.T) {
-	// 1. Should return true when the string ends with a date
-	t.Run("EndsWithDateTest", func(t *testing.T) {
-		assert.True(t, endsWithExceptionPattern("20240808"))
+func TestEndsWithIncrementalOrFloatingPattern(t *testing.T) {
+	// 1. Should return true when the tag ends with incremental pattern ending only between 1-999
+	t.Run("EndsWithIncrementalPatternTest", func(t *testing.T) {
+		assert.True(t, endsWithIncrementalOrFloatingPattern("10.1.1-1"))
+		assert.True(t, endsWithIncrementalOrFloatingPattern("10.1.1-10"))
+		assert.True(t, endsWithIncrementalOrFloatingPattern("10.1.1-999"))
+		assert.False(t, endsWithIncrementalOrFloatingPattern("10.1.1-1000"))
 	})
-	// 2. Should return false when the string does not end with a date
-	t.Run("DoesNotEndWithDateTest", func(t *testing.T) {
-		assert.False(t, endsWithExceptionPattern("20240808-10"))
+	// 2. Should return true when the tag ends with floating pattern
+	t.Run("EndsWithFloatingPatternTest", func(t *testing.T) {
+		assert.True(t, endsWithIncrementalOrFloatingPattern("10.1.1-patched"))
+	})
+	// 3. Should return false when the tag does not end with incremental or floating pattern
+	t.Run("DoesNotEndWithPatternTest", func(t *testing.T) {
+		assert.False(t, endsWithIncrementalOrFloatingPattern("10.1.1"))
 	})
 }
 

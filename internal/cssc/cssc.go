@@ -30,16 +30,16 @@ import (
 type TagConvention string
 
 const (
-	Semver   TagConvention = "semver"
-	Floating TagConvention = "floating"
+	Incremental TagConvention = "incremental"
+	Floating    TagConvention = "floating"
 )
 
 func (tc TagConvention) IsValid() error {
 	switch tc {
-	case Semver, Floating:
+	case Incremental, Floating:
 		return nil
 	}
-	return errors.New("TagConvention should be either semver or floating")
+	return errors.New("tag-convention should be either incremental or floating")
 }
 
 // Filter struct to hold the filter policy
@@ -128,17 +128,63 @@ func GetFilterFromFilePath(filePath string) (Filter, error) {
 	return filter, nil
 }
 
+// Validate filter
+func (filter *Filter) Validate() error {
+	fmt.Println("Validating filter...")
+	if filter.Version == "" {
+		return errors.New("Version is required in the filter")
+	}
+	if filter.Repositories == nil || len(filter.Repositories) == 0 {
+		return errors.New("Repositories is required in the filter")
+	}
+
+	if filter.Version > "v1" {
+		err := filter.TagConvention.IsValid()
+		if err != nil {
+			return err
+		}
+	}
+	allErrors := []string{}
+	for _, repo := range filter.Repositories {
+		if repo.Repository == "" {
+			return errors.New("Repository is required in the filter")
+		}
+		if repo.Tags == nil || len(repo.Tags) == 0 {
+			return errors.New("Tags is required in the filter")
+		}
+
+		incorrectTags := []string{}
+		for _, tag := range repo.Tags {
+			if tag == "" {
+				return errors.New("Tag is required in the filter")
+			}
+			if endsWithIncrementalOrFloatingPattern(tag) {
+				incorrectTags = append(incorrectTags, tag)
+			}
+		}
+		if len(incorrectTags) > 0 {
+			allErrors = append(allErrors, fmt.Sprintf("Repo:%s Invalid Tags: %s", repo.Repository, strings.Join(incorrectTags, ", ")))
+		}
+	}
+	if len(allErrors) > 0 {
+		allErrors = append(allErrors, "Tags in filter json should not end with -1 to -999 or -patched")
+		return errors.New(strings.Join(allErrors, "\n"))
+	}
+	return nil
+}
+
 // Applies filter to filter out the repositories and tags from the ACR according to the specified criteria and returns the FilteredRepository struct
 func ApplyFilterAndGetFilteredList(ctx context.Context, acrClient api.AcrCLIClientInterface, filter Filter) ([]FilteredRepository, []FilteredRepository, error) {
+
 	var filteredRepos []FilteredRepository
 	var artifactsNotFound []FilteredRepository
 	floatingTagRegex := regexp.MustCompile(`^(.+)-patched`)
-	semverTagRegex := regexp.MustCompile(`^(.+)-(\d+)$`)
+	incrementalTagRegex := regexp.MustCompile(`^(.+)-([1-9]\d{0,2})$`)
 
-	// Default is floating tag regex, only if version is greater than 1.0 and tag convention is semver, then use semver tag regex
+	// Default is floating tag regex, only if version is greater than 1.0 and tag convention is incremental, then use incremental tag regex
 	patchTagRegex := floatingTagRegex
-	if filter.Version > "1.0" && filter.TagConvention == "semver" {
-		patchTagRegex = semverTagRegex
+	if filter.Version > "1.0" && filter.TagConvention == Incremental {
+		patchTagRegex = incrementalTagRegex
 	}
 
 	for _, filterRepo := range filter.Repositories {
@@ -169,12 +215,10 @@ func ApplyFilterAndGetFilteredList(ctx context.Context, acrClient api.AcrCLIClie
 		if len(filterRepo.Tags) == 1 && filterRepo.Tags[0] == "*" { // If the repo has * as tags defined in the filter, then all tags are considered for that repo
 			for _, tag := range tagList {
 				matches := patchTagRegex.FindStringSubmatch(*tag.Name)
-				if endsWithExceptionPattern(*tag.Name) {
-					tagMap[*tag.Name] = append(tagMap[*tag.Name], *tag.Name)
-				} else if matches != nil {
+				if matches != nil {
 					baseTag := matches[1]
 					tagMap[baseTag] = append(tagMap[baseTag], *tag.Name)
-				} else if !floatingTagRegex.MatchString(*tag.Name) && !semverTagRegex.MatchString(*tag.Name) {
+				} else if !endsWithIncrementalOrFloatingPattern(*tag.Name) {
 					tagMap[*tag.Name] = append(tagMap[*tag.Name], *tag.Name)
 				}
 			}
@@ -191,21 +235,18 @@ func ApplyFilterAndGetFilteredList(ctx context.Context, acrClient api.AcrCLIClie
 				for _, tag := range tagList {
 					// This regex is needed to consider all versions of patch tags when original tag is specified in the filter
 					re := regexp.MustCompile(`^` + ftag + `(-patched\d*)?$`)
-					if filter.Version > "1.0" && filter.TagConvention == "semver" {
-						re = regexp.MustCompile(`^` + ftag + `(-\d+)?$`)
+					if filter.Version > "1.0" && filter.TagConvention == Incremental {
+						re = regexp.MustCompile(`^` + ftag + `(-[1-9]\d{0,2})?$`)
 					}
 					if *tag.Name == ftag || re.MatchString(*tag.Name) {
 						matches := patchTagRegex.FindStringSubmatch(*tag.Name)
-						if endsWithExceptionPattern(*tag.Name) && *tag.Name == ftag {
-							// if endsWithExceptionPattern(*tag.Name) && strings.HasPrefix(*tag.Name, ftag) {
-							tagMap[*tag.Name] = append(tagMap[*tag.Name], *tag.Name)
-						} else if !endsWithExceptionPattern(*tag.Name) && matches != nil {
+						if matches != nil {
 							baseTag := matches[1]
-							// fmt.Println("In matches: ", *tag.Name)
 							tagMap[baseTag] = append(tagMap[baseTag], *tag.Name)
-						} else if !floatingTagRegex.MatchString(*tag.Name) && !semverTagRegex.MatchString(*tag.Name) {
-							// fmt.Println("In ELSE: ", *tag.Name)
+							fmt.Println("In matches: ", *tag.Name)
+						} else if !endsWithIncrementalOrFloatingPattern(*tag.Name) {
 							tagMap[*tag.Name] = append(tagMap[*tag.Name], *tag.Name)
+							fmt.Println("In ELSE: ", *tag.Name)
 						}
 					}
 				}
@@ -232,7 +273,7 @@ func ApplyFilterAndGetFilteredList(ctx context.Context, acrClient api.AcrCLIClie
 // Compares two tags to determine their order while sorting
 func CompareTags(a, b string) bool {
 	// If a and b does not end with date, then extract suffix based on last occurrence of "-" and compare the suffixes
-	if !endsWithExceptionPattern(a) && !endsWithExceptionPattern(b) {
+	if endsWithIncrementalOrFloatingPattern(a) && endsWithIncrementalOrFloatingPattern(b) {
 		aIndex := strings.LastIndex(a, "-")
 		bIndex := strings.LastIndex(b, "-")
 		var aSuffix, bSuffix string
@@ -301,43 +342,16 @@ func ContainsTag(tagList []acr.TagAttributesBase, tag string) bool {
 	return false
 }
 
+func endsWithIncrementalOrFloatingPattern(str string) bool {
+	// Regular expression to match "-1" to "-999" and "-patched" at the end of the string
+	re := regexp.MustCompile(`(-\d{1,3}|-patched)$`)
+	return re.MatchString(str)
+}
+
 // Function to print the tag map
 func printTagMap(tagMap map[string][]string) {
 	fmt.Println("Tag Map:")
 	for baseTag, tags := range tagMap {
 		fmt.Printf("%s: %v\n", baseTag, tags)
 	}
-}
-
-// // Function to check if a string ends with any date format
-// func endsWithDate(str string) bool {
-// 	// Define common date patterns
-// 	datePatterns := []string{
-// 		`.*\d{4}-\d{2}-\d{2}$`, // YYYY-MM-DD
-// 		`.*\d{8}$`,             // YYYYMMDD
-// 		`.*\d{6}$`,             // YYYYMM or MMYYYY
-// 		`.*\d{2}-\d{2}-\d{4}$`, // DD-MM-YYYY or MM-DD-YYYY
-// 	}
-// 	// Check if the string matches any of the date patterns
-// 	for _, pattern := range datePatterns {
-// 		if regexp.MustCompile(pattern).MatchString(str) {
-// 			return true
-// 		}
-// 	}
-// 	return false
-// }
-
-// Function to check if a tag ends with exception pattern
-func endsWithExceptionPattern(str string) bool {
-	// Define common date patterns
-	exceptionPatterns := []string{
-		`.*\d{8}$`, // YYYYMMDD
-	}
-	// Check if the string matches any of the exception patterns
-	for _, pattern := range exceptionPatterns {
-		if regexp.MustCompile(pattern).MatchString(str) {
-			return true
-		}
-	}
-	return false
 }

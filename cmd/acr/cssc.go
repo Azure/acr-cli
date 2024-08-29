@@ -96,7 +96,7 @@ func newPatchFilterCmd(csscParams *csscParameters) *cobra.Command {
 				return errors.New("patch command without --dry-run is not operational at the moment and will be enabled in future releases")
 			} else if csscParams.dryRun {
 				fmt.Println("DRY RUN mode enabled...")
-				fmt.Println("DRY RUN mode will only list all the repositories and tags that match the filter and are eligible for continuous scan and patch. During the actual patch operation, each of the eligible images will first be scanned using trivy and if there are any vulnerabilities found, a new patched image will be generated with tag <originaltag>-patched or <originaltag>-semver based on the configured tag-convention.")
+				fmt.Println("DRY RUN mode will only list all the repositories and tags that match the filter and are eligible for continuous scan and patch. During the actual patch operation, each of the eligible images will first be scanned using trivy and if there are any vulnerabilities found, a new patched image will be generated with tag <originaltag>-patched or <originaltag>-x based on the configured tag-convention.")
 				if csscParams.filterPolicy == "" && csscParams.filterfilePath == "" {
 					return errors.New("flag --filter-policy or --filter-policy-file is required when using --dry-run")
 				} else if csscParams.filterfilePath != "" {
@@ -114,17 +114,13 @@ func newPatchFilterCmd(csscParams *csscParameters) *cobra.Command {
 				}
 			}
 
-			if filter.Version > "v1" {
-				err := filter.TagConvention.IsValid()
-				if err != nil {
-					return err
-				}
-				fmt.Println("Configured Tag Convention: ", filter.TagConvention)
+			// Validate the filter and return error if invalid
+			err = filter.Validate()
+			if err != nil {
+				return err
 			}
-			if len(filter.Repositories) == 0 {
-				fmt.Println("Filter is empty or invalid.")
-				return nil
-			}
+
+			fmt.Println("Configured Tag Convention: ", filter.TagConvention)
 			filteredResult, artifactsNotFound, err := cssc.ApplyFilterAndGetFilteredList(ctx, acrClient, filter)
 			if err != nil {
 				return err
