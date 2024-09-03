@@ -131,19 +131,19 @@ func GetFilterFromFilePath(filePath string) (Filter, error) {
 // Validate filter
 func (filter *Filter) Validate() error {
 	fmt.Println("Validating filter...")
-	if filter.Version == "" {
-		return errors.New("Version is required in the filter")
+	if filter.Version == "" || filter.Version != "v1" {
+		return errors.New("Version is required in the filter and should be v1")
 	}
 	if filter.Repositories == nil || len(filter.Repositories) == 0 {
 		return errors.New("Repositories is required in the filter")
 	}
-
-	if filter.Version > "v1" {
+	if filter.TagConvention != "" {
 		err := filter.TagConvention.IsValid()
 		if err != nil {
 			return err
 		}
 	}
+
 	allErrors := []string{}
 	for _, repo := range filter.Repositories {
 		if repo.Repository == "" {
@@ -163,7 +163,7 @@ func (filter *Filter) Validate() error {
 			}
 		}
 		if len(incorrectTags) > 0 {
-			allErrors = append(allErrors, fmt.Sprintf("Repo:%s Invalid Tags: %s", repo.Repository, strings.Join(incorrectTags, ", ")))
+			allErrors = append(allErrors, fmt.Sprintf("Repo:%s Invalid Tag(s): %s", repo.Repository, strings.Join(incorrectTags, ", ")))
 		}
 	}
 	if len(allErrors) > 0 {
@@ -181,9 +181,9 @@ func ApplyFilterAndGetFilteredList(ctx context.Context, acrClient api.AcrCLIClie
 	floatingTagRegex := regexp.MustCompile(`^(.+)-patched`)
 	incrementalTagRegex := regexp.MustCompile(`^(.+)-([1-9]\d{0,2})$`)
 
-	// Default is floating tag regex, only if version is greater than 1.0 and tag convention is incremental, then use incremental tag regex
+	// Default is floating tag regex, only if tag convention is incremental, then use incremental tag regex
 	patchTagRegex := floatingTagRegex
-	if filter.Version > "1.0" && filter.TagConvention == Incremental {
+	if filter.TagConvention == Incremental {
 		patchTagRegex = incrementalTagRegex
 	}
 
@@ -235,7 +235,7 @@ func ApplyFilterAndGetFilteredList(ctx context.Context, acrClient api.AcrCLIClie
 				for _, tag := range tagList {
 					// This regex is needed to consider all versions of patch tags when original tag is specified in the filter
 					re := regexp.MustCompile(`^` + ftag + `(-patched\d*)?$`)
-					if filter.Version > "1.0" && filter.TagConvention == Incremental {
+					if filter.TagConvention == Incremental {
 						re = regexp.MustCompile(`^` + ftag + `(-[1-9]\d{0,2})?$`)
 					}
 					if *tag.Name == ftag || re.MatchString(*tag.Name) {
@@ -344,7 +344,7 @@ func ContainsTag(tagList []acr.TagAttributesBase, tag string) bool {
 
 func endsWithIncrementalOrFloatingPattern(str string) bool {
 	// Regular expression to match "-1" to "-999" and "-patched" at the end of the string
-	re := regexp.MustCompile(`(-\d{1,3}|-patched)$`)
+	re := regexp.MustCompile(`(-[1-9]\d{0,2}|-patched)$`)
 	return re.MatchString(str)
 }
 
