@@ -42,6 +42,12 @@ func (tc TagConvention) IsValid() error {
 	return errors.New("tag-convention should be either incremental or floating")
 }
 
+var (
+	floatingTagRegex    = regexp.MustCompile(`^(.+)-patched`)             // Matches strings ending with -patched
+	incrementalTagRegex = regexp.MustCompile(`^(.+)-([1-9]\d{0,2})$`)     // Matches strings ending with -1 to -999
+	reservedSuffixRegex = regexp.MustCompile(`(-[1-9]\d{0,2}|-patched)$`) // Matches strings ending with -1 to -999 or -patched
+)
+
 // Filter struct to hold the filter policy
 type Filter struct {
 	Version       string        `json:"version"`
@@ -178,8 +184,6 @@ func ApplyFilterAndGetFilteredList(ctx context.Context, acrClient api.AcrCLIClie
 
 	var filteredRepos []FilteredRepository
 	var artifactsNotFound []FilteredRepository
-	floatingTagRegex := regexp.MustCompile(`^(.+)-patched`)
-	incrementalTagRegex := regexp.MustCompile(`^(.+)-([1-9]\d{0,2})$`)
 
 	// Default is floating tag regex, only if tag convention is incremental, then use incremental tag regex
 	patchTagRegex := floatingTagRegex
@@ -233,7 +237,7 @@ func ApplyFilterAndGetFilteredList(ctx context.Context, acrClient api.AcrCLIClie
 					continue
 				}
 				for _, tag := range tagList {
-					// This regex is needed to consider all versions of patch tags when original tag is specified in the filter
+					// This is needed to evaluate all versions of patch tags when original tag is specified in the filter
 					re := regexp.MustCompile(`^` + ftag + `(-patched\d*)?$`)
 					if filter.TagConvention == Incremental {
 						re = regexp.MustCompile(`^` + ftag + `(-[1-9]\d{0,2})?$`)
@@ -332,16 +336,14 @@ func isNumeric(s string) bool {
 // Helper function to check if tagList contains the specified tag
 func containsTag(tagList []acr.TagAttributesBase, tag string) bool {
 	for _, item := range tagList {
-		if *item.Name == tag {
+		if item.Name != nil && *item.Name == tag {
 			return true
 		}
 	}
 	return false
 }
 
-// Helper function to check if the string ends with "-1" to "-999" or "-patched"
+// Helper function to check if the string ends with incremental or floating pattern
 func endsWithIncrementalOrFloatingPattern(str string) bool {
-	// Regular expression to match "-1" to "-999" and "-patched" at the end of the string
-	re := regexp.MustCompile(`(-[1-9]\d{0,2}|-patched)$`)
-	return re.MatchString(str)
+	return reservedSuffixRegex.MatchString(str)
 }

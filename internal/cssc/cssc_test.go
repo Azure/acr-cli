@@ -56,7 +56,6 @@ func TestApplyFilterAndGetFilteredList(t *testing.T) {
 		assert.Nil(t, filteredRepositories)
 		assert.Len(t, filteredRepositories, 0)
 	})
-
 	// 3. No error should be returned when GetAcrTags fails with ListTagsError and the tags that failed to be fetched should be returned in the artifactsNotFound list
 	t.Run("GetAcrTagsFailsWithListTagsErrorTest", func(t *testing.T) {
 		filter := Filter{
@@ -79,7 +78,6 @@ func TestApplyFilterAndGetFilteredList(t *testing.T) {
 		assert.Equal(t, common.TagName2, artifactsNotFound[1].Tag)
 		assert.Nil(t, filteredRepositories)
 	})
-
 	// 4. If filter has a tag that is not present in the repository, that tag should be returned in the artifactsNotFound list and the rest of the tags should be returned in the filtered list
 	t.Run("TagSpecifiedInFilterDoesNotExistTest", func(t *testing.T) {
 		filter := Filter{
@@ -104,9 +102,8 @@ func TestApplyFilterAndGetFilteredList(t *testing.T) {
 		assert.Equal(t, common.RepoName1, artifactsNotFound[0].Repository)
 		assert.Equal(t, common.TagName1, artifactsNotFound[0].Tag)
 	})
-
 	// 5. Success scenario with all the combination of filters
-	t.Run("AllFilterCombinationTestForFilterVersionv1", func(t *testing.T) {
+	t.Run("AllFilterCombinationTest", func(t *testing.T) {
 		filter := Filter{
 			Version: "v1",
 			Repositories: []Repository{
@@ -167,7 +164,6 @@ func TestGetFilterFromFilterPolicy(t *testing.T) {
 		assert.Equal(t, "filter-policy should be in the format repository:tag e.g. continuouspatchpolicy:latest", err.Error())
 		assert.Equal(t, Filter{}, filter)
 	})
-
 	// 2. Error should be returned when filter policy has more than one colon
 	t.Run("FilterPolicyMoreThanOneColonTest", func(t *testing.T) {
 		filterPolicy := "repo1:something:anotherthing"
@@ -176,7 +172,6 @@ func TestGetFilterFromFilterPolicy(t *testing.T) {
 		assert.Equal(t, "filter-policy should be in the format repository:tag e.g. continuouspatchpolicy:latest", err.Error())
 		assert.Equal(t, Filter{}, filter)
 	})
-
 	// 3. Error should be returned when fetching repository manifest fails
 	t.Run("FetchBytesFailsTest", func(t *testing.T) {
 		filterPolicy := "repo1:tag1"
@@ -246,7 +241,7 @@ func TestIsTagConventionValid(t *testing.T) {
 	filter := Filter{
 		Version: "v1",
 	}
-	//1. Should return no error when the tag convention is incremental
+	// 1. Should return no error when the tag convention is incremental
 	t.Run("ValidTagConventionIncrementalTest", func(t *testing.T) {
 		filter.TagConvention = "incremental"
 		fil := filter.TagConvention.IsValid()
@@ -258,7 +253,7 @@ func TestIsTagConventionValid(t *testing.T) {
 		fil := filter.TagConvention.IsValid()
 		assert.Nil(t, fil)
 	})
-	//3. Should return error when the tag convention is not incremental or floating
+	// 3. Should return error when the tag convention is not incremental or floating
 	t.Run("InvalidTagConventionTest", func(t *testing.T) {
 		filter.TagConvention = "invalid"
 		fil := filter.TagConvention.IsValid()
@@ -334,10 +329,10 @@ func TestValidateFilter(t *testing.T) {
 		assert.Nil(t, err)
 	})
 	// 5. Should return no error when optional tag convention is specified as floating
-	t.Run("ValidFilterTestWithIncrementalTagConvention", func(t *testing.T) {
+	t.Run("ValidFilterTestWithFloatingTagConvention", func(t *testing.T) {
 		filter := Filter{
 			Version:       "v1",
-			TagConvention: "incremental",
+			TagConvention: "floating",
 			Repositories: []Repository{
 				{
 					Repository: common.RepoName1,
@@ -381,22 +376,7 @@ func TestValidateFilter(t *testing.T) {
 		err := filter.ValidateFilter()
 		assert.ErrorContains(t, err, "Repository is required in the filter")
 	})
-	// 8. Should succeed when tag convention is not specified and version is v1
-	t.Run("InvalidTagConventionTest", func(t *testing.T) {
-		filter := Filter{
-			Version: "v1",
-			Repositories: []Repository{
-				{
-					Repository: common.RepoName1,
-					Tags:       []string{common.TagName1, common.TagName2},
-					Enabled:    boolPtr(true),
-				},
-			},
-		}
-		err := filter.ValidateFilter()
-		assert.Nil(t, err)
-	})
-	// 9. Should return error when the tags list is empty
+	// 8. Should return error when the tags list is empty
 	t.Run("EmptyTagsListTest", func(t *testing.T) {
 		filter := Filter{
 			Version:       "v1",
@@ -412,14 +392,15 @@ func TestValidateFilter(t *testing.T) {
 		err := filter.ValidateFilter()
 		assert.ErrorContains(t, err, "Tags is required in the filter")
 	})
-	// 10. Should return error when the tag list is empty
-	t.Run("EmptyTagTest", func(t *testing.T) {
+	// 9. Should return error when the tag list is nil
+	t.Run("NilTagsListTest", func(t *testing.T) {
 		filter := Filter{
 			Version:       "v1",
 			TagConvention: "incremental",
 			Repositories: []Repository{
 				{
 					Repository: common.RepoName1,
+					Tags:       nil,
 					Enabled:    boolPtr(true),
 				},
 			},
@@ -427,7 +408,7 @@ func TestValidateFilter(t *testing.T) {
 		err := filter.ValidateFilter()
 		assert.ErrorContains(t, err, "Tags is required in the filter")
 	})
-	// 11. Should return error when the tag is empty
+	// 10. Should return error when tag list has empty tag
 	t.Run("EmptyTagTest", func(t *testing.T) {
 		filter := Filter{
 			Version:       "v1",
@@ -443,7 +424,7 @@ func TestValidateFilter(t *testing.T) {
 		err := filter.ValidateFilter()
 		assert.ErrorContains(t, err, "Tag is required in the filter")
 	})
-	// 12. Should return error when filter json contains tag ending with incremental or floating pattern
+	// 11. Should return error when filter json contains tags ending with incremental or floating pattern
 	t.Run("TagEndsWithIncrementalOrFloatingPatternTest", func(t *testing.T) {
 		filter := Filter{
 			Version:       "v1",
@@ -458,8 +439,9 @@ func TestValidateFilter(t *testing.T) {
 		}
 		err := filter.ValidateFilter()
 		assert.ErrorContains(t, err, "Tags in filter json should not end with -1 to -999 or -patched")
+		assert.ErrorContains(t, err, "Invalid Tag(s): jammy-1, jammy-patched")
 	})
-	// 13. Should return error when filter json contains tag ending with number outside the range of 1-999
+	// 12. Should return no error when filter json contains tag ending with number outside the range of 1-999
 	t.Run("TagEndsWithNumberOutsideRangeTest", func(t *testing.T) {
 		filter := Filter{
 			Version:       "v1",
