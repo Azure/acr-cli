@@ -280,7 +280,7 @@ func BuildRegexFilter(expression string, regexpMatchTimeoutSeconds uint64) (*reg
 	if regexpMatchTimeoutSeconds <= 0 {
 		regexpMatchTimeoutSeconds = defaultRegexpMatchTimeoutSeconds
 	}
-	regexp.MatchTimeout = time.Duration(regexpMatchTimeoutSeconds) * time.Second
+	regexp.MatchTimeout = time.Duration(int64(regexpMatchTimeoutSeconds)) * time.Second
 
 	return regexp, nil
 }
