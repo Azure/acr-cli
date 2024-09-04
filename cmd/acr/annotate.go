@@ -46,7 +46,7 @@ var (
 type annotateParameters struct {
 	*rootParameters
 	filters       []string
-	filterTimeout uint64
+	filterTimeout int64
 	artifactType  string
 	annotations   []string
 	untagged      bool
@@ -136,7 +136,7 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 
 	cmd.Flags().StringArrayVarP(&annotateParams.filters, "filter", "f", nil, `Specify the repository and a regular expression filter for the tag name. If a tag matches the filter, it will be annotated. If multiple tags refer to the same manifest and a tag matches the filter, the manifest will be annotated.
 																				Note: If backtracking is used in the regexp it's possible for the expression to run into an infinite loop. The default timeout is set to 1 minute for evaluation of any filter expression. Use the '--filter-timeout-seconds' option to set a different value`)
-	cmd.Flags().Uint64Var(&annotateParams.filterTimeout, "filter-timeout-seconds", defaultRegexpMatchTimeoutSeconds, "This limits the evaluation of the regex filter, and will return a timeout error if this duration is exceeded during a single evaluation. If written incorrectly a regexp filter with backtracking can result in an infinite loop")
+	cmd.Flags().Int64Var(&annotateParams.filterTimeout, "filter-timeout-seconds", defaultRegexpMatchTimeoutSeconds, "This limits the evaluation of the regex filter, and will return a timeout error if this duration is exceeded during a single evaluation. If written incorrectly a regexp filter with backtracking can result in an infinite loop")
 	cmd.Flags().StringVar(&annotateParams.artifactType, "artifact-type", "", "The configurable artifact type for an organization")
 	cmd.Flags().StringSliceVarP(&annotateParams.annotations, "annotations", "a", []string{}, "The configurable annotation key value that can be specified one or more times")
 	cmd.Flags().BoolVar(&annotateParams.untagged, "untagged", false, "If the untagged flag is set, all the manifests that do not have any tags associated to them will also be annotated, except if they belong to a manifest list that contains at least one tag")
@@ -159,7 +159,7 @@ func annotateTags(ctx context.Context,
 	artifactType string,
 	annotations []string,
 	tagFilter string,
-	regexpMatchTimeoutSeconds uint64,
+	regexpMatchTimeoutSeconds int64,
 	dryRun bool) (int, error) {
 
 	if !dryRun {
