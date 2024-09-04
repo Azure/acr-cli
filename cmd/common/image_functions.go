@@ -25,7 +25,7 @@ const (
 	headerLink                                            = "Link"
 	mediaTypeDockerManifestList                           = "application/vnd.docker.distribution.manifest.list.v2+json"
 	defaultRegexpOptions             regexp2.RegexOptions = regexp2.RE2 // This option will turn on compatibility mode so that it uses the group rules in regexp
-	defaultRegexpMatchTimeoutSeconds uint64               = 60
+	defaultRegexpMatchTimeoutSeconds int64                = 60
 	mediaTypeArtifactManifest                             = "application/vnd.oci.artifact.manifest.v1+json"
 )
 
@@ -48,7 +48,7 @@ func GetAllRepositoryNames(ctx context.Context, client acrapi.BaseClientAPI) ([]
 }
 
 // GetMatchingRepos get all repositories in current registry, that match the provided regular expression
-func GetMatchingRepos(repoNames []string, repoRegex string, regexMatchTimeout uint64) ([]string, error) {
+func GetMatchingRepos(repoNames []string, repoRegex string, regexMatchTimeout int64) ([]string, error) {
 	filter, err := BuildRegexFilter(repoRegex, regexMatchTimeout)
 	if err != nil {
 		return nil, err
@@ -97,7 +97,7 @@ func GetRepositoryAndTagRegex(filter string) (string, string, error) {
 }
 
 // CollectTagFilters collects all matching repos and collects the associated tag filters
-func CollectTagFilters(ctx context.Context, rawFilters []string, client acrapi.BaseClientAPI, regexMatchTimeout uint64) (map[string]string, error) {
+func CollectTagFilters(ctx context.Context, rawFilters []string, client acrapi.BaseClientAPI, regexMatchTimeout int64) (map[string]string, error) {
 	allRepoNames, err := GetAllRepositoryNames(ctx, client)
 	if err != nil {
 		return nil, err
@@ -270,7 +270,7 @@ func UpdateForManifestWithoutSubjectToDelete(ctx context.Context, manifest acr.M
 }
 
 // BuildRegexFilter compiles a regex state machine from a regex expression
-func BuildRegexFilter(expression string, regexpMatchTimeoutSeconds uint64) (*regexp2.Regexp, error) {
+func BuildRegexFilter(expression string, regexpMatchTimeoutSeconds int64) (*regexp2.Regexp, error) {
 	regexp, err := regexp2.Compile(expression, defaultRegexpOptions)
 	if err != nil {
 		return nil, err
