@@ -290,7 +290,7 @@ func PrintFilteredResult(filteredResult []FilteredRepository, showPatchTags bool
 }
 
 // Prints the artifacts not found to the console
-func PrintNotFoundArtifacts(artifactsNotFound []FilteredRepository, loginURL string) {
+func PrintNotFoundArtifacts(artifactsNotFound []FilteredRepository) {
 	if len(artifactsNotFound) > 0 {
 		fmt.Printf("%s\n", "Artifacts specified in the filter that don't exist:")
 		for _, result := range artifactsNotFound {
