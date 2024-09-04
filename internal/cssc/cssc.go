@@ -128,8 +128,8 @@ func GetFilterFromFilePath(filePath string) (Filter, error) {
 	return filter, nil
 }
 
-// Validate filter
-func (filter *Filter) Validate() error {
+// Validates the filter and returns an error if the filter is invalid
+func (filter *Filter) ValidateFilter() error {
 	fmt.Println("Validating filter...")
 	if filter.Version == "" || filter.Version != "v1" {
 		return errors.New("Version is required in the filter and should be v1")
@@ -224,8 +224,8 @@ func ApplyFilterAndGetFilteredList(ctx context.Context, acrClient api.AcrCLIClie
 			}
 		} else {
 			for _, ftag := range filterRepo.Tags { // If the repo has specific tags defined in the filter, then only those tags are considered
-				// If tag from filter is not found in the tag list obtained for the repository, then add it to artifactsNotFound and continue
-				if !ContainsTag(tagList, ftag) {
+				// If tag from filter is not found in the tag list obtained for the repository, then add it to artifactsNotFound and continue with the next tag
+				if !containsTag(tagList, ftag) {
 					artifactsNotFound = append(artifactsNotFound, FilteredRepository{
 						Repository: filterRepo.Repository,
 						Tag:        ftag,
@@ -238,15 +238,13 @@ func ApplyFilterAndGetFilteredList(ctx context.Context, acrClient api.AcrCLIClie
 					if filter.TagConvention == Incremental {
 						re = regexp.MustCompile(`^` + ftag + `(-[1-9]\d{0,2})?$`)
 					}
-					if *tag.Name == ftag || re.MatchString(*tag.Name) {
+					if re.MatchString(*tag.Name) {
 						matches := patchTagRegex.FindStringSubmatch(*tag.Name)
 						if matches != nil {
 							baseTag := matches[1]
 							tagMap[baseTag] = append(tagMap[baseTag], *tag.Name)
-							fmt.Println("In matches: ", *tag.Name)
 						} else if !endsWithIncrementalOrFloatingPattern(*tag.Name) {
 							tagMap[*tag.Name] = append(tagMap[*tag.Name], *tag.Name)
-							fmt.Println("In ELSE: ", *tag.Name)
 						}
 					}
 				}
@@ -256,7 +254,7 @@ func ApplyFilterAndGetFilteredList(ctx context.Context, acrClient api.AcrCLIClie
 		// Iterate over the tagMap to generate the FilteredRepository list
 		for baseTag, tags := range tagMap {
 			sort.Slice(tags, func(i, j int) bool {
-				return CompareTags(tags[i], tags[j])
+				return compareTags(tags[i], tags[j])
 			})
 			latestTag := tags[len(tags)-1]
 			filteredRepos = append(filteredRepos, FilteredRepository{
@@ -265,37 +263,8 @@ func ApplyFilterAndGetFilteredList(ctx context.Context, acrClient api.AcrCLIClie
 				PatchTag:   latestTag,
 			})
 		}
-		printTagMap(tagMap)
 	}
 	return filteredRepos, artifactsNotFound, nil
-}
-
-// Compares two tags to determine their order while sorting
-func CompareTags(a, b string) bool {
-	// If a and b does not end with date, then extract suffix based on last occurrence of "-" and compare the suffixes
-	if endsWithIncrementalOrFloatingPattern(a) && endsWithIncrementalOrFloatingPattern(b) {
-		aIndex := strings.LastIndex(a, "-")
-		bIndex := strings.LastIndex(b, "-")
-		var aSuffix, bSuffix string
-		if aIndex != -1 {
-			aSuffix = a[aIndex+1:]
-		} else {
-			aSuffix = a
-		}
-		if bIndex != -1 {
-			bSuffix = b[bIndex+1:]
-		} else {
-			bSuffix = b
-		}
-		// Compare the suffixes
-		if IsNumeric(aSuffix) && IsNumeric(bSuffix) {
-			aNum, _ := strconv.Atoi(aSuffix)
-			bNum, _ := strconv.Atoi(bSuffix)
-			return aNum < bNum
-		}
-	}
-	// Fallback to lexicographic comparison
-	return a < b
 }
 
 // Prints the filtered result to the console
@@ -326,14 +295,42 @@ func PrintNotFoundArtifacts(artifactsNotFound []FilteredRepository, loginURL str
 	}
 }
 
+// Helper function that compares two tags and returns true if tag1 is less than tag2
+func compareTags(tag1, tag2 string) bool {
+	// If tag1 and tag2 ends with incremental or floating pattern, then extract suffix based on last occurrence of "-" and compare the suffixes
+	if endsWithIncrementalOrFloatingPattern(tag1) && endsWithIncrementalOrFloatingPattern(tag2) {
+		tag1Index := strings.LastIndex(tag1, "-")
+		tag2Index := strings.LastIndex(tag2, "-")
+		var tag1Suffix, tag2Suffix string
+		if tag1Index != -1 {
+			tag1Suffix = tag1[tag1Index+1:]
+		} else {
+			tag1Suffix = tag1
+		}
+		if tag2Index != -1 {
+			tag2Suffix = tag2[tag2Index+1:]
+		} else {
+			tag2Suffix = tag2
+		}
+		// Compare the suffixes
+		if isNumeric(tag1Suffix) && isNumeric(tag2Suffix) {
+			aNum, _ := strconv.Atoi(tag1Suffix)
+			bNum, _ := strconv.Atoi(tag2Suffix)
+			return aNum < bNum
+		}
+	}
+	// Fallback to lexicographic comparison
+	return tag1 < tag2
+}
+
 // Helper function to check if a string is numeric
-func IsNumeric(s string) bool {
+func isNumeric(s string) bool {
 	_, err := strconv.Atoi(s)
 	return err == nil
 }
 
-// Helper function to check if tagList contains the tag
-func ContainsTag(tagList []acr.TagAttributesBase, tag string) bool {
+// Helper function to check if tagList contains the specified tag
+func containsTag(tagList []acr.TagAttributesBase, tag string) bool {
 	for _, item := range tagList {
 		if *item.Name == tag {
 			return true
@@ -342,16 +339,9 @@ func ContainsTag(tagList []acr.TagAttributesBase, tag string) bool {
 	return false
 }
 
+// Helper function to check if the string ends with "-1" to "-999" or "-patched"
 func endsWithIncrementalOrFloatingPattern(str string) bool {
 	// Regular expression to match "-1" to "-999" and "-patched" at the end of the string
 	re := regexp.MustCompile(`(-[1-9]\d{0,2}|-patched)$`)
 	return re.MatchString(str)
-}
-
-// Function to print the tag map
-func printTagMap(tagMap map[string][]string) {
-	fmt.Println("Tag Map:")
-	for baseTag, tags := range tagMap {
-		fmt.Printf("%s: %v\n", baseTag, tags)
-	}
 }

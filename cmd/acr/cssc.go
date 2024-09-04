@@ -115,7 +115,7 @@ func newPatchFilterCmd(csscParams *csscParameters) *cobra.Command {
 			}
 
 			// Validate the filter and return error if invalid
-			err = filter.Validate()
+			err = filter.ValidateFilter()
 			if err != nil {
 				return err
 			}
