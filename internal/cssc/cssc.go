@@ -43,7 +43,7 @@ func (tc TagConvention) IsValid() error {
 }
 
 var (
-	floatingTagRegex    = regexp.MustCompile(`^(.+)-patched`)             // Matches strings ending with -patched
+	floatingTagRegex    = regexp.MustCompile(`^(.+)-patched$`)            // Matches strings ending with -patched
 	incrementalTagRegex = regexp.MustCompile(`^(.+)-([1-9]\d{0,2})$`)     // Matches strings ending with -1 to -999
 	reservedSuffixRegex = regexp.MustCompile(`(-[1-9]\d{0,2}|-patched)$`) // Matches strings ending with -1 to -999 or -patched
 )
@@ -137,10 +137,11 @@ func GetFilterFromFilePath(filePath string) (Filter, error) {
 // Validates the filter and returns an error if the filter is invalid
 func (filter *Filter) ValidateFilter() error {
 	fmt.Println("Validating filter...")
-	if filter.Version == "" || filter.Version != "v1" {
-		return errors.New("Version is required in the filter and should be v1")
+	const versionV1 = "v1"
+	if filter.Version == "" || filter.Version != versionV1 {
+		return errors.New("Version is required in the filter and should be " + versionV1)
 	}
-	if filter.Repositories == nil || len(filter.Repositories) == 0 {
+	if len(filter.Repositories) == 0 {
 		return errors.New("Repositories is required in the filter")
 	}
 	if filter.TagConvention != "" {
@@ -292,7 +293,7 @@ func PrintFilteredResult(filteredResult []FilteredRepository, showPatchTags bool
 // Prints the artifacts not found to the console
 func PrintNotFoundArtifacts(artifactsNotFound []FilteredRepository) {
 	if len(artifactsNotFound) > 0 {
-		fmt.Printf("%s\n", "Artifacts specified in the filter that don't exist:")
+		fmt.Printf("%s\n", "Artifacts specified in the filter that do not exist:")
 		for _, result := range artifactsNotFound {
 			fmt.Printf("%s:%s\n", result.Repository, result.Tag)
 		}
