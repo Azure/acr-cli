@@ -97,7 +97,7 @@ func TestApplyFilterAndGetFilteredList(t *testing.T) {
 		assert.Len(t, filteredRepositories, 1)
 		assert.Equal(t, common.RepoName1, filteredRepositories[0].Repository)
 		assert.Equal(t, common.TagName, filteredRepositories[0].Tag)
-		assert.Equal(t, common.TagName, filteredRepositories[0].PatchTag)
+		assert.Equal(t, "N/A", filteredRepositories[0].PatchTag)
 		assert.Len(t, artifactsNotFound, 1)
 		assert.Equal(t, common.RepoName1, artifactsNotFound[0].Repository)
 		assert.Equal(t, common.TagName1, artifactsNotFound[0].Tag)

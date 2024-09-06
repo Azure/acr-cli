@@ -264,6 +264,10 @@ func ApplyFilterAndGetFilteredList(ctx context.Context, acrClient api.AcrCLIClie
 				return compareTags(tags[i], tags[j])
 			})
 			latestTag := tags[len(tags)-1]
+
+			if latestTag == baseTag {
+				latestTag = "N/A"
+			}
 			filteredRepos = append(filteredRepos, FilteredRepository{
 				Repository: filterRepo.Repository,
 				Tag:        baseTag,
@@ -279,26 +283,30 @@ func PrintFilteredResult(filteredResult []FilteredRepository, showPatchTags bool
 	if len(filteredResult) == 0 {
 		fmt.Println("No matching repository and tag found!")
 	} else if showPatchTags {
-		fmt.Println("Listing repositories and tags matching the filter with corresponding patch tag (if present):")
+		fmt.Println("Listing repositories and tags matching the filter with corresponding latest patch tag (if present):")
+		fmt.Printf("%s,%s,%s\n", "Repo", "Tag", "LatestPatchTag")
 		for _, result := range filteredResult {
-			fmt.Printf("%s/%s:%s,%s\n", loginURL, result.Repository, result.Tag, result.PatchTag)
+			fmt.Printf("%s,%s,%s\n", result.Repository, result.Tag, result.PatchTag)
 		}
 	} else {
 		fmt.Println("Listing repositories and tags matching the filter:")
+		fmt.Printf("%s,%s\n", "Repo", "Tag")
 		for _, result := range filteredResult {
-			fmt.Printf("%s/%s:%s\n", loginURL, result.Repository, result.Tag)
+			fmt.Printf("%s,%s\n", result.Repository, result.Tag)
 		}
 	}
-	fmt.Println("Total matches found:", len(filteredResult))
+	fmt.Println("Matches found:", len(filteredResult))
 }
 
 // Prints the artifacts not found to the console
 func PrintNotFoundArtifacts(artifactsNotFound []FilteredRepository) {
 	if len(artifactsNotFound) > 0 {
 		fmt.Printf("%s\n", "Artifacts specified in the filter that do not exist:")
+		fmt.Printf("%s,%s\n", "Repo", "Tag")
 		for _, result := range artifactsNotFound {
-			fmt.Printf("%s:%s\n", result.Repository, result.Tag)
+			fmt.Printf("%s,%s\n", result.Repository, result.Tag)
 		}
+		fmt.Println("Not found:", len(artifactsNotFound))
 	}
 }
 
