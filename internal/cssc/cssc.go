@@ -237,12 +237,14 @@ func ApplyFilterAndGetFilteredList(ctx context.Context, acrClient api.AcrCLIClie
 					})
 					continue
 				}
+				// This is needed to evaluate all versions of patch tags when original tag is specified in the filter
+				var re *regexp.Regexp
+				if filter.TagConvention == Incremental {
+					re = regexp.MustCompile(`^` + ftag + `(-[1-9]\d{0,2})?$`)
+				} else {
+					re = regexp.MustCompile(`^` + ftag + `(-patched\d*)?$`)
+				}
 				for _, tag := range tagList {
-					// This is needed to evaluate all versions of patch tags when original tag is specified in the filter
-					re := regexp.MustCompile(`^` + ftag + `(-patched\d*)?$`)
-					if filter.TagConvention == Incremental {
-						re = regexp.MustCompile(`^` + ftag + `(-[1-9]\d{0,2})?$`)
-					}
 					if re.MatchString(*tag.Name) {
 						matches := patchTagRegex.FindStringSubmatch(*tag.Name)
 						if matches != nil {
