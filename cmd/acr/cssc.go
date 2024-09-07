@@ -126,7 +126,7 @@ func newPatchFilterCmd(csscParams *csscParameters) *cobra.Command {
 				return err
 			}
 			cssc.PrintNotFoundArtifacts(artifactsNotFound)
-			cssc.PrintFilteredResult(filteredResult, csscParams.showPatchTags, loginURL)
+			cssc.PrintFilteredResult(filteredResult, csscParams.showPatchTags)
 			return nil
 		},
 	}

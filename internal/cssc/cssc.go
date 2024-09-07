@@ -279,7 +279,7 @@ func ApplyFilterAndGetFilteredList(ctx context.Context, acrClient api.AcrCLIClie
 }
 
 // Prints the filtered result to the console
-func PrintFilteredResult(filteredResult []FilteredRepository, showPatchTags bool, loginURL string) {
+func PrintFilteredResult(filteredResult []FilteredRepository, showPatchTags bool) {
 	if len(filteredResult) == 0 {
 		fmt.Println("No matching repository and tag found!")
 	} else if showPatchTags {
