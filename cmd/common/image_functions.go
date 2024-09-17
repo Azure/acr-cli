@@ -29,10 +29,9 @@ const (
 	mediaTypeArtifactManifest                             = "application/vnd.oci.artifact.manifest.v1+json"
 )
 
-func GetAllRepositoryNames(ctx context.Context, client acrapi.BaseClientAPI) ([]string, error) {
+func GetAllRepositoryNames(ctx context.Context, client acrapi.BaseClientAPI, batchSize int32) ([]string, error) {
 	allRepoNames := make([]string, 0)
 	lastName := ""
-	var batchSize int32 = 100
 	for {
 		repos, err := client.GetRepositories(ctx, lastName, &batchSize)
 		if err != nil {
@@ -97,8 +96,8 @@ func GetRepositoryAndTagRegex(filter string) (string, string, error) {
 }
 
 // CollectTagFilters collects all matching repos and collects the associated tag filters
-func CollectTagFilters(ctx context.Context, rawFilters []string, client acrapi.BaseClientAPI, regexMatchTimeout int64) (map[string]string, error) {
-	allRepoNames, err := GetAllRepositoryNames(ctx, client)
+func CollectTagFilters(ctx context.Context, rawFilters []string, client acrapi.BaseClientAPI, regexMatchTimeout int64, repoBatchSize int32) (map[string]string, error) {
+	allRepoNames, err := GetAllRepositoryNames(ctx, client, repoBatchSize)
 	if err != nil {
 		return nil, err
 	}
