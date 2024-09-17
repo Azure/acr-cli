@@ -97,9 +97,34 @@ func GetRepositoryAndTagRegex(filter string) (string, string, error) {
 
 // CollectTagFilters collects all matching repos and collects the associated tag filters
 func CollectTagFilters(ctx context.Context, rawFilters []string, client acrapi.BaseClientAPI, regexMatchTimeout int64, repoPageSize int32) (map[string]string, error) {
-	allRepoNames, err := GetAllRepositoryNames(ctx, client, repoPageSize)
-	if err != nil {
-		return nil, err
+	var allRepoNames []string
+
+	// Bypass listing the repositories if there are no regex in the repository name filters
+	notRegexRegex := regexp2.MustCompile(`^[a-z0-9-\/]+$`, defaultRegexpOptions)
+	listRepositories := false
+	for _, filter := range rawFilters {
+		repoRegex, _, err := GetRepositoryAndTagRegex(filter)
+		if err != nil {
+			return nil, err
+		}
+
+		notRegex, err := notRegexRegex.MatchString(repoRegex)
+		if err != nil {
+			return nil, err
+		}
+		if !notRegex {
+			listRepositories = true
+			break
+		}
+
+		allRepoNames = append(allRepoNames, repoRegex)
+	}
+
+	if listRepositories {
+		var err error
+		if allRepoNames, err = GetAllRepositoryNames(ctx, client, repoPageSize); err != nil {
+			return nil, err
+		}
 	}
 
 	tagFilters := map[string]string{}
