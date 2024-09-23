@@ -713,7 +713,7 @@ func TestCollectTagFilters(t *testing.T) {
 		mockClient := &mocks.BaseClientAPI{}
 		mockClient.On("GetRepositories", mock.Anything, "", mock.Anything).Return(ManyRepositoriesResult, nil).Once()
 		mockClient.On("GetRepositories", mock.Anything, mock.Anything, mock.Anything).Return(NoRepositoriesResult, nil).Once()
-		filters, err := common.CollectTagFilters(testCtx, []string{".+:.*-?local[.].+"}, mockClient, 60, defaultRepoBatchSize)
+		filters, err := common.CollectTagFilters(testCtx, []string{".+:.*-?local[.].+"}, mockClient, 60, defaultPageBatchSize)
 		assert.Equal(4, len(filters), "Number of found should be 4")
 		assert.Equal(".*-?local[.].+", filters[testRepo], "Filter for test repo should be .*-?local[.].+")
 		assert.Equal(".*-?local[.].+", filters["bar"], "Filter for bar repo should be .*-?local[.].+")
@@ -726,7 +726,7 @@ func TestCollectTagFilters(t *testing.T) {
 		mockClient := &mocks.BaseClientAPI{}
 		mockClient.On("GetRepositories", mock.Anything, "", mock.Anything).Return(ManyRepositoriesResult, nil).Once()
 		mockClient.On("GetRepositories", mock.Anything, mock.Anything, mock.Anything).Return(NoRepositoriesResult, nil).Once()
-		filters, err := common.CollectTagFilters(testCtx, []string{".+:.*-?local\\..+"}, mockClient, 60, defaultRepoBatchSize)
+		filters, err := common.CollectTagFilters(testCtx, []string{".+:.*-?local\\..+"}, mockClient, 60, defaultPageBatchSize)
 		assert.Equal(4, len(filters), "Number of found should be 4")
 		assert.Equal(".*-?local\\..+", filters[testRepo], "Filter for test repo should be .*-?local\\..+")
 		assert.Equal(".*-?local\\..+", filters["bar"], "Filter for bar repo should be .*-?local\\..+")
@@ -739,7 +739,7 @@ func TestCollectTagFilters(t *testing.T) {
 		mockClient := &mocks.BaseClientAPI{}
 		mockClient.On("GetRepositories", mock.Anything, "", mock.Anything).Return(ManyRepositoriesResult, nil).Once()
 		mockClient.On("GetRepositories", mock.Anything, mock.Anything, mock.Anything).Return(NoRepositoriesResult, nil).Once()
-		filters, err := common.CollectTagFilters(testCtx, []string{testRepo + ":.*"}, mockClient, 60, defaultRepoBatchSize)
+		filters, err := common.CollectTagFilters(testCtx, []string{testRepo + ":.*"}, mockClient, 60, defaultPageBatchSize)
 		assert.Equal(1, len(filters), "Number of found should be one")
 		assert.Equal(".*", filters[testRepo], "Filter for test repo should be .*")
 		assert.Equal(nil, err, "Error should be nil")
@@ -751,7 +751,7 @@ func TestCollectTagFilters(t *testing.T) {
 		mockClient := &mocks.BaseClientAPI{}
 		mockClient.On("GetRepositories", mock.Anything, "", mock.Anything).Return(ManyRepositoriesResult, nil).Once()
 		mockClient.On("GetRepositories", mock.Anything, mock.Anything, mock.Anything).Return(NoRepositoriesResult, nil).Once()
-		filters, err := common.CollectTagFilters(testCtx, []string{".*:.*"}, mockClient, 60, defaultRepoBatchSize)
+		filters, err := common.CollectTagFilters(testCtx, []string{".*:.*"}, mockClient, 60, defaultPageBatchSize)
 		assert.Equal(4, len(filters), "Number of found should be 4")
 		assert.Equal(".*", filters[testRepo], "Filter for test repo should be .*")
 		assert.Equal(".*", filters["bar"], "Filter for bar repo should be .*")
@@ -764,7 +764,7 @@ func TestCollectTagFilters(t *testing.T) {
 		mockClient := &mocks.BaseClientAPI{}
 		mockClient.On("GetRepositories", mock.Anything, "", mock.Anything).Return(ManyRepositoriesResult, nil).Once()
 		mockClient.On("GetRepositories", mock.Anything, mock.Anything, mock.Anything).Return(NoRepositoriesResult, nil).Once()
-		filters, err := common.CollectTagFilters(testCtx, []string{"ba:.*"}, mockClient, 60, defaultRepoBatchSize)
+		filters, err := common.CollectTagFilters(testCtx, []string{"ba:.*"}, mockClient, 60, defaultPageBatchSize)
 		assert.Equal(0, len(filters), "Number of found repos should be zero")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -775,7 +775,7 @@ func TestCollectTagFilters(t *testing.T) {
 		mockClient := &mocks.BaseClientAPI{}
 		mockClient.On("GetRepositories", mock.Anything, "", mock.Anything).Return(ManyRepositoriesResult, nil).Once()
 		mockClient.On("GetRepositories", mock.Anything, mock.Anything, mock.Anything).Return(NoRepositoriesResult, nil).Once()
-		filters, err := common.CollectTagFilters(testCtx, []string{"foo/bar:.*"}, mockClient, 60, defaultRepoBatchSize)
+		filters, err := common.CollectTagFilters(testCtx, []string{"foo/bar:.*"}, mockClient, 60, defaultPageBatchSize)
 		assert.Equal(1, len(filters), "Number of found repos should be one")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -786,7 +786,7 @@ func TestCollectTagFilters(t *testing.T) {
 		mockClient := &mocks.BaseClientAPI{}
 		mockClient.On("GetRepositories", mock.Anything, "", mock.Anything).Return(ManyRepositoriesResult, nil).Once()
 		mockClient.On("GetRepositories", mock.Anything, mock.Anything, mock.Anything).Return(NoRepositoriesResult, nil).Once()
-		filters, err := common.CollectTagFilters(testCtx, []string{"foo/bar:(?:.*)"}, mockClient, 60, defaultRepoBatchSize)
+		filters, err := common.CollectTagFilters(testCtx, []string{"foo/bar:(?:.*)"}, mockClient, 60, defaultPageBatchSize)
 		assert.Equal(1, len(filters), "Number of found repos should be one")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -797,7 +797,7 @@ func TestCollectTagFilters(t *testing.T) {
 		mockClient := &mocks.BaseClientAPI{}
 		mockClient.On("GetRepositories", mock.Anything, "", mock.Anything).Return(ManyRepositoriesResult, nil).Once()
 		mockClient.On("GetRepositories", mock.Anything, mock.Anything, mock.Anything).Return(NoRepositoriesResult, nil).Once()
-		filters, err := common.CollectTagFilters(testCtx, []string{"foo/bar(?:.*):(?:.*)"}, mockClient, 60, defaultRepoBatchSize)
+		filters, err := common.CollectTagFilters(testCtx, []string{"foo/bar(?:.*):(?:.*)"}, mockClient, 60, defaultPageBatchSize)
 		assert.Equal(1, len(filters), "Number of found repos should be one")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -808,7 +808,7 @@ func TestCollectTagFilters(t *testing.T) {
 		mockClient := &mocks.BaseClientAPI{}
 		mockClient.On("GetRepositories", mock.Anything, "", mock.Anything).Return(ManyRepositoriesResult, nil).Once()
 		mockClient.On("GetRepositories", mock.Anything, mock.Anything, mock.Anything).Return(NoRepositoriesResult, nil).Once()
-		filters, err := common.CollectTagFilters(testCtx, []string{"foo/bar(?:.*)?:(?:.*)"}, mockClient, 60, defaultRepoBatchSize)
+		filters, err := common.CollectTagFilters(testCtx, []string{"foo/bar(?:.*)?:(?:.*)"}, mockClient, 60, defaultPageBatchSize)
 		assert.Equal(1, len(filters), "Number of found repos should be one")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -819,7 +819,7 @@ func TestCollectTagFilters(t *testing.T) {
 		mockClient := &mocks.BaseClientAPI{}
 		mockClient.On("GetRepositories", mock.Anything, "", mock.Anything).Return(ManyRepositoriesResult, nil).Once()
 		mockClient.On("GetRepositories", mock.Anything, mock.Anything, mock.Anything).Return(NoRepositoriesResult, nil).Once()
-		filters, err := common.CollectTagFilters(testCtx, []string{"foo/bar(?:.*):.(?:.*)"}, mockClient, 60, defaultRepoBatchSize)
+		filters, err := common.CollectTagFilters(testCtx, []string{"foo/bar(?:.*):.(?:.*)"}, mockClient, 60, defaultPageBatchSize)
 		assert.Equal(1, len(filters), "Number of found repos should be one")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -830,7 +830,7 @@ func TestCollectTagFilters(t *testing.T) {
 		mockClient := &mocks.BaseClientAPI{}
 		mockClient.On("GetRepositories", mock.Anything, "", mock.Anything).Return(ManyRepositoriesResult, nil).Once()
 		mockClient.On("GetRepositories", mock.Anything, mock.Anything, mock.Anything).Return(NoRepositoriesResult, nil).Once()
-		filters, err := common.CollectTagFilters(testCtx, []string{"foo/b[[:alpha:]]r(?:.*):.(?:.*)"}, mockClient, 60, defaultRepoBatchSize)
+		filters, err := common.CollectTagFilters(testCtx, []string{"foo/b[[:alpha:]]r(?:.*):.(?:.*)"}, mockClient, 60, defaultPageBatchSize)
 		assert.Equal(1, len(filters), "Number of found repos should be one")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -840,7 +840,7 @@ func TestCollectTagFilters(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.BaseClientAPI{}
 		mockClient.On("GetRepositories", mock.Anything, "", mock.Anything).Return(NoRepositoriesResult, nil).Once()
-		filters, err := common.CollectTagFilters(testCtx, []string{testRepo + ":.*"}, mockClient, 60, defaultRepoBatchSize)
+		filters, err := common.CollectTagFilters(testCtx, []string{testRepo + ":.*"}, mockClient, 60, defaultPageBatchSize)
 		assert.Equal(0, len(filters), "Number of found repos should be zero")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -851,7 +851,7 @@ func TestCollectTagFilters(t *testing.T) {
 		mockClient := &mocks.BaseClientAPI{}
 		mockClient.On("GetRepositories", mock.Anything, "", mock.Anything).Return(ManyRepositoriesResult, nil).Once()
 		mockClient.On("GetRepositories", mock.Anything, mock.Anything, mock.Anything).Return(NoRepositoriesResult, nil).Once()
-		_, err := common.CollectTagFilters(testCtx, []string{":.*"}, mockClient, 60, defaultRepoBatchSize)
+		_, err := common.CollectTagFilters(testCtx, []string{":.*"}, mockClient, 60, defaultPageBatchSize)
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
 	})
@@ -861,7 +861,7 @@ func TestCollectTagFilters(t *testing.T) {
 		mockClient := &mocks.BaseClientAPI{}
 		mockClient.On("GetRepositories", mock.Anything, "", mock.Anything).Return(ManyRepositoriesResult, nil).Once()
 		mockClient.On("GetRepositories", mock.Anything, mock.Anything, mock.Anything).Return(NoRepositoriesResult, nil).Once()
-		_, err := common.CollectTagFilters(testCtx, []string{testRepo + ".*:"}, mockClient, 60, defaultRepoBatchSize)
+		_, err := common.CollectTagFilters(testCtx, []string{testRepo + ".*:"}, mockClient, 60, defaultPageBatchSize)
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
 	})
@@ -873,7 +873,7 @@ func TestGetAllRepositoryNames(t *testing.T) {
 		mockClient := &mocks.BaseClientAPI{}
 		mockClient.On("GetRepositories", mock.Anything, "", mock.Anything).Return(ManyRepositoriesResult, nil).Once()
 		mockClient.On("GetRepositories", mock.Anything, mock.Anything, mock.Anything).Return(NoRepositoriesResult, nil).Once()
-		allRepoNames, err := common.GetAllRepositoryNames(testCtx, mockClient, defaultRepoBatchSize)
+		allRepoNames, err := common.GetAllRepositoryNames(testCtx, mockClient, defaultPageBatchSize)
 		assert.Equal(4, len(allRepoNames), "Number of all repo names should be 4")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -885,7 +885,7 @@ func TestGetAllRepositoryNames(t *testing.T) {
 		mockClient.On("GetRepositories", mock.Anything, "", mock.Anything).Return(ManyRepositoriesResult, nil).Once()
 		mockClient.On("GetRepositories", mock.Anything, mock.Anything, mock.Anything).Return(MoreRepositoriesResult, nil).Once()
 		mockClient.On("GetRepositories", mock.Anything, mock.Anything, mock.Anything).Return(NoRepositoriesResult, nil).Once()
-		allRepoNames, err := common.GetAllRepositoryNames(testCtx, mockClient, defaultRepoBatchSize)
+		allRepoNames, err := common.GetAllRepositoryNames(testCtx, mockClient, defaultPageBatchSize)
 		assert.Equal(7, len(allRepoNames), "Number of all repo names should be 7")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -895,7 +895,7 @@ func TestGetAllRepositoryNames(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.BaseClientAPI{}
 		mockClient.On("GetRepositories", mock.Anything, "", mock.Anything).Return(NoRepositoriesResult, nil).Once()
-		allRepoNames, err := common.GetAllRepositoryNames(testCtx, mockClient, defaultRepoBatchSize)
+		allRepoNames, err := common.GetAllRepositoryNames(testCtx, mockClient, defaultPageBatchSize)
 		assert.Equal(0, len(allRepoNames), "Number of all repo names should be 7")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)

@@ -82,7 +82,7 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 			}
 
 			// A map is used to collect the regex tags for every repository.
-			tagFilters, err := common.CollectTagFilters(ctx, annotateParams.filters, acrClient.AutorestClient, annotateParams.filterTimeout, defaultRepoBatchSize)
+			tagFilters, err := common.CollectTagFilters(ctx, annotateParams.filters, acrClient.AutorestClient, annotateParams.filterTimeout, defaultPageBatchSize)
 			if err != nil {
 				return err
 			}
