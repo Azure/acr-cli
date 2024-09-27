@@ -196,6 +196,18 @@ acr purge \
     --ago 30d \
     --concurrency 4
 ```
+
+#### Repository page size flag
+To control the number of repositories fetched in a single page, the `--repository-page-size` flag should be set. A default value of 100 will be used if `--repository-page-size` is not specified.
+This is useful when the number of artifacts in the registry is very large and listing too many repositories at once can timeout.
+```sh
+acr purge \
+    --registry <Registry Name> \
+    --filter <Repository Filter/Name>:<Regex Filter> \
+    --ago 30d \
+    --repository-page-size 10
+```
+
 ### Integration with ACR Tasks
 
 To run a locally built version of the ACR-CLI using ACR Tasks follow these steps:

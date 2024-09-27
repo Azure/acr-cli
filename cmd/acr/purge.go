@@ -46,14 +46,19 @@ const (
 
   - Delete all tags older than 1 day in the example.azurecr.io registry inside the hello-world repository, with 4 purge tasks running concurrently
 	acr purge -r example --filter "hello-world:.*" --ago 1d --concurrency 4
+
+  - Delete all tags that are older than 7 days in the example.azurecr.io registry inside all repositories, with a page size of 50 repositories
+	acr purge -r example --filter ".*:.*" --ago 7d --repository-page-size 50
 	`
 	maxPoolSize = 32 // The max number of parallel delete requests recommended by ACR server
 	headerLink  = "Link"
 )
 
 var (
-	defaultPoolSize        = runtime.GOMAXPROCS(0)
-	concurrencyDescription = fmt.Sprintf("Number of concurrent purge tasks. Range: [1 - %d]", maxPoolSize)
+	defaultPoolSize         = runtime.GOMAXPROCS(0)
+	defaultRepoPageSize     = int32(100)
+	repoPageSizeDescription = "Number of repositories queried at once"
+	concurrencyDescription  = fmt.Sprintf("Number of concurrent purge tasks. Range: [1 - %d]", maxPoolSize)
 )
 
 // Default settings for regexp2
@@ -71,6 +76,7 @@ type purgeParameters struct {
 	untagged      bool
 	dryRun        bool
 	concurrency   int
+	repoPageSize  int32
 }
 
 // newPurgeCmd defines the purge command.
@@ -95,7 +101,7 @@ func newPurgeCmd(rootParams *rootParameters) *cobra.Command {
 				return err
 			}
 			// A map is used to collect the regex tags for every repository.
-			tagFilters, err := common.CollectTagFilters(ctx, purgeParams.filters, acrClient.AutorestClient, purgeParams.filterTimeout)
+			tagFilters, err := common.CollectTagFilters(ctx, purgeParams.filters, acrClient.AutorestClient, purgeParams.filterTimeout, purgeParams.repoPageSize)
 			if err != nil {
 				return err
 			}
@@ -162,6 +168,7 @@ func newPurgeCmd(rootParams *rootParameters) *cobra.Command {
 	cmd.Flags().StringArrayVarP(&purgeParams.configs, "config", "c", nil, "Authentication config paths (e.g. C://Users/docker/config.json)")
 	cmd.Flags().Int64Var(&purgeParams.filterTimeout, "filter-timeout-seconds", defaultRegexpMatchTimeoutSeconds, "This limits the evaluation of the regex filter, and will return a timeout error if this duration is exceeded during a single evaluation. If written incorrectly a regexp filter with backtracking can result in an infinite loop.")
 	cmd.Flags().IntVar(&purgeParams.concurrency, "concurrency", defaultPoolSize, concurrencyDescription)
+	cmd.Flags().Int32Var(&purgeParams.repoPageSize, "repository-page-size", defaultRepoPageSize, repoPageSizeDescription)
 	cmd.Flags().BoolP("help", "h", false, "Print usage")
 	cmd.MarkFlagRequired("filter")
 	cmd.MarkFlagRequired("ago")
