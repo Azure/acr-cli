@@ -102,10 +102,11 @@ func TestApplyFilterAndGetFilteredList(t *testing.T) {
 		assert.Equal(t, common.RepoName1, artifactsNotFound[0].Repository)
 		assert.Equal(t, common.TagName1, artifactsNotFound[0].Tag)
 	})
-	// 5. Success scenario with all the combination of filters
-	t.Run("AllFilterCombinationTest", func(t *testing.T) {
+	// 5. Success scenario with all the combination of filters when tag-convention is floating
+	t.Run("AllFilterCombinationTestWithFloatingTagConvention", func(t *testing.T) {
 		filter := Filter{
-			Version: "v1",
+			Version:       "v1",
+			TagConvention: "floating",
 			Repositories: []Repository{
 				{
 					Repository: common.RepoName1,
@@ -150,6 +151,55 @@ func TestApplyFilterAndGetFilteredList(t *testing.T) {
 		assert.True(t, isInFilteredList(filteredRepositories, common.RepoName2, common.TagName4, common.TagName4FloatingTag))
 		assert.True(t, isInFilteredList(filteredRepositories, common.RepoName3, common.TagName1, common.TagName1FloatingTag))
 		assert.True(t, isInFilteredList(filteredRepositories, common.RepoName3, common.TagName2, common.TagName2FloatingTag))
+	})
+	// 6. Success scenario with all the combination of filters when tag-convention is empty (defaults to incremental)
+	t.Run("AllFilterCombinationTestWithIncrementalTagConvention", func(t *testing.T) {
+		filter := Filter{
+			Version: "v1",
+			Repositories: []Repository{
+				{
+					Repository: common.RepoName1,
+					Tags:       []string{common.TagName1, common.TagName2}, // tags specified
+					Enabled:    boolPtr(true),
+				},
+				{
+					Repository: common.RepoName2,
+					Tags:       []string{"*"}, // * all tags
+					Enabled:    boolPtr(true),
+				},
+				{
+					Repository: common.RepoName3,
+					Tags:       []string{common.TagName1, common.TagName2},
+					Enabled:    nil, // nil means enabled
+				},
+				{
+					Repository: common.RepoName4,
+					Tags:       []string{common.TagName1, common.TagName2},
+					Enabled:    boolPtr(false), // disabled repository for all tags
+				},
+			},
+		}
+		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName1, "", "").Return(common.FourTagsResultWithPatchTags, nil).Once()
+		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName1, "", common.TagName4FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
+		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName2, "", "").Return(common.FourTagsResultWithPatchTags, nil).Once()
+		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName2, "", common.TagName4FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
+		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName3, "", "").Return(common.FourTagsResultWithPatchTags, nil).Once()
+		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName3, "", common.TagName4FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
+		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName4, "", "").Return(common.FourTagsResultWithPatchTags, nil).Once()
+		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName4, "", common.TagName4FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
+		filteredRepositories, artifactsNotFound, err := ApplyFilterAndGetFilteredList(context.Background(), mockAcrClient, filter)
+		assert.NoError(t, err)
+		assert.Nil(t, artifactsNotFound)
+		assert.Len(t, artifactsNotFound, 0)
+		assert.Len(t, filteredRepositories, 8)
+		assert.True(t, isInFilteredList(filteredRepositories, common.RepoName1, common.TagName1, common.TagName1Incremental2))
+		assert.True(t, isInFilteredList(filteredRepositories, common.RepoName1, common.TagName2, common.TagName2Incremental2))
+		assert.True(t, isInFilteredList(filteredRepositories, common.RepoName2, common.TagName1, common.TagName1Incremental2))
+		assert.True(t, isInFilteredList(filteredRepositories, common.RepoName2, common.TagName2, common.TagName2Incremental2))
+		assert.True(t, isInFilteredList(filteredRepositories, common.RepoName2, common.TagName3, common.TagName3Incremental2))
+		assert.True(t, isInFilteredList(filteredRepositories, common.RepoName2, common.TagName4, common.TagName4Incremental2))
+		assert.True(t, isInFilteredList(filteredRepositories, common.RepoName3, common.TagName1, common.TagName1Incremental2))
+		assert.True(t, isInFilteredList(filteredRepositories, common.RepoName3, common.TagName2, common.TagName2Incremental2))
 	})
 }
 
