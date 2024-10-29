@@ -186,10 +186,10 @@ func ApplyFilterAndGetFilteredList(ctx context.Context, acrClient api.AcrCLIClie
 	var filteredRepos []FilteredRepository
 	var artifactsNotFound []FilteredRepository
 
-	// Default is floating tag regex, only if tag convention is incremental, then use incremental tag regex
-	patchTagRegex := floatingTagRegex
-	if filter.TagConvention == Incremental {
-		patchTagRegex = incrementalTagRegex
+	// Default is incremental tag regex, only if tag convention is specified as floating, use floating tag regex
+	patchTagRegex := incrementalTagRegex
+	if filter.TagConvention == Floating {
+		patchTagRegex = floatingTagRegex
 	}
 
 	for _, filterRepo := range filter.Repositories {
@@ -239,10 +239,10 @@ func ApplyFilterAndGetFilteredList(ctx context.Context, acrClient api.AcrCLIClie
 				}
 				// This is needed to evaluate all versions of patch tags when original tag is specified in the filter
 				var re *regexp.Regexp
-				if filter.TagConvention == Incremental {
-					re = regexp.MustCompile(`^` + ftag + `(-[1-9]\d{0,2})?$`)
-				} else {
+				if filter.TagConvention == Floating {
 					re = regexp.MustCompile(`^` + ftag + `(-patched\d*)?$`)
+				} else {
+					re = regexp.MustCompile(`^` + ftag + `(-[1-9]\d{0,2})?$`)
 				}
 				for _, tag := range tagList {
 					if re.MatchString(*tag.Name) {
