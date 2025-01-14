@@ -7,7 +7,7 @@ require (
 	github.com/Azure/go-autorest/autorest/adal v0.9.24
 	github.com/Azure/go-autorest/tracing v0.6.0
 	github.com/dlclark/regexp2 v1.11.4
-	github.com/docker/cli v27.4.1+incompatible
+	github.com/docker/cli v27.5.0+incompatible
 	github.com/golang-jwt/jwt/v4 v4.5.1
 	github.com/google/uuid v1.6.0
 	github.com/moby/term v0.5.0
