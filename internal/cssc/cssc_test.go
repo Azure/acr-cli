@@ -102,7 +102,62 @@ func TestApplyFilterAndGetFilteredList(t *testing.T) {
 		assert.Equal(t, common.RepoName1, artifactsNotFound[0].Repository)
 		assert.Equal(t, common.TagName1, artifactsNotFound[0].Tag)
 	})
-	// 5. Success scenario with all the combination of filters when tag-convention is floating
+	// 5. If same repository is specified multiple times with the same tags, it should be returned only once in the filtered list
+	t.Run("SameRepositorySpecifiedMultipleTimesWithSameTagsTest", func(t *testing.T) {
+		filter := Filter{
+			Version: "v1",
+			Repositories: []Repository{
+				{
+					Repository: common.RepoName1,
+					Tags:       []string{common.TagName},
+					Enabled:    boolPtr(true),
+				},
+				{
+					Repository: common.RepoName1,
+					Tags:       []string{common.TagName},
+					Enabled:    boolPtr(true),
+				},
+			},
+		}
+		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName1, "", "").Return(common.OneTagResult, nil).Twice()
+		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName1, "", common.TagName).Return(common.EmptyListTagsResult, nil).Twice()
+		filteredRepositories, artifactsNotFound, err := ApplyFilterAndGetFilteredList(context.Background(), mockAcrClient, filter)
+		assert.NoError(t, err)
+		assert.Len(t, filteredRepositories, 1)
+		assert.Equal(t, common.RepoName1, filteredRepositories[0].Repository)
+		assert.Equal(t, common.TagName, filteredRepositories[0].Tag)
+		assert.Equal(t, "N/A", filteredRepositories[0].PatchTag)
+		assert.Nil(t, artifactsNotFound)
+		assert.Len(t, artifactsNotFound, 0)
+	})
+	// 6. If same repository is specified multiple times with same and different tags, filtered list should contain all unique tags
+	t.Run("SameRepositorySpecifiedMultipleTimesWithDifferentTagsTest", func(t *testing.T) {
+		filter := Filter{
+			Version: "v1",
+			Repositories: []Repository{
+				{
+					Repository: common.RepoName1,
+					Tags:       []string{common.TagName1},
+					Enabled:    boolPtr(true),
+				},
+				{
+					Repository: common.RepoName1,
+					Tags:       []string{common.TagName1, common.TagName2},
+					Enabled:    boolPtr(true),
+				},
+			},
+		}
+		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName1, "", "").Return(common.FourTagsResultWithPatchTags, nil).Twice()
+		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName1, "", common.TagName4FloatingTag).Return(common.EmptyListTagsResult, nil).Twice()
+		filteredRepositories, artifactsNotFound, err := ApplyFilterAndGetFilteredList(context.Background(), mockAcrClient, filter)
+		assert.NoError(t, err)
+		assert.Nil(t, artifactsNotFound)
+		assert.Len(t, artifactsNotFound, 0)
+		assert.Len(t, filteredRepositories, 2)
+		assert.True(t, isInFilteredList(filteredRepositories, common.RepoName1, common.TagName1, common.TagName1Incremental2))
+		assert.True(t, isInFilteredList(filteredRepositories, common.RepoName1, common.TagName2, common.TagName2Incremental2))
+	})
+	// 7. Success scenario with all the combination of filters when tag-convention is floating
 	t.Run("AllFilterCombinationTestWithFloatingTagConvention", func(t *testing.T) {
 		filter := Filter{
 			Version:       "v1",
@@ -152,7 +207,7 @@ func TestApplyFilterAndGetFilteredList(t *testing.T) {
 		assert.True(t, isInFilteredList(filteredRepositories, common.RepoName3, common.TagName1, common.TagName1FloatingTag))
 		assert.True(t, isInFilteredList(filteredRepositories, common.RepoName3, common.TagName2, common.TagName2FloatingTag))
 	})
-	// 6. Success scenario with all the combination of filters when tag-convention is empty (defaults to incremental)
+	// 7. Success scenario with all the combination of filters when tag-convention is empty (defaults to incremental)
 	t.Run("AllFilterCombinationTestWithIncrementalTagConvention", func(t *testing.T) {
 		filter := Filter{
 			Version: "v1",
