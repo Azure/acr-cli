@@ -192,6 +192,7 @@ func ApplyFilterAndGetFilteredList(ctx context.Context, acrClient api.AcrCLIClie
 		patchTagRegex = floatingTagRegex
 	}
 
+	uniqueFilteredRepos := make(map[string]bool)
 	for _, filterRepo := range filter.Repositories {
 		// Create a tag map for each repository, where the key will be the base tag and the value will be the list of tags matching the tag convention from the filter
 		tagMap := make(map[string][]string)
@@ -268,11 +269,15 @@ func ApplyFilterAndGetFilteredList(ctx context.Context, acrClient api.AcrCLIClie
 			if latestTag == baseTag {
 				latestTag = "N/A"
 			}
-			filteredRepos = append(filteredRepos, FilteredRepository{
-				Repository: filterRepo.Repository,
-				Tag:        baseTag,
-				PatchTag:   latestTag,
-			})
+			key := fmt.Sprintf("%s-%s-%s", filterRepo.Repository, baseTag, latestTag)
+			if !uniqueFilteredRepos[key] {
+				uniqueFilteredRepos[key] = true
+				filteredRepos = append(filteredRepos, FilteredRepository{
+					Repository: filterRepo.Repository,
+					Tag:        baseTag,
+					PatchTag:   latestTag,
+				})
+			}
 		}
 	}
 	return filteredRepos, artifactsNotFound, nil
