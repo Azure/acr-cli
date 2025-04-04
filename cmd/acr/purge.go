@@ -49,6 +49,9 @@ const (
 
   - Delete all tags that are older than 7 days in the example.azurecr.io registry inside all repositories, with a page size of 50 repositories
 	acr purge -r example --filter ".*:.*" --ago 7d --repository-page-size 50
+
+  - Delete all tags that starts with hello but not if the tag is a production tag ending on -prod
+        acr purge -r example --filter "hello-world:hello.*" --exclude-filter ".*-prod$"
 	`
 	maxPoolSize = 32 // The max number of parallel delete requests recommended by ACR server
 	headerLink  = "Link"
@@ -73,6 +76,7 @@ type purgeParameters struct {
 	keep          int
 	filters       []string
 	filterTimeout int64
+	excludeFilter string
 	untagged      bool
 	dryRun        bool
 	concurrency   int
@@ -123,7 +127,7 @@ func newPurgeCmd(rootParams *rootParameters) *cobra.Command {
 						fmt.Printf("Specified concurrency value too large. Set to maximum value: %d \n", maxPoolSize)
 					}
 
-					singleDeletedTagsCount, err := purgeTags(ctx, acrClient, poolSize, loginURL, repoName, purgeParams.ago, tagRegex, purgeParams.keep, purgeParams.filterTimeout)
+					singleDeletedTagsCount, err := purgeTags(ctx, acrClient, poolSize, loginURL, repoName, purgeParams.ago, tagRegex, purgeParams.keep, purgeParams.filterTimeout, purgeParams.excludeFilter)
 					if err != nil {
 						return errors.Wrap(err, "failed to purge tags")
 					}
@@ -140,7 +144,7 @@ func newPurgeCmd(rootParams *rootParameters) *cobra.Command {
 					deletedManifestsCount += singleDeletedManifestsCount
 				} else {
 					// No tag or manifest will be deleted but the counters still will be updated.
-					singleDeletedTagsCount, singleDeletedManifestsCount, err := dryRunPurge(ctx, acrClient, loginURL, repoName, purgeParams.ago, tagRegex, purgeParams.untagged, purgeParams.keep, purgeParams.filterTimeout)
+					singleDeletedTagsCount, singleDeletedManifestsCount, err := dryRunPurge(ctx, acrClient, loginURL, repoName, purgeParams.ago, tagRegex, purgeParams.untagged, purgeParams.keep, purgeParams.filterTimeout, purgeParams.excludeFilter)
 					if err != nil {
 						return errors.Wrap(err, "failed to dry-run purge")
 					}
@@ -165,6 +169,7 @@ func newPurgeCmd(rootParams *rootParameters) *cobra.Command {
 	cmd.Flags().StringVar(&purgeParams.ago, "ago", "", "The tags that were last updated before this duration will be deleted, the format is [number]d[string] where the first number represents an amount of days and the string is in a Go duration format (e.g. 2d3h6m selects images older than 2 days, 3 hours and 6 minutes)")
 	cmd.Flags().IntVar(&purgeParams.keep, "keep", 0, "Number of latest to-be-deleted tags to keep, use this when you want to keep at least x number of latest tags that could be deleted meeting all other filter criteria")
 	cmd.Flags().StringArrayVarP(&purgeParams.filters, "filter", "f", nil, "Specify the repository and a regular expression filter for the tag name, if a tag matches the filter and is older than the duration specified in ago it will be deleted. Note: If backtracking is used in the regexp it's possible for the expression to run into an infinite loop. The default timeout is set to 1 minute for evaluation of any filter expression. Use the '--filter-timeout-seconds' option to set a different value.")
+	cmd.Flags().StringVar(&purgeParams.excludeFilter, "exclude-filter", "", "Specify a regular expression filter for the tag name (without repository!) to be excluded from purge.")
 	cmd.Flags().StringArrayVarP(&purgeParams.configs, "config", "c", nil, "Authentication config paths (e.g. C://Users/docker/config.json)")
 	cmd.Flags().Int64Var(&purgeParams.filterTimeout, "filter-timeout-seconds", defaultRegexpMatchTimeoutSeconds, "This limits the evaluation of the regex filter, and will return a timeout error if this duration is exceeded during a single evaluation. If written incorrectly a regexp filter with backtracking can result in an infinite loop.")
 	cmd.Flags().IntVar(&purgeParams.concurrency, "concurrency", defaultPoolSize, concurrencyDescription)
@@ -176,8 +181,19 @@ func newPurgeCmd(rootParams *rootParameters) *cobra.Command {
 }
 
 // purgeTags deletes all tags that are older than the ago value and that match the tagFilter string.
-func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, poolSize int, loginURL string, repoName string, ago string, tagFilter string, keep int, regexpMatchTimeoutSeconds int64) (int, error) {
+func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, poolSize int, loginURL string, repoName string, ago string, tagFilter string, keep int, regexpMatchTimeoutSeconds int64, excludeFilter string) (int, error) {
 	fmt.Printf("Deleting tags for repository: %s\n", repoName)
+
+	var excludeRegex *regexp2.Regexp = nil
+
+	if excludeFilter != "" {
+		res, err := common.BuildRegexFilter(excludeFilter, regexpMatchTimeoutSeconds)
+		if err != nil {
+			return -1, err
+		}
+		excludeRegex = res
+	}
+
 	agoDuration, err := parseDuration(ago)
 	if err != nil {
 		return -1, err
@@ -197,8 +213,9 @@ func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, poolSiz
 	// In order to only have a limited amount of http requests, a purger is used that will start goroutines to delete tags.
 	purger := worker.NewPurger(poolSize, acrClient, loginURL, repoName)
 	// GetTagsToDelete will return an empty lastTag when there are no more tags.
+
 	for {
-		tagsToDelete, newLastTag, newSkippedTagsCount, err := getTagsToDelete(ctx, acrClient, repoName, tagRegex, timeToCompare, lastTag, keep, skippedTagsCount)
+		tagsToDelete, newLastTag, newSkippedTagsCount, err := getTagsToDelete(ctx, acrClient, repoName, tagRegex, timeToCompare, lastTag, keep, skippedTagsCount, excludeRegex)
 		if err != nil {
 			return -1, err
 		}
@@ -257,7 +274,8 @@ func getTagsToDelete(ctx context.Context,
 	timeToCompare time.Time,
 	lastTag string,
 	keep int,
-	skippedTagsCount int) (*[]acr.TagAttributesBase, string, int, error) {
+	skippedTagsCount int,
+	excludeFilter *regexp2.Regexp) (*[]acr.TagAttributesBase, string, int, error) {
 
 	var matches bool
 	var lastUpdateTime time.Time
@@ -275,6 +293,18 @@ func getTagsToDelete(ctx context.Context,
 		tags := *resultTags.TagsAttributes
 		tagsEligibleForDeletion := []acr.TagAttributesBase{}
 		for _, tag := range tags {
+			if excludeFilter != nil {
+				matches, err = excludeFilter.MatchString(*tag.Name)
+				if err != nil {
+					// The only error that regexp2 will return is a timeout error
+					return nil, "", skippedTagsCount, err
+				}
+				if matches {
+					fmt.Printf("Tag \"%s\" skipped due to exclude filter\n", *tag.Name)
+					continue
+				}
+			}
+
 			matches, err = filter.MatchString(*tag.Name)
 			if err != nil {
 				// The only error that regexp2 will return is a timeout error
@@ -337,7 +367,18 @@ func purgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInter
 }
 
 // dryRunPurge outputs everything that would be deleted if the purge command was executed
-func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string, ago string, filter string, untagged bool, keep int, regexMatchTimeout int64) (int, int, error) {
+func dryRunPurge(
+	ctx context.Context,
+	acrClient api.AcrCLIClientInterface,
+	loginURL string,
+	repoName string,
+	ago string,
+	filter string,
+	untagged bool,
+	keep int,
+	regexMatchTimeout int64,
+	excludeFilter string) (int, int, error) {
+
 	deletedTagsCount := 0
 	deletedManifestsCount := 0
 	// In order to keep track if a manifest would get deleted a map is defined that as a key has the manifest
@@ -355,11 +396,21 @@ func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, login
 		return -1, -1, err
 	}
 
+	var excludeRegex *regexp2.Regexp = nil
+
+	if excludeFilter != "" {
+		res, err := common.BuildRegexFilter(excludeFilter, regexMatchTimeout)
+		if err != nil {
+			return -1, -1, err
+		}
+		excludeRegex = res
+	}
+
 	lastTag := ""
 	skippedTagsCount := 0
 	// The loop to get the deleted tags follows the same logic as the one in the purgeTags function
 	for {
-		tagsToDelete, newLastTag, newSkippedTagsCount, err := getTagsToDelete(ctx, acrClient, repoName, regex, timeToCompare, lastTag, keep, skippedTagsCount)
+		tagsToDelete, newLastTag, newSkippedTagsCount, err := getTagsToDelete(ctx, acrClient, repoName, regex, timeToCompare, lastTag, keep, skippedTagsCount, excludeRegex)
 		if err != nil {
 			return -1, -1, err
 		}
