@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/oss/go/microsoft/golang:1.22-fips-cbl-mariner2.0 AS gobuild-base
+FROM mcr.microsoft.com/oss/go/microsoft/golang:1.24.2-fips-azurelinux3.0 AS gobuild-base
 RUN tdnf check-update \
     && tdnf install -y \
         git \
@@ -10,7 +10,7 @@ WORKDIR /go/src/github.com/Azure/acr-cli
 COPY . .
 RUN make binaries && mv bin/acr /usr/bin/acr
 
-FROM mcr.microsoft.com/cbl-mariner/base/core:2.0
+FROM mcr.microsoft.com/azurelinux/base/core:3.0
 RUN tdnf check-update \
     && tdnf --refresh install -y \
         ca-certificates-microsoft \
