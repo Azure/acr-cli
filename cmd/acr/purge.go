@@ -14,7 +14,6 @@ import (
 	"github.com/Azure/acr-cli/acr"
 	"github.com/Azure/acr-cli/cmd/common"
 	"github.com/Azure/acr-cli/internal/api"
-	"github.com/Azure/acr-cli/internal/container/set"
 	"github.com/Azure/acr-cli/internal/worker"
 	"github.com/dlclark/regexp2"
 	"github.com/spf13/cobra"
@@ -189,7 +188,7 @@ func purge(ctx context.Context,
 }
 
 // purgeTags deletes all tags that are older than the ago value and that match the tagFilter string.
-func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, poolSize int, loginURL string, repoName string, ago string, tagFilter string, keep int, regexpMatchTimeoutSeconds int64) (int, error) {
+func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, poolSize int, loginURL string, repoName string, ago string, tagFilter string, keep int, regexpMatchTimeoutSeconds int64, dryRun bool) (int, error) {
 	fmt.Printf("Deleting tags for repository: %s\n", repoName)
 	agoDuration, err := parseDuration(ago)
 	if err != nil {
@@ -348,110 +347,6 @@ func purgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInter
 		return -1, purgeErr
 	}
 	return deletedManifestsCount, nil
-}
-
-// dryRunPurge outputs everything that would be deleted if the purge command was executed
-func dryRunPurge(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string, ago string, filter string, untagged bool, keep int, regexMatchTimeout int64) (int, int, error) {
-	deletedTagsCount := 0
-	deletedManifestsCount := 0
-	// In order to keep track if a manifest would get deleted a map is defined that as a key has the manifest
-	// digest and as the value the number of tags (referencing said manifests) that were deleted.
-	deletedTags := map[string]int{}
-	fmt.Printf("Tags for this repository would be deleted: %s\n", repoName)
-	agoDuration, err := parseDuration(ago)
-	if err != nil {
-		return -1, -1, err
-	}
-	timeToCompare := time.Now().UTC()
-	timeToCompare = timeToCompare.Add(agoDuration)
-	regex, err := common.BuildRegexFilter(filter, regexMatchTimeout)
-	if err != nil {
-		return -1, -1, err
-	}
-
-	lastTag := ""
-	skippedTagsCount := 0
-	// The loop to get the deleted tags follows the same logic as the one in the purgeTags function
-	for {
-		tagsToDelete, newLastTag, newSkippedTagsCount, err := getTagsToDelete(ctx, acrClient, repoName, regex, timeToCompare, lastTag, keep, skippedTagsCount)
-		if err != nil {
-			return -1, -1, err
-		}
-		lastTag = newLastTag
-		skippedTagsCount = newSkippedTagsCount
-		if tagsToDelete != nil {
-			for _, tag := range *tagsToDelete {
-				// For every tag that would be deleted first check if it exists in the map, if it doesn't add a new key
-				// with value 1 and if it does just add 1 to the existent value.
-				deletedTags[*tag.Digest]++
-				fmt.Printf("%s/%s:%s\n", loginURL, repoName, *tag.Name)
-				deletedTagsCount++
-			}
-		}
-		if len(lastTag) == 0 {
-			break
-		}
-	}
-	if untagged {
-		fmt.Printf("Manifests for this repository would be deleted: %s\n", repoName)
-		// The tagsCount contains a map that for every digest contains how many tags are referencing it.
-		tagsCount, err := countTagsByManifest(ctx, acrClient, repoName)
-		if err != nil {
-			return -1, -1, err
-		}
-		lastManifestDigest := ""
-		resultManifests, err := acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
-		if err != nil {
-			if resultManifests != nil && resultManifests.Response.Response != nil && resultManifests.StatusCode == http.StatusNotFound {
-				fmt.Printf("%s repository not found\n", repoName)
-				return 0, 0, nil
-			}
-			return -1, -1, err
-		}
-		// This set will do the check: if a key is present, then the corresponding manifest
-		// should not be deleted because it is referenced by a multiarch manifest
-		// or otherwise references a subject
-		doNotDelete := set.New[string]()
-		candidatesToDelete := []acr.ManifestAttributesBase{}
-		for resultManifests != nil && resultManifests.ManifestsAttributes != nil {
-			manifests := *resultManifests.ManifestsAttributes
-			for _, manifest := range manifests {
-				if tagsCount[*manifest.Digest] != deletedTags[*manifest.Digest] {
-					// If the number of the tags associated with the manifest is  not equal to
-					// the number of tags to be deleted, the said manifest will still have
-					// tags remaining and we will consider if it has any dependant manifests
-					err = common.FindDependentManifests(ctx, manifest, doNotDelete, acrClient, repoName)
-					if err != nil {
-						return -1, -1, err
-					}
-				} else {
-					// Otherwise the manifest have no tag left after purgeTags.
-					// we will need to find if the manifest has subject. If so,
-					// we will mark the manifest to not be deleted.
-					candidatesToDelete, err = common.IsManifestOkayToDelete(ctx, manifest, doNotDelete, candidatesToDelete, acrClient, repoName)
-					if err != nil {
-						return -1, -1, err
-					}
-				}
-			}
-			// Get the last manifest digest from the last manifest from manifests.
-			lastManifestDigest = *manifests[len(manifests)-1].Digest
-			// Use this new digest to find next batch of manifests.
-			resultManifests, err = acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
-			if err != nil {
-				return -1, -1, err
-			}
-		}
-		// Just print manifests that would be deleted.
-		for i := 0; i < len(candidatesToDelete); i++ {
-			if !doNotDelete.Contains(*candidatesToDelete[i].Digest) {
-				fmt.Printf("%s/%s@%s\n", loginURL, repoName, *candidatesToDelete[i].Digest)
-				deletedManifestsCount++
-			}
-		}
-	}
-
-	return deletedTagsCount, deletedManifestsCount, nil
 }
 
 // countTagsByManifest returns a map that for a given manifest digest contains the number of tags associated to it.

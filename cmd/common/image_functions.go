@@ -11,12 +11,12 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Azure/acr-cli/acr"
 	"github.com/Azure/acr-cli/acr/acrapi"
 	"github.com/Azure/acr-cli/internal/api"
-	"github.com/Azure/acr-cli/internal/container/set"
 	"github.com/dlclark/regexp2"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"golang.org/x/sync/errgroup"
@@ -150,14 +150,14 @@ func GetLastTagFromResponse(resultTags *acr.RepositoryTagsType) string {
 // GetUntaggedManifests gets all the manifests for the command to be executed on. The command will be executed on this manifest if it does not
 // have any tag and does not form part of a manifest list that has tags referencing it. If the purge command is to be executed,
 // the manifest should also not have a tag and not have a subject manifest.
-func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string, dryRun bool, ignoreReferrerManifests bool) (*[]string, error) {
+func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string, dryRun bool, dontPreserveAllOCIManifests bool) (*[]string, error) {
 	lastManifestDigest := ""
-	var manifestsForCommand []string
+	var manifestsToDelete []string
 	resultManifests, err := acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
 	if err != nil {
 		if resultManifests != nil && resultManifests.Response.Response != nil && resultManifests.StatusCode == http.StatusNotFound {
 			fmt.Printf("%s repository not found\n", repoName)
-			return &manifestsForCommand, nil
+			return &manifestsToDelete, nil
 		}
 		return nil, err
 	}
@@ -165,26 +165,52 @@ func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterfa
 	// This will act as a set. If a key is present, then the command shouldn't be executed because it is referenced by a multiarch manifest
 	// or the manifest has subjects attached
 	// #BUG add concurrency guards to this
-	ignoreList := set.New[string]()
+	ignoreList := sync.Map{}
+
+	// We will be adding to this map concurrently, so we need to use a mutex to lock it
 	var candidates = make(map[string]acr.ManifestAttributesBase)
 
-	// BUG We can parallelize this, read operations are not blocking
-	// Create an errgroup
+	// Read operations, specifically manifest gets are less throttled and so we can do more at once
 	errgroup, ctx := errgroup.WithContext(ctx)
 	errgroup.SetLimit(10)
 
 	for resultManifests != nil && resultManifests.ManifestsAttributes != nil {
 		manifests := *resultManifests.ManifestsAttributes
 		for _, manifest := range manifests {
-			// Check if we have already analyzed this manifest and added it to the ignoreList
-			if _, ok := ignoreList[*manifest.Digest]; ok {
+			if manifest.Digest == nil {
 				continue
 			}
 
-			if manifest.Tags != nil {
-				// Do a channel dispatch here to a pool of workers
-				// If a manifest has Tags and its media type supports multiarch manifest, we will
-				// iterate all its dependent manifests and mark them to not have the command execute on them.
+			// Check if the manifest is already in the ignoreList and can be skipped
+			if _, ok := ignoreList.Load(*manifest.Digest); ok {
+				continue
+			}
+
+			// _____MANIFEST HAS DELETION AS DISALLOWED BY ATTRIBUTES_____
+			// If the manifest cannot be deleted or written to we can skip them (ACR will not allow deletion of these manifests)
+			if manifest.ChangeableAttributes != nil {
+				if manifest.ChangeableAttributes.DeleteEnabled != nil && *manifest.ChangeableAttributes.DeleteEnabled == false {
+					continue
+				}
+				if manifest.ChangeableAttributes.WriteEnabled != nil && *manifest.ChangeableAttributes.WriteEnabled == false {
+					continue
+				}
+			}
+
+			// _____MANIFEST IS TAGGED_____
+			// If an image has tags, it should not be deleted. If it is a manifest list, we need to check for its children which might be untagged
+			if manifest.Tags != nil && len(*manifest.Tags) > 0 {
+				// This case is a bug, out of an abundance of caution we will ignore it
+				if manifest.MediaType == nil {
+					continue
+				}
+
+				// If the manifest is not a list type, we can skip searching for its children
+				if *manifest.MediaType != v1.MediaTypeImageIndex && *manifest.MediaType != mediaTypeDockerManifestList {
+					continue
+				}
+
+				// Schedule a goroutine to find the dependent manifests and add them to the ignoreList
 				errgroup.Go(func() error {
 					manifests, err := FindDependentManifests(ctx, manifest, acrClient, repoName)
 					if err != nil {
@@ -192,39 +218,58 @@ func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterfa
 					}
 					// Add all the manifests to the ignoreList
 					for _, manifest := range manifests {
-						if _, ok := ignoreList[manifest]; !ok {
-							ignoreList.Add(manifest)
-						}
+						ignoreList.LoadOrStore(manifest, struct{}{})
 					}
 					return nil
 				})
-			} else {
-				// We can optimize at this point by checking if the manifest has already been added to the ignoreList
-				// If the manifest is already in the ignoreList, we don't need to check if it has a subject or not, this also lets
-				// us skip the index children
-				if ignoreReferrerManifests { // BUG? : isnt this backwards?
-					errgroup.Go(func() error {
-						canDelete, err := IsManifestOkayToDelete(ctx, manifest, acrClient, repoName)
-						if err != nil {
-							return err
-						}
 
-						if canDelete {
-							// Add the manifest to the candidates list
-							if _, ok := candidates[*manifest.Digest]; !ok {
-								candidates[*manifest.Digest] = manifest
-							}
-						}
-						return nil
-					})
-				} else { // Why do we automatically assume all oci artifacts should be kept?
-					if *manifest.MediaType != v1.MediaTypeImageManifest { // BUG? we also need to check for indexes today I think
-						// Add the manifest to the candidates list
-						if _, ok := candidates[*manifest.Digest]; !ok {
-							candidates[*manifest.Digest] = manifest
-						}
+				continue // We can skip the rest of the loop since the index is tagged and we are going to find its children
+			}
+
+			// _____MANIFEST IS UNTAGGED BUT MAY BE PROTECTED_____
+			// TODO: I am a little unclear as to why this was ever an option but respecting it for now. Its not used by the purge scenarios.
+			if !dontPreserveAllOCIManifests {
+				if *manifest.MediaType != v1.MediaTypeImageManifest { // BUG? we also need to check for indexes today I think
+					// Add the manifest to the candidates list
+					if _, ok := candidates[*manifest.Digest]; !ok {
+						candidates[*manifest.Digest] = manifest
 					}
 				}
+				continue
+			}
+
+			// ______MANIFEST IS UNTAGGED BUT MAY STILL BE A REFERRER_____
+			// If the manifest is a referrer type we want to preserve it as ACR does cleanup on the server side when a parent manifest is deleted
+
+			// Schedule a goroutine to check if the manifest is okay to delete, it will be added to the
+			// candidates list anyway but if it is not okay to delete we will add it to the ignoreList
+			errgroup.Go(func() error {
+				canDelete, err := IsManifestOkayToDelete(ctx, manifest, acrClient, repoName)
+				if err != nil {
+					return err
+				}
+				if canDelete {
+					// Add the manifest to the candidates list
+				} else if *manifest.MediaType == v1.MediaTypeImageIndex {
+					manifests, err := FindDependentManifests(ctx, manifest, acrClient, repoName)
+					if err != nil {
+						return err
+					}
+					// Add all the sub manifests to the ignoreList
+					for _, manifest := range manifests {
+						ignoreList.LoadOrStore(manifest, struct{}{})
+					}
+					return nil
+				}
+				return nil
+			})
+
+			// _____MANIFEST IS A CANDIDATE FOR DELETION_____
+
+			// If we make it here we can add the manifest to the candidates map, it might still be marked as to ignore by the ignoreList
+			// subsequently but that is not a problem.
+			if _, ok := candidates[*manifest.Digest]; !ok {
+				candidates[*manifest.Digest] = manifest
 			}
 		}
 
@@ -237,34 +282,25 @@ func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterfa
 		}
 	}
 
-	// TODO this whole part
-	// Remove all manifests that should not be deleted
-
-	for toIgnore := range ignoreList {
-		if _, ok := candidates[toIgnore]; ok {
-			// Remove the manifest from the candidates list
-			delete(candidates, toIgnore)
-		}
-	}
 	// Wait for all the goroutines to finish
 	if err := errgroup.Wait(); err != nil {
 		return nil, err
 	}
 
-	for i := 0; i < len(candidates); i++ {
-		if !ignoreList.Contains(*candidates[i].Digest) {
-			// if a manifest has no tags, is not part of a manifest list and can be deleted then it is added to the
-			// manifestsForCommand array.
-			if *(candidates[i].ChangeableAttributes).DeleteEnabled && *(candidates[i].ChangeableAttributes).WriteEnabled {
-				manifestsForCommand = append(manifestsForCommand, *candidates[i].Digest)
-				if dryRun && !ignoreReferrerManifests {
-					fmt.Printf("%s/%s@%s\n", loginURL, repoName, *candidates[i].Digest)
-				}
-			}
+	// Remove everything from the candidates list that is in the ignoreList
+	for _, manifest := range candidates {
+		if _, ok := ignoreList.Load(*manifest.Digest); ok {
+			// Remove the manifest from the candidates list
+			delete(candidates, *manifest.Digest)
 		}
 	}
 
-	return &manifestsForCommand, nil
+	for _, manifest := range candidates {
+		// Add the manifest to the list of manifests to delete
+		manifestsToDelete = append(manifestsToDelete, *manifest.Digest)
+	}
+
+	return &manifestsToDelete, nil
 }
 
 // FindDependentManifests adds the dependant manifest to doNotAffect if the referred manifest has tags.
