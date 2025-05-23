@@ -19,6 +19,7 @@ import (
 	"github.com/Azure/acr-cli/internal/container/set"
 	"github.com/dlclark/regexp2"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -163,27 +164,65 @@ func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterfa
 
 	// This will act as a set. If a key is present, then the command shouldn't be executed because it is referenced by a multiarch manifest
 	// or the manifest has subjects attached
+	// #BUG add concurrency guards to this
 	ignoreList := set.New[string]()
-	var candidates []acr.ManifestAttributesBase
+	var candidates = make(map[string]acr.ManifestAttributesBase)
+
+	// BUG We can parallelize this, read operations are not blocking
+	// Create an errgroup
+	errgroup, ctx := errgroup.WithContext(ctx)
+	errgroup.SetLimit(10)
+
 	for resultManifests != nil && resultManifests.ManifestsAttributes != nil {
 		manifests := *resultManifests.ManifestsAttributes
 		for _, manifest := range manifests {
+			// Check if we have already analyzed this manifest and added it to the ignoreList
+			if _, ok := ignoreList[*manifest.Digest]; ok {
+				continue
+			}
+
 			if manifest.Tags != nil {
+				// Do a channel dispatch here to a pool of workers
 				// If a manifest has Tags and its media type supports multiarch manifest, we will
 				// iterate all its dependent manifests and mark them to not have the command execute on them.
-				if err = AddDependentManifestsToIgnoreList(ctx, manifest, ignoreList, acrClient, repoName); err != nil {
-					return nil, err
-				}
-			} else {
-				if ignoreReferrerManifests {
-					// If a manifest does not have Tags and its media type supports subject, we will
-					// check if the subject exists. If so, the manifest is marked not to be affected by the command.
-					if candidates, err = UpdateForManifestWithoutSubjectToDelete(ctx, manifest, ignoreList, candidates, acrClient, repoName); err != nil {
-						return nil, err
+				errgroup.Go(func() error {
+					manifests, err := FindDependentManifests(ctx, manifest, acrClient, repoName)
+					if err != nil {
+						return err
 					}
-				} else {
-					if *manifest.MediaType != v1.MediaTypeImageManifest {
-						candidates = append(candidates, manifest)
+					// Add all the manifests to the ignoreList
+					for _, manifest := range manifests {
+						if _, ok := ignoreList[manifest]; !ok {
+							ignoreList.Add(manifest)
+						}
+					}
+					return nil
+				})
+			} else {
+				// We can optimize at this point by checking if the manifest has already been added to the ignoreList
+				// If the manifest is already in the ignoreList, we don't need to check if it has a subject or not, this also lets
+				// us skip the index children
+				if ignoreReferrerManifests { // BUG? : isnt this backwards?
+					errgroup.Go(func() error {
+						canDelete, err := IsManifestOkayToDelete(ctx, manifest, acrClient, repoName)
+						if err != nil {
+							return err
+						}
+
+						if canDelete {
+							// Add the manifest to the candidates list
+							if _, ok := candidates[*manifest.Digest]; !ok {
+								candidates[*manifest.Digest] = manifest
+							}
+						}
+						return nil
+					})
+				} else { // Why do we automatically assume all oci artifacts should be kept?
+					if *manifest.MediaType != v1.MediaTypeImageManifest { // BUG? we also need to check for indexes today I think
+						// Add the manifest to the candidates list
+						if _, ok := candidates[*manifest.Digest]; !ok {
+							candidates[*manifest.Digest] = manifest
+						}
 					}
 				}
 			}
@@ -197,7 +236,21 @@ func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterfa
 			return nil, err
 		}
 	}
+
+	// TODO this whole part
 	// Remove all manifests that should not be deleted
+
+	for toIgnore := range ignoreList {
+		if _, ok := candidates[toIgnore]; ok {
+			// Remove the manifest from the candidates list
+			delete(candidates, toIgnore)
+		}
+	}
+	// Wait for all the goroutines to finish
+	if err := errgroup.Wait(); err != nil {
+		return nil, err
+	}
+
 	for i := 0; i < len(candidates); i++ {
 		if !ignoreList.Contains(*candidates[i].Digest) {
 			// if a manifest has no tags, is not part of a manifest list and can be deleted then it is added to the
@@ -214,58 +267,66 @@ func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterfa
 	return &manifestsForCommand, nil
 }
 
-// AddDependentManifestsToIgnoreList adds the dependant manifest to doNotAffect if the referred manifest has tags.
-func AddDependentManifestsToIgnoreList(ctx context.Context, manifest acr.ManifestAttributesBase, doNotAffect set.Set[string], acrClient api.AcrCLIClientInterface, repoName string) error {
+// FindDependentManifests adds the dependant manifest to doNotAffect if the referred manifest has tags.
+// We also need to account for nested indexes. #BUG
+func FindDependentManifests(ctx context.Context, manifest acr.ManifestAttributesBase, acrClient api.AcrCLIClientInterface, repoName string) ([]string, error) {
+	var dependentManifestDigests []string
 	switch *manifest.MediaType {
 	case mediaTypeDockerManifestList, v1.MediaTypeImageIndex:
 		var manifestBytes []byte
 		manifestBytes, err := acrClient.GetManifest(ctx, repoName, *manifest.Digest)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		// this struct defines a customized struct for manifests
 		// which is used to parse the content of a multiarch manifest
-		mam := struct {
+		subManifestOnlyStruct := struct {
 			Manifests []v1.Descriptor `json:"manifests"`
 		}{}
 
-		if err = json.Unmarshal(manifestBytes, &mam); err != nil {
-			return err
+		if err = json.Unmarshal(manifestBytes, &subManifestOnlyStruct); err != nil {
+			return nil, err
 		}
-		for _, dependentManifest := range mam.Manifests {
-			doNotAffect.Add(dependentManifest.Digest.String())
+
+		// Add all the manifests to the result
+		dependentManifestDigests := make([]string, len(subManifestOnlyStruct.Manifests))
+		for i, dependentManifest := range subManifestOnlyStruct.Manifests {
+			dependentManifestDigests[i] = string(dependentManifest.Digest)
 		}
 	}
-	return nil
+	return dependentManifestDigests, nil
 }
 
-// UpdateForManifestWithoutSubjectToDelete adds the manifest to candidatesToDelete
-// if the manifest does not have subject, otherwise add it to doNotDelete.
-func UpdateForManifestWithoutSubjectToDelete(ctx context.Context, manifest acr.ManifestAttributesBase, doNotDelete set.Set[string], candidatesToDelete []acr.ManifestAttributesBase, acrClient api.AcrCLIClientInterface, repoName string) ([]acr.ManifestAttributesBase, error) {
+// IsManifestOkayToDelete returns if a specific manifest is okay to delete. This depends on the following
+// criteria:
+// - Referrer manifests are not deleted (If a subject is present, the manifest is not deleted)
+func IsManifestOkayToDelete(ctx context.Context, manifest acr.ManifestAttributesBase, acrClient api.AcrCLIClientInterface, repoName string) (bool, error) {
 	switch *manifest.MediaType {
 	case mediaTypeArtifactManifest, v1.MediaTypeImageManifest, v1.MediaTypeImageIndex:
 		var manifestBytes []byte
 		manifestBytes, err := acrClient.GetManifest(ctx, repoName, *manifest.Digest)
 		if err != nil {
-			return nil, err
+			return false, err
 		}
 		// this struct defines a customized struct for manifests which
 		// is used to parse the content of a manifest references a subject
-		mws := struct {
+		subjectOnlyStruct := struct {
 			Subject *v1.Descriptor `json:"subject,omitempty"`
 		}{}
-		if err = json.Unmarshal(manifestBytes, &mws); err != nil {
-			return nil, err
+		if err = json.Unmarshal(manifestBytes, &subjectOnlyStruct); err != nil {
+			return false, err
 		}
-		if mws.Subject != nil {
-			doNotDelete.Add(*manifest.Digest)
-		} else {
-			candidatesToDelete = append(candidatesToDelete, manifest)
+
+		// Subject should be nil if the manifest is does not contain a subject,
+		// but add a check for the actual struct values just in case
+		if subjectOnlyStruct.Subject != nil && subjectOnlyStruct.Subject.Digest != "" {
+			return false, nil
+		} else { // No subject means the manifest is not a referrer type
+			return true, nil
 		}
 	default:
-		candidatesToDelete = append(candidatesToDelete, manifest)
+		return true, nil // This means the manifest is not a referrer type and can be deleted
 	}
-	return candidatesToDelete, nil
 }
 
 // BuildRegexFilter compiles a regex state machine from a regex expression
