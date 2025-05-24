@@ -17,6 +17,7 @@ type Purger struct {
 }
 
 // NewPurger creates a new Purger.
+// TODO: Lets rewrite the purger to use a global pool of workers so we can do cross repo purging efficiently (doing deletes cross repo is less likely to hit concurrency limits)
 func NewPurger(poolSize int, acrClient api.AcrCLIClientInterface, loginURL string, repoName string) *Purger {
 	executeBase := Executer{
 		pool:     newPool(poolSize),

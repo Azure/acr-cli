@@ -201,13 +201,14 @@ func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, poolSiz
 
 	tagRegex, err := common.BuildRegexFilter(tagFilter, regexpMatchTimeoutSeconds)
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("failed to build Regex %s with error : %w", tagRegex, err)
 	}
 	lastTag := ""
 	skippedTagsCount := 0
 	deletedTagsCount := 0
 	// In order to only have a limited amount of http requests, a purger is used that will start goroutines to delete tags.
 	purger := worker.NewPurger(poolSize, acrClient, loginURL, repoName)
+
 	// GetTagsToDelete will return an empty lastTag when there are no more tags.
 	for {
 		tagsToDelete, newLastTag, newSkippedTagsCount, err := getTagsToDelete(ctx, acrClient, repoName, tagRegex, timeToCompare, lastTag, keep, skippedTagsCount)

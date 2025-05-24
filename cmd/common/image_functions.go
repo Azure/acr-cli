@@ -177,6 +177,12 @@ func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterfa
 	for resultManifests != nil && resultManifests.ManifestsAttributes != nil {
 		manifests := *resultManifests.ManifestsAttributes
 		for _, manifest := range manifests {
+			// In the rare event that we run into an error with the errgroup while still doing the manifest acquisition loop,
+			// we need to check if the context is done to break out of the loop early.
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+
 			if manifest.Digest == nil {
 				continue
 			}
