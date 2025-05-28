@@ -17,6 +17,7 @@ import (
 	"github.com/Azure/acr-cli/acr"
 	"github.com/Azure/acr-cli/acr/acrapi"
 	"github.com/Azure/acr-cli/internal/api"
+	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/dlclark/regexp2"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"golang.org/x/sync/errgroup"
@@ -321,6 +322,11 @@ func FindDependentManifests(ctx context.Context, manifest acr.ManifestAttributes
 		var manifestBytes []byte
 		manifestBytes, err := acrClient.GetManifest(ctx, repoName, *manifest.Digest)
 		if err != nil {
+			errParsed := azure.RequestError{}
+			if errors.As(err, &errParsed) && errParsed.StatusCode == http.StatusNotFound {
+				// If the manifest is not found, we can return an empty list
+				return dependentManifestDigests, nil
+			}
 			return nil, err
 		}
 		// this struct defines a customized struct for manifests
@@ -351,6 +357,11 @@ func IsManifestOkayToDelete(ctx context.Context, manifest acr.ManifestAttributes
 		var manifestBytes []byte
 		manifestBytes, err := acrClient.GetManifest(ctx, repoName, *manifest.Digest)
 		if err != nil {
+			errParsed := azure.RequestError{}
+			if errors.As(err, &errParsed) && errParsed.StatusCode == http.StatusNotFound {
+				// If the manifest is not found, lets ignore it
+				return false, nil
+			}
 			return false, err
 		}
 		// this struct defines a customized struct for manifests which
