@@ -255,8 +255,11 @@ func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterfa
 					return err
 				}
 				if canDelete {
-					// Add the manifest to the candidates list
-				} else if *manifest.MediaType == v1.MediaTypeImageIndex {
+					// Manifest is okay to delete
+					return nil
+				}
+				if *manifest.MediaType == v1.MediaTypeImageIndex {
+					// If the manifest is a multiarch manifest, we need to find its children manifests and add them to the ignoreList
 					manifests, err := FindDependentManifests(ctx, manifest, acrClient, repoName)
 					if err != nil {
 						return err
@@ -265,8 +268,8 @@ func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterfa
 					for _, manifest := range manifests {
 						ignoreList.LoadOrStore(manifest, struct{}{})
 					}
-					return nil
 				}
+				ignoreList.LoadOrStore(*manifest.Digest, struct{}{})
 				return nil
 			})
 
@@ -331,7 +334,7 @@ func FindDependentManifests(ctx context.Context, manifest acr.ManifestAttributes
 		}
 
 		// Add all the manifests to the result
-		dependentManifestDigests := make([]string, len(subManifestOnlyStruct.Manifests))
+		dependentManifestDigests = make([]string, len(subManifestOnlyStruct.Manifests))
 		for i, dependentManifest := range subManifestOnlyStruct.Manifests {
 			dependentManifestDigests[i] = string(dependentManifest.Digest)
 		}
@@ -359,7 +362,7 @@ func IsManifestOkayToDelete(ctx context.Context, manifest acr.ManifestAttributes
 			return false, err
 		}
 
-		// Subject should be nil if the manifest is does not contain a subject,
+		// Subject should be nil if the manifest does not contain a subject,
 		// but add a check for the actual struct values just in case
 		if subjectOnlyStruct.Subject != nil && subjectOnlyStruct.Subject.Digest != "" {
 			return false, nil

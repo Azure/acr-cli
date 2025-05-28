@@ -614,6 +614,7 @@ func TestDryRunAnnotate(t *testing.T) {
 		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(FourTagsResult, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleMultiArchManifestV2WithTagsResult, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", multiArchDigest).Return(EmptyListManifestsResult, nil).Maybe() // This is to ensure that the GetAcrManifests method may be called again before the failure happens
 		mockClient.On("GetManifest", mock.Anything, testRepo, "sha256:d88fb54ba4424dada7c928c6af332ed1c49065ad85eafefb6f26664695015119").Return(nil, errors.New("error getting manifest")).Once()
 		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], "^lat.*", defaultRegexpMatchTimeoutSeconds, true)
 		annotatedManifests, errManifests := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], true)
@@ -631,6 +632,7 @@ func TestDryRunAnnotate(t *testing.T) {
 		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(FourTagsResult, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleMultiArchManifestV2WithTagsResult, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", multiArchDigest).Return(nil, nil).Maybe() // This is to ensure that the GetAcrManifests method may be called again before the failure happens
 		mockClient.On("GetManifest", mock.Anything, testRepo, "sha256:d88fb54ba4424dada7c928c6af332ed1c49065ad85eafefb6f26664695015119").Return([]byte("invalid json"), nil).Once()
 		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], "^lat.*", defaultRegexpMatchTimeoutSeconds, true)
 		annotatedManifests, errManifests := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], true)
@@ -648,7 +650,8 @@ func TestDryRunAnnotate(t *testing.T) {
 		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(FourTagsResult, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleMultiArchManifestV2WithTagsResult, nil).Once()
-		mockClient.On("GetManifest", mock.Anything, testRepo, "sha256:d88fb54ba4424dada7c928c6af332ed1c49065ad85eafefb6f26664695015119").Return(multiArchManifestV2Bytes, nil).Once()
+		mockClient.On("GetManifest", mock.Anything, testRepo, "sha256:d88fb54ba4424dada7c928c6af332ed1c49065ad85eafefb6f26664695015119").Return(multiArchManifestV2Bytes, nil).Maybe() // This may not be invoked if the
+		// GetAcrManifests call fails first.
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:d88fb54ba4424dada7c928c6af332ed1c49065ad85eafefb6f26664695015119").Return(nil, errors.New("error fetching manifests")).Once()
 		annotatedTags, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], "^lat.*", defaultRegexpMatchTimeoutSeconds, true)
 		annotatedManifests, errManifests := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], true)
