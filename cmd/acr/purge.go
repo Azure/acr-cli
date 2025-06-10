@@ -167,7 +167,6 @@ func purge(ctx context.Context,
 	for repoName, tagRegex := range tagFilters {
 		singleDeletedTagsCount, err := purgeTags(ctx, acrClient, concurrentRepoRoutines, loginURL, repoName, tagDeletionSince, tagRegex, tagsToKeep, filterTimeout, dryRun)
 		if err != nil {
-
 			return deletedTagsCount, deletedManifestsCount, fmt.Errorf("failed to purge tags: %w", err)
 		}
 		singleDeletedManifestsCount := 0

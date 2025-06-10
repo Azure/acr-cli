@@ -18,9 +18,9 @@ import (
 	"github.com/Azure/acr-cli/acr/acrapi"
 	"github.com/Azure/acr-cli/internal/api"
 	"github.com/Azure/go-autorest/autorest/azure"
+	"github.com/alitto/pond/v2"
 	"github.com/dlclark/regexp2"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
-	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -165,15 +165,16 @@ func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterfa
 
 	// This will act as a set. If a key is present, then the command shouldn't be executed because it is referenced by a multiarch manifest
 	// or the manifest has subjects attached
-	// #BUG add concurrency guards to this
 	ignoreList := sync.Map{}
 
 	// We will be adding to this map concurrently, so we need to use a mutex to lock it
 	var candidates = make(map[string]acr.ManifestAttributesBase)
 
 	// Read operations, specifically manifest gets are less throttled and so we can do more at once
-	errgroup, ctx := errgroup.WithContext(ctx)
-	errgroup.SetLimit(10)
+	// We will use a goroutine pool to limit the number of concurrent operations. We allow for a large queue size
+	// so that we save some time by not having to wait for the pool to be available before submitting a new task.
+	pool := pond.NewPool(10, pond.WithContext(ctx), pond.WithQueueSize(1000), pond.WithNonBlocking(false))
+	group := pool.NewGroup()
 
 	for resultManifests != nil && resultManifests.ManifestsAttributes != nil {
 		manifests := *resultManifests.ManifestsAttributes
@@ -196,10 +197,10 @@ func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterfa
 			// _____MANIFEST HAS DELETION AS DISALLOWED BY ATTRIBUTES_____
 			// If the manifest cannot be deleted or written to we can skip them (ACR will not allow deletion of these manifests)
 			if manifest.ChangeableAttributes != nil {
-				if manifest.ChangeableAttributes.DeleteEnabled != nil && *manifest.ChangeableAttributes.DeleteEnabled == false {
+				if manifest.ChangeableAttributes.DeleteEnabled != nil && !(*manifest.ChangeableAttributes.DeleteEnabled) {
 					continue
 				}
-				if manifest.ChangeableAttributes.WriteEnabled != nil && *manifest.ChangeableAttributes.WriteEnabled == false {
+				if manifest.ChangeableAttributes.WriteEnabled != nil && !(*manifest.ChangeableAttributes.WriteEnabled) {
 					continue
 				}
 			}
@@ -207,36 +208,26 @@ func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterfa
 			// _____MANIFEST IS TAGGED_____
 			// If an image has tags, it should not be deleted. If it is a manifest list, we need to check for its children which might be untagged
 			if manifest.Tags != nil && len(*manifest.Tags) > 0 {
-				// This case is a bug, out of an abundance of caution we will ignore it
-				if manifest.MediaType == nil {
-					continue
+				// If the media type is not set, we will have to identify the manifest type from its fields, in this case the manifests field.
+				// This should not really happen for this API but we will handle it gracefully.
+				if manifest.MediaType != nil {
+					// If the manifest is not a list type, we can skip searching for its children
+					if *manifest.MediaType != v1.MediaTypeImageIndex && *manifest.MediaType != mediaTypeDockerManifestList {
+						continue
+					}
 				}
 
-				// If the manifest is not a list type, we can skip searching for its children
-				if *manifest.MediaType != v1.MediaTypeImageIndex && *manifest.MediaType != mediaTypeDockerManifestList {
-					continue
-				}
-
-				// Schedule a goroutine to find the dependent manifests and add them to the ignoreList
-				errgroup.Go(func() error {
-					manifests, err := FindDependentManifests(ctx, manifest, acrClient, repoName)
-					if err != nil {
-						return err
-					}
-					// Add all the manifests to the ignoreList
-					for _, manifest := range manifests {
-						ignoreList.LoadOrStore(manifest, struct{}{})
-					}
-					return nil
+				group.SubmitErr(func() error {
+					return addIndexDependenciesToIgnoreList(ctx, *manifest.Digest, acrClient, repoName, &ignoreList)
 				})
-
-				continue // We can skip the rest of the loop since the index is tagged and we are going to find its children
+				continue // We can skip the rest since the index is tagged and we are going to find its children
 			}
 
 			// _____MANIFEST IS UNTAGGED BUT MAY BE PROTECTED_____
-			// TODO: I am a little unclear as to why this was ever an option but respecting it for now. Its not used by the purge scenarios.
+			// TODO: I am a little unclear as to why this was ever an option but respecting it for now. Its not used by the purge scenarios only for
+			// the annotate command.
 			if !dontPreserveAllOCIManifests {
-				if *manifest.MediaType != v1.MediaTypeImageManifest { // BUG? we also need to check for indexes today I think
+				if *manifest.MediaType != v1.MediaTypeImageManifest {
 					// Add the manifest to the candidates list
 					if _, ok := candidates[*manifest.Digest]; !ok {
 						candidates[*manifest.Digest] = manifest
@@ -250,8 +241,8 @@ func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterfa
 
 			// Schedule a goroutine to check if the manifest is okay to delete, it will be added to the
 			// candidates list anyway but if it is not okay to delete we will add it to the ignoreList
-			errgroup.Go(func() error {
-				canDelete, err := IsManifestOkayToDelete(ctx, manifest, acrClient, repoName)
+			group.SubmitErr(func() error {
+				canDelete, err := isManifestOkayToDelete(ctx, manifest, acrClient, repoName)
 				if err != nil {
 					return err
 				}
@@ -259,23 +250,18 @@ func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterfa
 					// Manifest is okay to delete
 					return nil
 				}
+
+				// If the manifest is a list, we need to find its children manifests and add them to the ignoreList
 				if *manifest.MediaType == v1.MediaTypeImageIndex {
-					// If the manifest is a multiarch manifest, we need to find its children manifests and add them to the ignoreList
-					manifests, err := FindDependentManifests(ctx, manifest, acrClient, repoName)
-					if err != nil {
-						return err
-					}
-					// Add all the sub manifests to the ignoreList
-					for _, manifest := range manifests {
-						ignoreList.LoadOrStore(manifest, struct{}{})
-					}
+
+					addIndexDependenciesToIgnoreList(ctx, *manifest.Digest, acrClient, repoName, &ignoreList)
 				}
+
 				ignoreList.LoadOrStore(*manifest.Digest, struct{}{})
 				return nil
 			})
 
 			// _____MANIFEST IS A CANDIDATE FOR DELETION_____
-
 			// If we make it here we can add the manifest to the candidates map, it might still be marked as to ignore by the ignoreList
 			// subsequently but that is not a problem.
 			if _, ok := candidates[*manifest.Digest]; !ok {
@@ -292,8 +278,8 @@ func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterfa
 		}
 	}
 
-	// Wait for all the goroutines to finish
-	if err := errgroup.Wait(); err != nil {
+	// Wait for all the goroutines to finish or return an error if one of them failed
+	if err := group.Wait(); err != nil {
 		return nil, err
 	}
 
@@ -313,45 +299,84 @@ func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterfa
 	return &manifestsToDelete, nil
 }
 
-// FindDependentManifests adds the dependant manifest to doNotAffect if the referred manifest has tags.
-// We also need to account for nested indexes. #BUG
-func FindDependentManifests(ctx context.Context, manifest acr.ManifestAttributesBase, acrClient api.AcrCLIClientInterface, repoName string) ([]string, error) {
-	var dependentManifestDigests []string
-	switch *manifest.MediaType {
-	case mediaTypeDockerManifestList, v1.MediaTypeImageIndex:
-		var manifestBytes []byte
-		manifestBytes, err := acrClient.GetManifest(ctx, repoName, *manifest.Digest)
+// addIndexDependenciesToIgnoreList adds all the dependencies of a multiarch manifest or an index to the ignore list. This includes all the child manifests that are also lists.
+// We don't generally expect there to be a lot of such dependencies, so we can use a simple breadth-first search to find all the child manifests synchronously. May add concurrency
+// here later if we find that this is a bottleneck.
+func addIndexDependenciesToIgnoreList(ctx context.Context, rootDigest string, acrClient api.AcrCLIClientInterface, repoName string, ignoreList *sync.Map) error {
+	queue := []string{rootDigest}
+
+	for len(queue) > 0 {
+		// Dequeue the first digest
+		currentDigest := queue[0]
+		queue = queue[1:]
+
+		// Skip if already in ignore list
+		if _, loaded := ignoreList.LoadOrStore(currentDigest, struct{}{}); loaded {
+			continue
+		}
+
+		// Fetch direct dependencies
+		manifests, err := findDirectDependentManifests(ctx, currentDigest, acrClient, repoName)
 		if err != nil {
-			errParsed := azure.RequestError{}
-			if errors.As(err, &errParsed) && errParsed.StatusCode == http.StatusNotFound {
-				// If the manifest is not found, we can return an empty list
-				return dependentManifestDigests, nil
+			return err
+		}
+
+		// Enqueue child manifests if they are lists
+		for _, manifest := range manifests {
+			if manifest.IsList {
+				queue = append(queue, manifest.Digest)
+			} else {
+				ignoreList.LoadOrStore(manifest.Digest, struct{}{})
 			}
-			return nil, err
 		}
-		// this struct defines a customized struct for manifests
-		// which is used to parse the content of a multiarch manifest
-		subManifestOnlyStruct := struct {
-			Manifests []v1.Descriptor `json:"manifests"`
-		}{}
+	}
+	return nil
+}
 
-		if err = json.Unmarshal(manifestBytes, &subManifestOnlyStruct); err != nil {
-			return nil, err
+type dependentManifestResult struct {
+	Digest string `json:"digest"`
+	IsList bool   `json:"isList"`
+}
+
+// findDirectDependentManifests finds all the manifests that are directly dependent on the provided manifest digest. We expect the manifest to be a multiarch manifest or an index.
+// It returns a list of dependent manifests with their digests and whether they are lists or not.
+func findDirectDependentManifests(ctx context.Context, manifestDigest string, acrClient api.AcrCLIClientInterface, repoName string) ([]dependentManifestResult, error) {
+	dependentManifestDigests := []dependentManifestResult{}
+	var manifestBytes []byte
+	manifestBytes, err := acrClient.GetManifest(ctx, repoName, manifestDigest)
+	if err != nil {
+		errParsed := azure.RequestError{}
+		if errors.As(err, &errParsed) && errParsed.StatusCode == http.StatusNotFound {
+			// If the manifest is not found, we can return an empty list
+			return dependentManifestDigests, nil
 		}
+		return nil, err
+	}
+	// this struct defines a customized struct for manifests
+	// which is used to parse the content of a multiarch manifest
+	subManifestOnlyStruct := struct {
+		Manifests []v1.Descriptor `json:"manifests"`
+	}{}
 
-		// Add all the manifests to the result
-		dependentManifestDigests = make([]string, len(subManifestOnlyStruct.Manifests))
-		for i, dependentManifest := range subManifestOnlyStruct.Manifests {
-			dependentManifestDigests[i] = string(dependentManifest.Digest)
+	if err = json.Unmarshal(manifestBytes, &subManifestOnlyStruct); err != nil {
+		return nil, err
+	}
+
+	// Add all the manifests to the result
+	dependentManifestDigests = make([]dependentManifestResult, len(subManifestOnlyStruct.Manifests))
+	for i, dependentManifest := range subManifestOnlyStruct.Manifests {
+		dependentManifestDigests[i] = dependentManifestResult{
+			Digest: string(dependentManifest.Digest),
+			IsList: dependentManifest.MediaType == mediaTypeDockerManifestList || dependentManifest.MediaType == v1.MediaTypeImageIndex,
 		}
 	}
 	return dependentManifestDigests, nil
 }
 
-// IsManifestOkayToDelete returns if a specific manifest is okay to delete. This depends on the following
+// isManifestOkayToDelete returns if a specific manifest is okay to delete. This depends on the following
 // criteria:
 // - Referrer manifests are not deleted (If a subject is present, the manifest is not deleted)
-func IsManifestOkayToDelete(ctx context.Context, manifest acr.ManifestAttributesBase, acrClient api.AcrCLIClientInterface, repoName string) (bool, error) {
+func isManifestOkayToDelete(ctx context.Context, manifest acr.ManifestAttributesBase, acrClient api.AcrCLIClientInterface, repoName string) (bool, error) {
 	switch *manifest.MediaType {
 	case mediaTypeArtifactManifest, v1.MediaTypeImageManifest, v1.MediaTypeImageIndex:
 		var manifestBytes []byte

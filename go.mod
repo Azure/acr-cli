@@ -6,6 +6,7 @@ require (
 	github.com/Azure/go-autorest/autorest v0.11.30
 	github.com/Azure/go-autorest/autorest/adal v0.9.24
 	github.com/Azure/go-autorest/tracing v0.6.1
+	github.com/alitto/pond/v2 v2.3.4
 	github.com/dlclark/regexp2 v1.11.5
 	github.com/docker/cli v28.1.1+incompatible
 	github.com/golang-jwt/jwt/v4 v4.5.2
@@ -16,6 +17,7 @@ require (
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.10.0
+	golang.org/x/sync v0.6.0
 	oras.land/oras-go/v2 v2.5.0
 )
 
@@ -34,7 +36,6 @@ require (
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	golang.org/x/crypto v0.35.0 // indirect
-	golang.org/x/sync v0.6.0 // indirect
 	golang.org/x/sys v0.30.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
