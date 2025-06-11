@@ -151,14 +151,14 @@ func GetLastTagFromResponse(resultTags *acr.RepositoryTagsType) string {
 // GetUntaggedManifests gets all the manifests for the command to be executed on. The command will be executed on this manifest if it does not
 // have any tag and does not form part of a manifest list that has tags referencing it. If the purge command is to be executed,
 // the manifest should also not have a tag and not have a subject manifest.
-func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string, dryRun bool, dontPreserveAllOCIManifests bool) (*[]string, error) {
+func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string, dryRun bool, dontPreserveAllOCIManifests bool) ([]string, error) {
 	lastManifestDigest := ""
 	var manifestsToDelete []string
 	resultManifests, err := acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
 	if err != nil {
 		if resultManifests != nil && resultManifests.Response.Response != nil && resultManifests.StatusCode == http.StatusNotFound {
 			fmt.Printf("%s repository not found\n", repoName)
-			return &manifestsToDelete, nil
+			return manifestsToDelete, nil
 		}
 		return nil, err
 	}
@@ -296,7 +296,7 @@ func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterfa
 		manifestsToDelete = append(manifestsToDelete, *manifest.Digest)
 	}
 
-	return &manifestsToDelete, nil
+	return manifestsToDelete, nil
 }
 
 // addIndexDependenciesToIgnoreList adds all the dependencies of a multiarch manifest or an index to the ignore list. This includes all the child manifests that are also lists.

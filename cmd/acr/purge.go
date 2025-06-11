@@ -269,7 +269,7 @@ func getTagsToDelete(ctx context.Context,
 	timeToCompare time.Time,
 	lastTag string,
 	keep int,
-	skippedTagsCount int) (*[]acr.TagAttributesBase, string, int, error) {
+	skippedTagsCount int) ([]acr.TagAttributesBase, string, int, error) {
 
 	var matches bool
 	var lastUpdateTime time.Time
@@ -310,7 +310,7 @@ func getTagsToDelete(ctx context.Context,
 		newLastTag = common.GetLastTagFromResponse(resultTags)
 		// No more tags to keep
 		if keep == 0 || skippedTagsCount == keep {
-			return &tagsEligibleForDeletion, newLastTag, skippedTagsCount, nil
+			return tagsEligibleForDeletion, newLastTag, skippedTagsCount, nil
 		}
 
 		tagsToDelete := []acr.TagAttributesBase{}
@@ -322,7 +322,7 @@ func getTagsToDelete(ctx context.Context,
 				tagsToDelete = append(tagsToDelete, tag)
 			}
 		}
-		return &tagsToDelete, newLastTag, skippedTagsCount, nil
+		return tagsToDelete, newLastTag, skippedTagsCount, nil
 	}
 	// In case there are no more tags return empty string as lastTag so that the purgeTags function stops
 	return nil, "", skippedTagsCount, nil

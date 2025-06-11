@@ -258,7 +258,7 @@ func TestGetManifeststoAnnotate(t *testing.T) {
 		ref = fmt.Sprintf("%s/%s:%s", testLoginURL, testRepo, tagNameWithLoad)
 		mockOrasClient.On("DiscoverLifecycleAnnotation", mock.Anything, ref, testArtifactType).Return(false, nil).Once()
 		tagsToAnnotate, testLastTag, err := getManifestsToAnnotate(testCtx, mockClient, mockOrasClient, testLoginURL, testRepo, tagRegex, "", testArtifactType, false)
-		assert.Equal(4, len(*tagsToAnnotate), "Number of tags to annotate should be 1")
+		assert.Equal(4, len(tagsToAnnotate), "Number of tags to annotate should be 1")
 		assert.Equal("", testLastTag, "Last tag should be empty")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)

@@ -5,9 +5,13 @@ package worker
 
 import (
 	"context"
+	"fmt"
+	"net/http"
+	"sync/atomic"
 
 	"github.com/Azure/acr-cli/acr"
 	"github.com/Azure/acr-cli/internal/api"
+	"github.com/alitto/pond/v2"
 )
 
 // Purger purges tags or manifests concurrently.
@@ -20,7 +24,7 @@ type Purger struct {
 // TODO: Lets rewrite the purger to use a global pool of workers so we can do cross repo purging efficiently (doing deletes cross repo is less likely to hit concurrency limits)
 func NewPurger(poolSize int, acrClient api.AcrCLIClientInterface, loginURL string, repoName string) *Purger {
 	executeBase := Executer{
-		pool:     newPool(poolSize),
+		pool:     pond.NewPool(poolSize, pond.WithQueueSize(poolSize*2), pond.WithNonBlocking(false)),
 		loginURL: loginURL,
 		repoName: repoName,
 	}
@@ -31,21 +35,62 @@ func NewPurger(poolSize int, acrClient api.AcrCLIClientInterface, loginURL strin
 }
 
 // PurgeTags purges a list of tags concurrently, and returns a count of deleted tags and the first error occurred.
-func (p *Purger) PurgeTags(ctx context.Context, tags *[]acr.TagAttributesBase) (int, error) {
-	jobs := make([]job, len(*tags))
-	for i, tag := range *tags {
-		jobs[i] = newPurgeTagJob(p.loginURL, p.repoName, p.acrClient, *tag.Name)
-	}
+func (p *Purger) PurgeTags(ctx context.Context, tags []acr.TagAttributesBase) (int, error) {
+	var deletedTags atomic.Int64 // Count of successfully deleted tags
+	group := p.pool.NewGroup()
+	for _, tag := range tags {
+		group.SubmitErr(func() error {
+			resp, err := p.acrClient.DeleteAcrTag(ctx, p.repoName, *tag.Name)
+			if err == nil {
+				fmt.Printf("Deleted %s/%s:%s\n", p.loginURL, p.repoName, *tag.Name)
+				// Increment the count of successfully deleted tags atomically
+				deletedTags.Add(1)
+				return nil
+			}
 
-	return p.process(ctx, &jobs)
+			if resp != nil && resp.Response != nil && resp.StatusCode == http.StatusNotFound {
+				// If the tag is not found it can be assumed to have been deleted.
+				deletedTags.Add(1)
+				fmt.Printf("Skipped %s/%s:%s, HTTP status: %d\n", p.loginURL, p.repoName, *tag.Name, resp.StatusCode)
+				return nil
+			}
+
+			fmt.Printf("Failed to delete %s/%s:%s, error: %v\n", p.loginURL, p.repoName, *tag.Name, err)
+			return err
+		})
+	}
+	err := group.Wait() // Error should be nil
+	return int(deletedTags.Load()), err
 }
 
 // PurgeManifests purges a list of manifests concurrently, and returns a count of deleted manifests and the first error occurred.
-func (p *Purger) PurgeManifests(ctx context.Context, manifests *[]string) (int, error) {
-	jobs := make([]job, len(*manifests))
-	for i, manifest := range *manifests {
-		jobs[i] = newPurgeManifestJob(p.loginURL, p.repoName, p.acrClient, manifest)
-	}
+func (p *Purger) PurgeManifests(ctx context.Context, manifests []string) (int, error) {
+	var deletedManifests atomic.Int64 // Count of successfully deleted tags
+	group := p.pool.NewGroup()
+	for _, manifest := range manifests {
+		group.SubmitErr(func() error {
+			resp, err := p.acrClient.DeleteManifest(ctx, p.repoName, manifest)
+			if err == nil {
+				fmt.Printf("Deleted %s/%s:%s\n", p.loginURL, p.repoName, manifest)
+				// Increment the count of successfully deleted tags atomically
+				deletedManifests.Add(1)
+				return nil
+			}
 
-	return p.process(ctx, &jobs)
+			if resp != nil && resp.Response != nil && resp.StatusCode == http.StatusNotFound {
+				// If the tag is not found it can be assumed to have been deleted.
+				deletedManifests.Add(1)
+				fmt.Printf("Skipped %s/%s:%s, HTTP status: %d\n", p.loginURL, p.repoName, manifest, resp.StatusCode)
+				return nil
+			}
+
+			// TODO: We can probably continue to increase the resilliency here. Some errors can indicate catastrophic failures like network denied, so we should probably not continue in those cases.
+			// 429s might also mean we should slow down and can probably introduce logic to do that here.
+			fmt.Printf("Failed to delete %s/%s:%s, error: %v\n", p.loginURL, p.repoName, manifest, err)
+			return err
+
+		})
+	}
+	err := group.Wait()
+	return int(deletedManifests.Load()), err
 }
