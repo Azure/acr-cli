@@ -151,7 +151,9 @@ func GetLastTagFromResponse(resultTags *acr.RepositoryTagsType) string {
 // GetUntaggedManifests gets all the manifests for the command to be executed on. The command will be executed on this manifest if it does not
 // have any tag and does not form part of a manifest list that has tags referencing it. If the purge command is to be executed,
 // the manifest should also not have a tag and not have a subject manifest.
-func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string, dryRun bool, dontPreserveAllOCIManifests bool) ([]string, error) {
+// Param manifestToTagsCountMap is an optional map that can be used to pass the count of tags for each manifest that we know would be deleted if the command is exectued
+// under dryRun conditions. Its ignored if the dryRun flag is false.
+func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string, manifestToDeletedTagsCountMap map[string]int, dryRun bool, dontPreserveAllOCIManifests bool) ([]string, error) {
 	lastManifestDigest := ""
 	var manifestsToDelete []string
 	resultManifests, err := acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
@@ -206,8 +208,9 @@ func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterfa
 			}
 
 			// _____MANIFEST IS TAGGED_____
+			manifestWouldHaveTagsWithoutDryRun := dryRun && manifestToDeletedTagsCountMap != nil && manifest.Tags != nil && len(*manifest.Tags) > manifestToDeletedTagsCountMap[*manifest.Digest]
 			// If an image has tags, it should not be deleted. If it is a manifest list, we need to check for its children which might be untagged
-			if manifest.Tags != nil && len(*manifest.Tags) > 0 {
+			if manifest.Tags != nil && len(*manifest.Tags) > 0 && !manifestWouldHaveTagsWithoutDryRun {
 				// If the media type is not set, we will have to identify the manifest type from its fields, in this case the manifests field.
 				// This should not really happen for this API but we will handle it gracefully.
 				if manifest.MediaType != nil {

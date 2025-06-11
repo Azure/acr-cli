@@ -9,9 +9,10 @@ The concurrency flag seems to set a per purge limit so if a customer is cleaning
 TODO:
 - Nested Indexes - Done
 - Referrer Indexes - Done
-- Certain artifact types
 - Pool for Gets - Done
-- Pool for Deletes
+- Pool for Deletes - Rewrote, but no cross repo scenarios
+
+- Certain artifact types - Next PR
 
 Optimize the cross repo scenario?
 We shouldn't do one repo one by one, instead we can spread the messages across repos for deletes. This will allow the greatest throughtput
