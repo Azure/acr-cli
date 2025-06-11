@@ -348,7 +348,7 @@ func purgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInter
 	// Contrary to getTagsToDelete, getManifestsToDelete gets all the Manifests at once, this was done because if there is a manifest that has no
 	// tag but is referenced by a multiarch manifest that has tags then it should not be deleted. Or if a manifest has no tag, but it has subject,
 	// then it should not be deleted.
-	manifestsToDelete, err := common.GetUntaggedManifests(ctx, acrClient, loginURL, repoName, manifestToTagsCountMap, dryRun, true)
+	manifestsToDelete, err := common.GetUntaggedManifests(ctx, acrClient, loginURL, repoName, false, manifestToTagsCountMap, dryRun)
 	if err != nil {
 		return -1, err
 	}

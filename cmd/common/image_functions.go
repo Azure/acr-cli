@@ -153,7 +153,7 @@ func GetLastTagFromResponse(resultTags *acr.RepositoryTagsType) string {
 // the manifest should also not have a tag and not have a subject manifest.
 // Param manifestToTagsCountMap is an optional map that can be used to pass the count of tags for each manifest that we know would be deleted if the command is exectued
 // under dryRun conditions. Its ignored if the dryRun flag is false.
-func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string, manifestToDeletedTagsCountMap map[string]int, dryRun bool, dontPreserveAllOCIManifests bool) ([]string, error) {
+func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string, preserveAllOCIManifests bool, manifestToDeletedTagsCountMap map[string]int, dryRun bool) ([]string, error) {
 	lastManifestDigest := ""
 	var manifestsToDelete []string
 	resultManifests, err := acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
@@ -229,7 +229,7 @@ func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterfa
 			// _____MANIFEST IS UNTAGGED BUT MAY BE PROTECTED_____
 			// TODO: I am a little unclear as to why this was ever an option but respecting it for now. Its not used by the purge scenarios only for
 			// the annotate command.
-			if !dontPreserveAllOCIManifests {
+			if preserveAllOCIManifests {
 				if *manifest.MediaType != v1.MediaTypeImageManifest {
 					// Add the manifest to the candidates list
 					if _, ok := candidates[*manifest.Digest]; !ok {
