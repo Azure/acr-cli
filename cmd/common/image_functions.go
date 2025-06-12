@@ -17,6 +17,7 @@ import (
 	"github.com/Azure/acr-cli/acr/acrapi"
 	"github.com/Azure/acr-cli/internal/api"
 	"github.com/Azure/acr-cli/internal/container/set"
+	"github.com/Azure/go-autorest/autorest"
 	"github.com/dlclark/regexp2"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 )
@@ -247,9 +248,14 @@ func UpdateForManifestWithoutSubjectToDelete(ctx context.Context, manifest acr.M
 		var manifestBytes []byte
 		manifestBytes, err := acrClient.GetManifest(ctx, repoName, *manifest.Digest)
 		if err != nil {
-			fmt.Println("Error getting manifest bytes for", *manifest.Digest, ":", err, "continuing with the next manifest")
-			candidatesToDelete = append(candidatesToDelete, manifest)
-			return candidatesToDelete, nil
+			// Check if the error is autorest.DetailedError with status code not found
+			if detailedErr, ok := err.(autorest.DetailedError); ok && detailedErr.StatusCode == http.StatusNotFound {
+				fmt.Println("Manifest", *manifest.Digest, "not found, adding to delete candidates")
+				candidatesToDelete = append(candidatesToDelete, manifest)
+				return candidatesToDelete, nil
+			}
+			// For other errors, return the error
+			return nil, err
 		}
 		// this struct defines a customized struct for manifests which
 		// is used to parse the content of a manifest references a subject
