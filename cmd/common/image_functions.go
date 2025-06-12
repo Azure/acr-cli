@@ -149,7 +149,7 @@ func GetLastTagFromResponse(resultTags *acr.RepositoryTagsType) string {
 // GetUntaggedManifests gets all the manifests for the command to be executed on. The command will be executed on this manifest if it does not
 // have any tag and does not form part of a manifest list that has tags referencing it. If the purge command is to be executed,
 // the manifest should also not have a tag and not have a subject manifest.
-func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string, dryRun bool, ignoreReferrerManifests bool) (*[]string, error) {
+func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string, dryRun bool, ignoreReferrerManifests bool, UntagLimit int) (*[]string, error) {
 	lastManifestDigest := ""
 	var manifestsForCommand []string
 	resultManifests, err := acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
@@ -195,6 +195,10 @@ func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterfa
 		resultManifests, err = acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
 		if err != nil {
 			return nil, err
+		}
+		if UntagLimit > 0 && len(candidates) >= UntagLimit {
+			// If the number of candidates is greater than the limit, we stop fetching more manifests.
+			break
 		}
 	}
 	// Remove all manifests that should not be deleted
