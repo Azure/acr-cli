@@ -247,7 +247,9 @@ func UpdateForManifestWithoutSubjectToDelete(ctx context.Context, manifest acr.M
 		var manifestBytes []byte
 		manifestBytes, err := acrClient.GetManifest(ctx, repoName, *manifest.Digest)
 		if err != nil {
-			return nil, err
+			fmt.Println("Error getting manifest bytes for", *manifest.Digest, ":", err, "continuing with the next manifest")
+			candidatesToDelete = append(candidatesToDelete, manifest)
+			return candidatesToDelete, nil
 		}
 		// this struct defines a customized struct for manifests which
 		// is used to parse the content of a manifest references a subject
