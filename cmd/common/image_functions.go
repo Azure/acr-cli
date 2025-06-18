@@ -157,6 +157,7 @@ func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterfa
 	lastManifestDigest := ""
 	var manifestsToDelete []string
 	resultManifests, err := acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
+	fmt.Print("Fetching manifests")
 	if err != nil {
 		if resultManifests != nil && resultManifests.Response.Response != nil && resultManifests.StatusCode == http.StatusNotFound {
 			fmt.Printf("%s repository not found\n", repoName)
@@ -219,7 +220,7 @@ func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterfa
 						continue
 					}
 				}
-
+				fmt.Printf("Submitting manifest %s for processing\n", *manifest.Digest)
 				group.SubmitErr(func() error {
 					return addIndexDependenciesToIgnoreList(ctx, *manifest.Digest, acrClient, repoName, &ignoreList)
 				})
@@ -244,7 +245,11 @@ func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterfa
 
 			// Schedule a goroutine to check if the manifest is okay to delete, it will be added to the
 			// candidates list anyway but if it is not okay to delete we will add it to the ignoreList
+
+			// We only need to do this check if we are looking at an oci index or oci manifest
+			fmt.Printf("Submitting manifest %s for delete check\n", *manifest.Digest)
 			group.SubmitErr(func() error {
+				fmt.Printf("Checking if manifest %s is okay to delete\n", *manifest.Digest)
 				canDelete, err := isManifestOkayToDelete(ctx, manifest, acrClient, repoName)
 				if err != nil {
 					return err
@@ -255,8 +260,8 @@ func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterfa
 				}
 
 				// If the manifest is a list, we need to find its children manifests and add them to the ignoreList
+				fmt.Printf("Manifest %s is not okay to delete, adding its dependencies to the ignore list\n", *manifest.Digest)
 				if *manifest.MediaType == v1.MediaTypeImageIndex {
-
 					addIndexDependenciesToIgnoreList(ctx, *manifest.Digest, acrClient, repoName, &ignoreList)
 				}
 
@@ -383,10 +388,12 @@ func isManifestOkayToDelete(ctx context.Context, manifest acr.ManifestAttributes
 	switch *manifest.MediaType {
 	case mediaTypeArtifactManifest, v1.MediaTypeImageManifest, v1.MediaTypeImageIndex:
 		var manifestBytes []byte
+		fmt.Printf("Checking manifest %s for subject\n", *manifest.Digest)
 		manifestBytes, err := acrClient.GetManifest(ctx, repoName, *manifest.Digest)
 		if err != nil {
 			errParsed := azure.RequestError{}
 			if errors.As(err, &errParsed) && errParsed.StatusCode == http.StatusNotFound {
+				fmt.Printf("Manifest %s not found, skipping\n", *manifest.Digest)
 				// If the manifest is not found, lets ignore it
 				return false, nil
 			}

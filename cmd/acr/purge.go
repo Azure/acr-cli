@@ -217,7 +217,7 @@ func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, poolSiz
 		}
 		lastTag = newLastTag
 		skippedTagsCount = newSkippedTagsCount
-		if tagsToDelete != nil {
+		if len(tagsToDelete) > 0 {
 			for _, tag := range tagsToDelete {
 				tagsPerManifestMap[*tag.Digest]++
 				if dryRun {
@@ -227,6 +227,9 @@ func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, poolSiz
 
 			if dryRun {
 				deletedTagsCount += len(tagsToDelete)
+				if len(lastTag) == 0 {
+					break
+				}
 				continue // If dryRun is set to true then no tags will be deleted, but the count is updated.
 			}
 
