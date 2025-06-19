@@ -49,6 +49,8 @@ const (
 
   - Delete all tags that are older than 7 days in the example.azurecr.io registry inside all repositories, with a page size of 50 repositories
 	acr purge -r example --filter ".*:.*" --ago 7d --repository-page-size 50
+  - Delete all tags that are older than 7 days in the example.azurecr.io registry inside all repositories, with a maximum of 100 manifests untagged in a single request
+	acr purge -r example --filter ".*:.*" --ago 7d --untag-limit 10000
 	`
 	maxPoolSize = 32 // The max number of parallel delete requests recommended by ACR server
 	headerLink  = "Link"
@@ -57,6 +59,7 @@ const (
 var (
 	defaultPoolSize         = runtime.GOMAXPROCS(0)
 	defaultRepoPageSize     = int32(100)
+	defaultUntagLimit       = 0
 	repoPageSizeDescription = "Number of repositories queried at once"
 	concurrencyDescription  = fmt.Sprintf("Number of concurrent purge tasks. Range: [1 - %d]", maxPoolSize)
 )
@@ -77,6 +80,7 @@ type purgeParameters struct {
 	dryRun        bool
 	concurrency   int
 	repoPageSize  int32
+	UntagLimit    int
 }
 
 // newPurgeCmd defines the purge command.
@@ -130,7 +134,7 @@ func newPurgeCmd(rootParams *rootParameters) *cobra.Command {
 					singleDeletedManifestsCount := 0
 					// If the untagged flag is set then also manifests are deleted.
 					if purgeParams.untagged {
-						singleDeletedManifestsCount, err = purgeDanglingManifests(ctx, acrClient, poolSize, loginURL, repoName)
+						singleDeletedManifestsCount, err = purgeDanglingManifests(ctx, acrClient, poolSize, loginURL, repoName, purgeParams.UntagLimit)
 						if err != nil {
 							return errors.Wrap(err, "failed to purge manifests")
 						}
@@ -169,6 +173,7 @@ func newPurgeCmd(rootParams *rootParameters) *cobra.Command {
 	cmd.Flags().Int64Var(&purgeParams.filterTimeout, "filter-timeout-seconds", defaultRegexpMatchTimeoutSeconds, "This limits the evaluation of the regex filter, and will return a timeout error if this duration is exceeded during a single evaluation. If written incorrectly a regexp filter with backtracking can result in an infinite loop.")
 	cmd.Flags().IntVar(&purgeParams.concurrency, "concurrency", defaultPoolSize, concurrencyDescription)
 	cmd.Flags().Int32Var(&purgeParams.repoPageSize, "repository-page-size", defaultRepoPageSize, repoPageSizeDescription)
+	cmd.Flags().IntVar(&purgeParams.UntagLimit, "untag-limit", defaultUntagLimit, "The maximum number of manifests to untag in a single requess.")
 	cmd.Flags().BoolP("help", "h", false, "Print usage")
 	cmd.MarkFlagRequired("filter")
 	cmd.MarkFlagRequired("ago")
@@ -318,12 +323,12 @@ func getTagsToDelete(ctx context.Context,
 
 // purgeDanglingManifests deletes all manifests that do not have any tags associated with them.
 // except the ones that are referenced by a multiarch manifest or that have subject.
-func purgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, poolSize int, loginURL string, repoName string) (int, error) {
+func purgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, poolSize int, loginURL string, repoName string, limit int) (int, error) {
 	fmt.Printf("Deleting manifests for repository: %s\n", repoName)
 	// Contrary to getTagsToDelete, getManifestsToDelete gets all the Manifests at once, this was done because if there is a manifest that has no
 	// tag but is referenced by a multiarch manifest that has tags then it should not be deleted. Or if a manifest has no tag, but it has subject,
 	// then it should not be deleted.
-	manifestsToDelete, err := common.GetUntaggedManifests(ctx, acrClient, loginURL, repoName, false, true)
+	manifestsToDelete, err := common.GetUntaggedManifests(ctx, acrClient, loginURL, repoName, false, true, limit)
 	if err != nil {
 		return -1, err
 	}
