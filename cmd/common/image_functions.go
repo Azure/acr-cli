@@ -250,8 +250,7 @@ func UpdateForManifestWithoutSubjectToDelete(ctx context.Context, manifest acr.M
 		if err != nil {
 			// Check if the error is autorest.DetailedError with status code not found
 			if detailedErr, ok := err.(autorest.DetailedError); ok && detailedErr.StatusCode == http.StatusNotFound {
-				fmt.Println("Manifest", *manifest.Digest, "not found, adding to delete candidates")
-				candidatesToDelete = append(candidatesToDelete, manifest)
+				fmt.Println("Manifest", *manifest.Digest, "not found, skip it")
 				return candidatesToDelete, nil
 			}
 			// For other errors, return the error
