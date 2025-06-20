@@ -17,6 +17,7 @@ import (
 	"github.com/Azure/acr-cli/acr"
 	"github.com/Azure/acr-cli/acr/acrapi"
 	"github.com/Azure/acr-cli/internal/api"
+	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/alitto/pond/v2"
 	"github.com/dlclark/regexp2"
@@ -391,13 +392,14 @@ func isManifestOkayToDelete(ctx context.Context, manifest acr.ManifestAttributes
 		fmt.Printf("Checking manifest %s for subject\n", *manifest.Digest)
 		manifestBytes, err := acrClient.GetManifest(ctx, repoName, *manifest.Digest)
 		if err != nil {
-			errParsed := azure.RequestError{}
+			// Check if the error is autorest.DetailedError with status code not found
+			errParsed := autorest.DetailedError{}
 			if errors.As(err, &errParsed) && errParsed.StatusCode == http.StatusNotFound {
-				fmt.Printf("Manifest %s not found, skipping\n", *manifest.Digest)
-				// If the manifest is not found, lets ignore it
-				return false, nil
+				fmt.Println("Manifest", *manifest.Digest, "not found, skip it")
+				return candidatesToDelete, nil
 			}
-			return false, err
+			// For other errors, return the error
+			return nil, err
 		}
 		// this struct defines a customized struct for manifests which
 		// is used to parse the content of a manifest references a subject
