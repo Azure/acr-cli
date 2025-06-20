@@ -396,10 +396,10 @@ func isManifestOkayToDelete(ctx context.Context, manifest acr.ManifestAttributes
 			errParsed := autorest.DetailedError{}
 			if errors.As(err, &errParsed) && errParsed.StatusCode == http.StatusNotFound {
 				fmt.Println("Manifest", *manifest.Digest, "not found, skip it")
-				return candidatesToDelete, nil
+				return false, nil
 			}
 			// For other errors, return the error
-			return nil, err
+			return false, err
 		}
 		// this struct defines a customized struct for manifests which
 		// is used to parse the content of a manifest references a subject
