@@ -127,6 +127,18 @@ Examples of filters
 | Untag all tags that are older than the duration in app repository                | --filter `"app:.*"`                   |
 | Untag all tags that are older than the duration in all repositories              | --filter `".*:.*"`                    |
 
+##### Exclude filter tag
+
+To exclude tags from the purging, use the --exclude-filter parameter. Exclude filters take precedence over filters.
+
+```sh
+acr purge \
+    --registry <Registry Name> \
+    --filter <Repository Name>:<Regex filter> \
+    --exclude-filter <Regex exclude>
+    ...
+```
+
 #### Ago flag
 
 The ago flag can be used to change the default expiration time of a tag, for example, the following command would purge all tags that are older than 30 days:
