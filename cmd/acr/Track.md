@@ -14,5 +14,6 @@ Left out of scope for this PR:
 - Add cleanup filtering for specific artifact types
 - Add cross repo delete optimizations for the pool
 - Improved logging
+- Headless Referrers (Referrers without a parent?)
 
 
