@@ -20,11 +20,10 @@ type Purger struct {
 	acrClient api.AcrCLIClientInterface
 }
 
-// NewPurger creates a new Purger.
-// TODO: Lets rewrite the purger to use a global pool of workers so we can do cross repo purging efficiently (doing deletes cross repo is less likely to hit concurrency limits)
+// NewPurger creates a new Purger. Purgers are currently repository specific
 func NewPurger(poolSize int, acrClient api.AcrCLIClientInterface, loginURL string, repoName string) *Purger {
 	executeBase := Executer{
-		pool:     pond.NewPool(poolSize, pond.WithQueueSize(poolSize*2), pond.WithNonBlocking(false)),
+		pool:     pond.NewPool(poolSize, pond.WithQueueSize(poolSize), pond.WithNonBlocking(false)),
 		loginURL: loginURL,
 		repoName: repoName,
 	}
@@ -84,8 +83,6 @@ func (p *Purger) PurgeManifests(ctx context.Context, manifests []string) (int, e
 				return nil
 			}
 
-			// TODO: We can probably continue to increase the resilliency here. Some errors can indicate catastrophic failures like network denied, so we should probably not continue in those cases.
-			// 429s might also mean we should slow down and can probably introduce logic to do that here.
 			fmt.Printf("Failed to delete %s/%s:%s, error: %v\n", p.loginURL, p.repoName, manifest, err)
 			return err
 

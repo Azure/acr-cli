@@ -35,7 +35,7 @@ func NewAnnotator(poolSize int, orasClient api.ORASClientInterface, loginURL str
 		return nil, err
 	}
 	executeBase := Executer{
-		pool:     pond.NewPool(poolSize, pond.WithQueueSize(poolSize*2), pond.WithNonBlocking(false)),
+		pool:     pond.NewPool(poolSize, pond.WithQueueSize(poolSize*3), pond.WithNonBlocking(false)),
 		loginURL: loginURL,
 		repoName: repoName,
 	}

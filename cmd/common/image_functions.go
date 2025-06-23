@@ -154,11 +154,10 @@ func GetLastTagFromResponse(resultTags *acr.RepositoryTagsType) string {
 // the manifest should also not have a tag and not have a subject manifest.
 // Param manifestToTagsCountMap is an optional map that can be used to pass the count of tags for each manifest that we know would be deleted if the command is exectued
 // under dryRun conditions. Its ignored if the dryRun flag is false.
-func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string, preserveAllOCIManifests bool, manifestToDeletedTagsCountMap map[string]int, dryRun bool) ([]string, error) {
+func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCLIClientInterface, loginURL string, repoName string, preserveAllOCIManifests bool, manifestToDeletedTagsCountMap map[string]int, dryRun bool) ([]string, error) {
 	lastManifestDigest := ""
 	var manifestsToDelete []string
 	resultManifests, err := acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
-	fmt.Print("Fetching manifests")
 	if err != nil {
 		if resultManifests != nil && resultManifests.Response.Response != nil && resultManifests.StatusCode == http.StatusNotFound {
 			fmt.Printf("%s repository not found\n", repoName)
@@ -177,7 +176,7 @@ func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterfa
 	// Read operations, specifically manifest gets are less throttled and so we can do more at once
 	// We will use a goroutine pool to limit the number of concurrent operations. We allow for a large queue size
 	// so that we save some time by not having to wait for the pool to be available before submitting a new task.
-	pool := pond.NewPool(10, pond.WithContext(ctx), pond.WithQueueSize(1000), pond.WithNonBlocking(false))
+	pool := pond.NewPool(poolSize, pond.WithContext(ctx), pond.WithQueueSize(poolSize*3), pond.WithNonBlocking(false))
 	group := pool.NewGroup()
 
 	for resultManifests != nil && resultManifests.ManifestsAttributes != nil {
@@ -221,7 +220,6 @@ func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterfa
 						continue
 					}
 				}
-				fmt.Printf("Submitting manifest %s for processing\n", *manifest.Digest)
 				group.SubmitErr(func() error {
 					return addIndexDependenciesToIgnoreList(ctx, *manifest.Digest, acrClient, repoName, &ignoreList)
 				})
@@ -248,9 +246,7 @@ func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterfa
 			// candidates list anyway but if it is not okay to delete we will add it to the ignoreList
 
 			// We only need to do this check if we are looking at an oci index or oci manifest
-			fmt.Printf("Submitting manifest %s for delete check\n", *manifest.Digest)
 			group.SubmitErr(func() error {
-				fmt.Printf("Checking if manifest %s is okay to delete\n", *manifest.Digest)
 				canDelete, err := isManifestOkayToDelete(ctx, manifest, acrClient, repoName)
 				if err != nil {
 					return err
@@ -261,7 +257,6 @@ func GetUntaggedManifests(ctx context.Context, acrClient api.AcrCLIClientInterfa
 				}
 
 				// If the manifest is a list, we need to find its children manifests and add them to the ignoreList
-				fmt.Printf("Manifest %s is not okay to delete, adding its dependencies to the ignore list\n", *manifest.Digest)
 				if *manifest.MediaType == v1.MediaTypeImageIndex {
 					addIndexDependenciesToIgnoreList(ctx, *manifest.Digest, acrClient, repoName, &ignoreList)
 				}
@@ -389,7 +384,6 @@ func isManifestOkayToDelete(ctx context.Context, manifest acr.ManifestAttributes
 	switch *manifest.MediaType {
 	case mediaTypeArtifactManifest, v1.MediaTypeImageManifest, v1.MediaTypeImageIndex:
 		var manifestBytes []byte
-		fmt.Printf("Checking manifest %s for subject\n", *manifest.Digest)
 		manifestBytes, err := acrClient.GetManifest(ctx, repoName, *manifest.Digest)
 		if err != nil {
 			// Check if the error is autorest.DetailedError with status code not found
