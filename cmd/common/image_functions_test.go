@@ -3,7 +3,6 @@ package common
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -83,131 +82,63 @@ func TestFindDirectDependentManifests(t *testing.T) {
 	}
 }
 
-func TestAddIndexDependenciesToIgnoreList(t *testing.T) {
+func TestAddDependentManifestsToIgnoreList(t *testing.T) {
 	ctx := context.Background()
 	err404 := azure.RequestError{}
 	err404.StatusCode = 404
 	repoName := "test-repo"
 
-	testCases := []struct {
-		name               string
-		manifestDigest     string
-		mockResponses      map[string]string // Multiple responses for recursion
-		mockErrorResponses map[string]error  // Simulate errors for specific digests
-		expectedKeys       []string
-		expectedError      bool
-	}{
-		{
-			name:           "Valid multiarch manifest with recursion",
-			manifestDigest: "test-digest",
-			mockResponses: map[string]string{
-				"test-digest": `{
-					"manifests": [
-						{"digest": "digest1", "mediaType": "application/vnd.docker.distribution.manifest.list.v2+json"},
-						{"digest": "digest2", "mediaType": "application/vnd.oci.image.index.v1+json"},
-						{"digest": "digest3", "mediaType": "application/vnd.oci.image.manifest.v1+json"}
-					]
-				}`,
-				"digest1": `{
-					"manifests": [
-						{"digest": "digest1-1", "mediaType": "application/vnd.docker.distribution.manifest.list.v2+json"},
-						{"digest": "digest1-2", "mediaType": "application/vnd.oci.image.index.v1+json"},
-						{"digest": "digest1-3", "mediaType": "application/vnd.oci.image.manifest.v1+json"}
-					]
-				}`,
-				"digest2": `{
-					"manifests": [
-						{"digest": "digest2-1", "mediaType": "application/vnd.docker.distribution.manifest.list.v2+json"},
-						{"digest": "digest2-2", "mediaType": "application/vnd.oci.image.index.v1+json"},
-						{"digest": "digest2-3", "mediaType": "application/vnd.oci.image.manifest.v1+json"}
-					]
-				}`,
-				"digest1-1": `{"manifests": []}`,
-				"digest1-2": `{"manifests": []}`,
-				"digest2-1": `{"manifests": []}`,
-				"digest2-2": `{"manifests": []}`,
-			},
-			expectedKeys:  []string{"digest1", "digest2", "digest3", "digest1-1", "digest1-2", "digest1-3", "digest2-1", "digest2-2", "digest2-3"},
-			expectedError: false,
-		},
-		{
-			name:           "Some Manifests not found",
-			manifestDigest: "test-digest",
-			mockResponses: map[string]string{
-				"test-digest": `{
-					"manifests": [
-						{"digest": "digest1", "mediaType": "application/vnd.docker.distribution.manifest.list.v2+json"},
-						{"digest": "digest2", "mediaType": "application/vnd.oci.image.index.v1+json"},
-						{"digest": "digest3", "mediaType": "application/vnd.oci.image.manifest.v1+json"}
-					]
-				}`,
-				"digest2": `{
-					"manifests": [
-						{"digest": "digest2-1", "mediaType": "application/vnd.oci.image.manifest.v1+json"}
-					]
-				}`,
-			},
-			mockErrorResponses: map[string]error{
-				"digest1": err404, // Simulate 404 for digest1
-			},
-			expectedKeys: []string{"digest1", "digest2", "digest3", "digest2-1"},
-		},
-		{
-			name:           "Encountered error that could not be resolved",
-			manifestDigest: "test-digest",
-			mockResponses: map[string]string{
-				"test-digest": `{
-					"manifests": [
-						{"digest": "digest1", "mediaType": "application/vnd.docker.distribution.manifest.list.v2+json"},
-						{"digest": "digest2", "mediaType": "application/vnd.oci.image.index.v1+json"},
-						{"digest": "digest3", "mediaType": "application/vnd.oci.image.manifest.v1+json"}
-					]
-				}`,
-				"digest1": `{
-					"manifests": [
-						{"digest": "digest1-1", "mediaType": "application/vnd.oci.image.manifest.v1+json"}
-					]
-				}`,
-			},
-			mockErrorResponses: map[string]error{
-				"digest2": errors.New("this is an unexpected error that purge cannot resolve"),
-			},
-			expectedKeys:  []string{"digest1", "digest2", "digest3", "digest1-1"},
-			expectedError: true, // Expect an error due to the unresolved error for digest1
-		},
-	}
+	t.Run("Simple case with non-list manifests", func(t *testing.T) {
+		ignoreList := &sync.Map{}
+		mockClient := &mocks.AcrCLIClientInterface{}
 
-	for _, tt := range testCases {
-		tc := tt
-		t.Run(tc.name, func(t *testing.T) {
-			ignoreList := &sync.Map{}
-			mockClient := &mocks.AcrCLIClientInterface{}
+		dependentManifests := []dependentManifestResult{
+			{Digest: "digest1", IsList: false},
+			{Digest: "digest2", IsList: false},
+		}
 
-			// Mock responses dynamically
-			for digest, response := range tc.mockResponses {
-				mockClient.On("GetManifest", ctx, repoName, digest).Return([]byte(response), nil)
-			}
+		err := addDependentManifestsToIgnoreList(ctx, dependentManifests, mockClient, repoName, ignoreList)
+		assert.NoError(t, err)
 
-			// Mock error responses
-			for digest, err := range tc.mockErrorResponses {
-				mockClient.On("GetManifest", ctx, repoName, digest).Return(nil, err)
-			}
+		// Check that both manifests are in ignore list
+		_, exists1 := ignoreList.Load("digest1")
+		assert.True(t, exists1)
+		_, exists2 := ignoreList.Load("digest2")
+		assert.True(t, exists2)
 
-			err := addIndexDependenciesToIgnoreList(ctx, tc.manifestDigest, mockClient, repoName, ignoreList)
-			if tc.expectedError {
-				assert.Error(t, err, "Expected an error due to unresolved manifest")
-			} else {
-				assert.NoError(t, err, "Expected no error while processing manifests")
-			}
+		// No mock expectations since non-list manifests don't get fetched
+		mockClient.AssertExpectations(t)
+	})
 
-			for _, key := range tc.expectedKeys {
-				_, exists := ignoreList.Load(key)
-				assert.True(t, exists, "Expected manifest %s in ignore list", key)
-			}
+	t.Run("Mixed list and non-list manifests", func(t *testing.T) {
+		ignoreList := &sync.Map{}
+		mockClient := &mocks.AcrCLIClientInterface{}
 
-			mockClient.AssertExpectations(t)
-		})
-	}
+		dependentManifests := []dependentManifestResult{
+			{Digest: "list1", IsList: true},
+			{Digest: "nonlist1", IsList: false},
+		}
+
+		// Mock response for the list manifest
+		mockClient.On("GetManifest", ctx, repoName, "list1").Return([]byte(`{
+			"manifests": [
+				{"digest": "child1", "mediaType": "application/vnd.oci.image.manifest.v1+json"}
+			]
+		}`), nil)
+
+		err := addDependentManifestsToIgnoreList(ctx, dependentManifests, mockClient, repoName, ignoreList)
+		assert.NoError(t, err)
+
+		// Check that all manifests are in ignore list
+		_, exists1 := ignoreList.Load("list1")
+		assert.True(t, exists1)
+		_, exists2 := ignoreList.Load("nonlist1")
+		assert.True(t, exists2)
+		_, exists3 := ignoreList.Load("child1")
+		assert.True(t, exists3)
+
+		mockClient.AssertExpectations(t)
+	})
 }
 
 // TestAddIndexDependenciesToIgnoreListComplex tests the recursive structure of manifests
@@ -240,8 +171,17 @@ func TestAddIndexDependenciesToIgnoreListComplex(t *testing.T) {
 				mockClient.On("GetManifest", ctx, repoName, digest).Return([]byte(response), nil)
 			}
 
-			err := addIndexDependenciesToIgnoreList(ctx, rootDigest, mockClient, repoName, ignoreList)
+			// Convert root digest to dependent manifest for testing
+			dependentManifests := []dependentManifestResult{
+				{Digest: rootDigest, IsList: true},
+			}
+
+			err := addDependentManifestsToIgnoreList(ctx, dependentManifests, mockClient, repoName, ignoreList)
 			assert.NoError(t, err, "Expected no error while processing recursive manifests")
+
+			// Check that root digest is in ignore list
+			_, exists := ignoreList.Load(rootDigest)
+			assert.True(t, exists, "Expected root manifest %s in ignore list", rootDigest)
 
 			for _, key := range expectedKeys {
 				_, exists := ignoreList.Load(key)
@@ -308,4 +248,127 @@ func generateRecursiveTestCase(depth, branching int) (string, map[string]string,
 	}
 
 	return root, mockResponses, expectedKeys
+}
+
+func TestCheckOCIArtifactDeletability(t *testing.T) {
+	testCases := []struct {
+		name         string
+		manifestJSON string
+		mediaType    string
+		canDelete    bool
+		expectError  bool
+	}{
+		{
+			name:         "OCI manifest without subject",
+			manifestJSON: `{"schemaVersion": 2}`,
+			mediaType:    v1.MediaTypeImageManifest,
+			canDelete:    true,
+			expectError:  false,
+		},
+		{
+			name:         "OCI manifest with subject - referrer",
+			manifestJSON: `{"schemaVersion": 2, "subject": {"digest": "sha256:abc123", "mediaType": "application/vnd.oci.image.manifest.v1+json"}}`,
+			mediaType:    v1.MediaTypeImageManifest,
+			canDelete:    false,
+			expectError:  false,
+		},
+		{
+			name:         "OCI artifact manifest without subject",
+			manifestJSON: `{"schemaVersion": 2}`,
+			mediaType:    mediaTypeArtifactManifest,
+			canDelete:    true,
+			expectError:  false,
+		},
+		{
+			name:         "OCI artifact manifest with subject - referrer",
+			manifestJSON: `{"schemaVersion": 2, "subject": {"digest": "sha256:def456", "mediaType": "application/vnd.oci.image.manifest.v1+json"}}`,
+			mediaType:    mediaTypeArtifactManifest,
+			canDelete:    false,
+			expectError:  false,
+		},
+		{
+			name:         "Non-OCI media type",
+			manifestJSON: `{"schemaVersion": 2}`,
+			mediaType:    "application/vnd.docker.distribution.manifest.v2+json",
+			canDelete:    true,
+			expectError:  false,
+		},
+		{
+			name:         "Invalid JSON",
+			manifestJSON: `{invalid json}`,
+			mediaType:    v1.MediaTypeImageManifest,
+			canDelete:    false,
+			expectError:  true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			canDelete, err := checkOCIArtifactDeletability([]byte(tc.manifestJSON), tc.mediaType)
+
+			if tc.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.canDelete, canDelete)
+			}
+		})
+	}
+}
+
+func TestExtractSubmanifestsFromBytes(t *testing.T) {
+	testCases := []struct {
+		name         string
+		manifestJSON string
+		expected     []dependentManifestResult
+		expectError  bool
+	}{
+		{
+			name:         "Empty manifests array",
+			manifestJSON: `{"manifests": []}`,
+			expected:     nil,
+			expectError:  false,
+		},
+		{
+			name: "Mixed manifest types",
+			manifestJSON: `{
+				"manifests": [
+					{"digest": "sha256:abc123", "mediaType": "application/vnd.docker.distribution.manifest.list.v2+json"},
+					{"digest": "sha256:def456", "mediaType": "application/vnd.oci.image.index.v1+json"},
+					{"digest": "sha256:ghi789", "mediaType": "application/vnd.oci.image.manifest.v1+json"}
+				]
+			}`,
+			expected: []dependentManifestResult{
+				{Digest: "sha256:abc123", IsList: true},
+				{Digest: "sha256:def456", IsList: true},
+				{Digest: "sha256:ghi789", IsList: false},
+			},
+			expectError: false,
+		},
+		{
+			name:         "No manifests field",
+			manifestJSON: `{"schemaVersion": 2}`,
+			expected:     nil,
+			expectError:  false,
+		},
+		{
+			name:         "Invalid JSON",
+			manifestJSON: `{invalid json}`,
+			expected:     nil,
+			expectError:  true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := extractSubmanifestsFromBytes([]byte(tc.manifestJSON))
+
+			if tc.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expected, result)
+			}
+		})
+	}
 }

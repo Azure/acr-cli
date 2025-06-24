@@ -221,7 +221,27 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 					}
 				}
 				group.SubmitErr(func() error {
-					return addIndexDependenciesToIgnoreList(ctx, *manifest.Digest, acrClient, repoName, &ignoreList)
+					// For tagged indexes/lists, we need to get dependencies and add them to ignore list
+					// We don't need to check deletability since it's tagged (not deletable), just get dependencies
+					manifestBytes, err := acrClient.GetManifest(ctx, repoName, *manifest.Digest)
+					if err != nil {
+						errParsed := autorest.DetailedError{}
+						if errors.As(err, &errParsed) && errParsed.StatusCode == http.StatusNotFound {
+							// If manifest not found, skip it
+							return nil
+						}
+						return err
+					}
+
+					dependentManifests, err := extractSubmanifestsFromBytes(manifestBytes)
+					if err != nil {
+						return err
+					}
+
+					if len(dependentManifests) > 0 {
+						return addDependentManifestsToIgnoreList(ctx, dependentManifests, acrClient, repoName, &ignoreList)
+					}
+					return nil
 				})
 				continue // We can skip the rest since the index is tagged and we are going to find its children
 			}
@@ -247,7 +267,7 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 
 			// We only need to do this check if we are looking at an oci index or oci manifest
 			group.SubmitErr(func() error {
-				canDelete, err := isManifestOkayToDelete(ctx, manifest, acrClient, repoName)
+				canDelete, dependentManifests, err := checkManifestDeletabilityAndGetDependencies(ctx, manifest, acrClient, repoName)
 				if err != nil {
 					return err
 				}
@@ -256,9 +276,9 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 					return nil
 				}
 
-				// If the manifest is a list, we need to find its children manifests and add them to the ignoreList
-				if *manifest.MediaType == v1.MediaTypeImageIndex {
-					addIndexDependenciesToIgnoreList(ctx, *manifest.Digest, acrClient, repoName, &ignoreList)
+				// If the manifest has dependencies (is an index), add them to the ignore list
+				if len(dependentManifests) > 0 {
+					return addDependentManifestsToIgnoreList(ctx, dependentManifests, acrClient, repoName, &ignoreList)
 				}
 
 				ignoreList.LoadOrStore(*manifest.Digest, struct{}{})
@@ -303,12 +323,160 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 	return manifestsToDelete, nil
 }
 
-// addIndexDependenciesToIgnoreList adds all the dependencies of a multiarch manifest or an index to the ignore list. This includes all the child manifests that are also lists.
-// We don't generally expect there to be a lot of such dependencies, so we can use a simple breadth-first search to find all the child manifests synchronously. May add concurrency
-// here later if we find that this is a bottleneck.
-func addIndexDependenciesToIgnoreList(ctx context.Context, rootDigest string, acrClient api.AcrCLIClientInterface, repoName string, ignoreList *sync.Map) error {
-	queue := []string{rootDigest}
+type dependentManifestResult struct {
+	Digest string `json:"digest"`
+	IsList bool   `json:"isList"`
+}
 
+// findDirectDependentManifests finds all the manifests that are directly dependent on the provided manifest digest. We expect the manifest to be a multiarch manifest or an index.
+// It returns a list of dependent manifests with their digests and whether they are lists or not.
+func findDirectDependentManifests(ctx context.Context, manifestDigest string, acrClient api.AcrCLIClientInterface, repoName string) ([]dependentManifestResult, error) {
+	var manifestBytes []byte
+	manifestBytes, err := acrClient.GetManifest(ctx, repoName, manifestDigest)
+	if err != nil {
+		errParsed := azure.RequestError{}
+		if errors.As(err, &errParsed) && errParsed.StatusCode == http.StatusNotFound {
+			// If the manifest is not found, we can return an empty list
+			return []dependentManifestResult{}, nil
+		}
+		return nil, err
+	}
+
+	return extractSubmanifestsFromBytes(manifestBytes)
+}
+
+// BuildRegexFilter compiles a regex state machine from a regex expression
+func BuildRegexFilter(expression string, regexpMatchTimeoutSeconds int64) (*regexp2.Regexp, error) {
+	regexp, err := regexp2.Compile(expression, defaultRegexpOptions)
+	if err != nil {
+		return nil, err
+	}
+
+	// A timeout value must always be set
+	if regexpMatchTimeoutSeconds <= 0 {
+		regexpMatchTimeoutSeconds = defaultRegexpMatchTimeoutSeconds
+	}
+	regexp.MatchTimeout = time.Duration(regexpMatchTimeoutSeconds) * time.Second
+
+	return regexp, nil
+}
+
+// checkManifestDeletabilityAndGetDependencies combines the functionality of isManifestOkayToDelete and findDirectDependentManifests
+// to avoid double-fetching the same manifest. It returns whether the manifest can be deleted and its dependencies if it's an index.
+func checkManifestDeletabilityAndGetDependencies(ctx context.Context, manifest acr.ManifestAttributesBase, acrClient api.AcrCLIClientInterface, repoName string) (bool, []dependentManifestResult, error) {
+	var dependentManifests []dependentManifestResult
+
+	// Check media type first to avoid unnecessary GetManifest calls
+	if manifest.MediaType == nil {
+		// No media type, do not delete this manifest to be on the safe side
+		fmt.Println("Manifest", *manifest.Digest, "has no media type, skipping deletion")
+		return false, dependentManifests, nil
+	}
+
+	mediaType := *manifest.MediaType
+
+	// Check if it's a type that could be a referrer (needs content inspection)
+	needsContentCheck := mediaType == mediaTypeArtifactManifest || mediaType == v1.MediaTypeImageManifest || mediaType == v1.MediaTypeImageIndex
+
+	// Only fetch manifest if we need to check its content
+	if !needsContentCheck {
+		// Regular manifest types (like Docker v2) that don't need content inspection
+		return true, dependentManifests, nil
+	}
+
+	// Fetch the manifest content only when needed
+	manifestBytes, err := acrClient.GetManifest(ctx, repoName, *manifest.Digest)
+	if err != nil {
+		errParsed := autorest.DetailedError{}
+		if errors.As(err, &errParsed) && errParsed.StatusCode == http.StatusNotFound {
+			fmt.Println("Manifest", *manifest.Digest, "not found, skip it")
+			return false, dependentManifests, nil
+		}
+		return false, dependentManifests, err
+	}
+
+	// Check if it's an OCI artifact type (referrer) - these are not deletable
+	canDelete, err := checkOCIArtifactDeletability(manifestBytes, mediaType)
+	if err != nil {
+		return false, dependentManifests, err
+	}
+	// Image can be deleted, it has no subject (referrer)
+	if canDelete {
+		return true, dependentManifests, nil
+	}
+
+	// If we reach here, the manifest is an OCI index with a subject
+	if mediaType == v1.MediaTypeImageIndex {
+		dependentManifests, err = extractSubmanifestsFromBytes(manifestBytes)
+		if err != nil {
+			return false, dependentManifests, err
+		}
+	}
+
+	return false, dependentManifests, nil
+}
+
+// checkOCIArtifactDeletability checks if an OCI artifact manifest can be deleted based on whether it has a subject (referrer)
+func checkOCIArtifactDeletability(manifestBytes []byte, mediaType string) (bool, error) {
+	// Only check for subject on artifact types that can be referrers
+	switch mediaType {
+	case mediaTypeArtifactManifest, v1.MediaTypeImageManifest, v1.MediaTypeImageIndex:
+		subjectOnlyStruct := struct {
+			Subject *v1.Descriptor `json:"subject,omitempty"`
+		}{}
+
+		if err := json.Unmarshal(manifestBytes, &subjectOnlyStruct); err != nil {
+			return false, err
+		}
+
+		// If it has a subject, it's a referrer and should not be deleted
+		if subjectOnlyStruct.Subject != nil && subjectOnlyStruct.Subject.Digest != "" {
+			return false, nil
+		}
+	}
+
+	return true, nil
+}
+
+// extractSubmanifestsFromBytes extracts submanifest dependencies from manifest bytes
+func extractSubmanifestsFromBytes(manifestBytes []byte) ([]dependentManifestResult, error) {
+	subManifestOnlyStruct := struct {
+		Manifests []v1.Descriptor `json:"manifests,omitempty"`
+	}{}
+
+	if err := json.Unmarshal(manifestBytes, &subManifestOnlyStruct); err != nil {
+		return nil, err
+	}
+
+	if len(subManifestOnlyStruct.Manifests) == 0 {
+		return nil, nil
+	}
+
+	dependentManifests := make([]dependentManifestResult, len(subManifestOnlyStruct.Manifests))
+	for i, dependentManifest := range subManifestOnlyStruct.Manifests {
+		dependentManifests[i] = dependentManifestResult{
+			Digest: string(dependentManifest.Digest),
+			IsList: dependentManifest.MediaType == mediaTypeDockerManifestList || dependentManifest.MediaType == v1.MediaTypeImageIndex,
+		}
+	}
+
+	return dependentManifests, nil
+}
+
+// addDependentManifestsToIgnoreList adds the provided dependent manifests to the ignore list, recursively handling nested indexes
+func addDependentManifestsToIgnoreList(ctx context.Context, dependentManifests []dependentManifestResult, acrClient api.AcrCLIClientInterface, repoName string, ignoreList *sync.Map) error {
+	queue := make([]string, 0, len(dependentManifests))
+
+	// Add initial dependencies to queue
+	for _, manifest := range dependentManifests {
+		if manifest.IsList {
+			queue = append(queue, manifest.Digest)
+		} else {
+			ignoreList.LoadOrStore(manifest.Digest, struct{}{})
+		}
+	}
+
+	// Process nested indexes
 	for len(queue) > 0 {
 		// Dequeue the first digest
 		currentDigest := queue[0]
@@ -335,99 +503,4 @@ func addIndexDependenciesToIgnoreList(ctx context.Context, rootDigest string, ac
 		}
 	}
 	return nil
-}
-
-type dependentManifestResult struct {
-	Digest string `json:"digest"`
-	IsList bool   `json:"isList"`
-}
-
-// findDirectDependentManifests finds all the manifests that are directly dependent on the provided manifest digest. We expect the manifest to be a multiarch manifest or an index.
-// It returns a list of dependent manifests with their digests and whether they are lists or not.
-func findDirectDependentManifests(ctx context.Context, manifestDigest string, acrClient api.AcrCLIClientInterface, repoName string) ([]dependentManifestResult, error) {
-	dependentManifestDigests := []dependentManifestResult{}
-	var manifestBytes []byte
-	manifestBytes, err := acrClient.GetManifest(ctx, repoName, manifestDigest)
-	if err != nil {
-		errParsed := azure.RequestError{}
-		if errors.As(err, &errParsed) && errParsed.StatusCode == http.StatusNotFound {
-			// If the manifest is not found, we can return an empty list
-			return dependentManifestDigests, nil
-		}
-		return nil, err
-	}
-	// this struct defines a customized struct for manifests
-	// which is used to parse the content of a multiarch manifest
-	subManifestOnlyStruct := struct {
-		Manifests []v1.Descriptor `json:"manifests"`
-	}{}
-
-	if err = json.Unmarshal(manifestBytes, &subManifestOnlyStruct); err != nil {
-		return nil, err
-	}
-
-	// Add all the manifests to the result
-	dependentManifestDigests = make([]dependentManifestResult, len(subManifestOnlyStruct.Manifests))
-	for i, dependentManifest := range subManifestOnlyStruct.Manifests {
-		dependentManifestDigests[i] = dependentManifestResult{
-			Digest: string(dependentManifest.Digest),
-			IsList: dependentManifest.MediaType == mediaTypeDockerManifestList || dependentManifest.MediaType == v1.MediaTypeImageIndex,
-		}
-	}
-	return dependentManifestDigests, nil
-}
-
-// isManifestOkayToDelete returns if a specific manifest is okay to delete. This depends on the following
-// criteria:
-// - Referrer manifests are not deleted (If a subject is present, the manifest is not deleted)
-func isManifestOkayToDelete(ctx context.Context, manifest acr.ManifestAttributesBase, acrClient api.AcrCLIClientInterface, repoName string) (bool, error) {
-	switch *manifest.MediaType {
-	case mediaTypeArtifactManifest, v1.MediaTypeImageManifest, v1.MediaTypeImageIndex:
-		var manifestBytes []byte
-		manifestBytes, err := acrClient.GetManifest(ctx, repoName, *manifest.Digest)
-		if err != nil {
-			// Check if the error is autorest.DetailedError with status code not found
-			errParsed := autorest.DetailedError{}
-			if errors.As(err, &errParsed) && errParsed.StatusCode == http.StatusNotFound {
-				fmt.Println("Manifest", *manifest.Digest, "not found, skip it")
-				return false, nil
-			}
-			// For other errors, return the error
-			return false, err
-		}
-		// this struct defines a customized struct for manifests which
-		// is used to parse the content of a manifest references a subject
-		subjectOnlyStruct := struct {
-			Subject *v1.Descriptor `json:"subject,omitempty"`
-		}{}
-		if err = json.Unmarshal(manifestBytes, &subjectOnlyStruct); err != nil {
-			return false, err
-		}
-
-		// Subject should be nil if the manifest does not contain a subject,
-		// but add a check for the actual struct values just in case
-		if subjectOnlyStruct.Subject != nil && subjectOnlyStruct.Subject.Digest != "" {
-			return false, nil
-		} else { // No subject means the manifest is not a referrer type
-			return true, nil
-		}
-	default:
-		return true, nil // This means the manifest is not a referrer type and can be deleted
-	}
-}
-
-// BuildRegexFilter compiles a regex state machine from a regex expression
-func BuildRegexFilter(expression string, regexpMatchTimeoutSeconds int64) (*regexp2.Regexp, error) {
-	regexp, err := regexp2.Compile(expression, defaultRegexpOptions)
-	if err != nil {
-		return nil, err
-	}
-
-	// A timeout value must always be set
-	if regexpMatchTimeoutSeconds <= 0 {
-		regexpMatchTimeoutSeconds = defaultRegexpMatchTimeoutSeconds
-	}
-	regexp.MatchTimeout = time.Duration(regexpMatchTimeoutSeconds) * time.Second
-
-	return regexp, nil
 }

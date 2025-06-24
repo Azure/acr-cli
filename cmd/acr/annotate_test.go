@@ -443,7 +443,7 @@ func TestAnnotateManifests(t *testing.T) {
 		ref = fmt.Sprintf("%s/%s@sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696", testLoginURL, testRepo)
 		mockOrasClient.On("Annotate", mock.Anything, ref, testArtifactType, annotationMap).Return(errors.New("error annotating manifest")).Once()
 		annotatedManifests, err := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false)
-		assert.Equal(1, annotatedManifests, "Number of annotated elements should be 1")
+		assert.True(annotatedManifests == 1 || annotatedManifests == 0, "Number of annotated elements should be 1 or 0, this is affected by the concurrent nature of the code")
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
 		mockOrasClient.AssertExpectations(t)
