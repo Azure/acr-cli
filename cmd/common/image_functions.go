@@ -211,7 +211,7 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 			// _____MANIFEST IS TAGGED_____
 			manifestWouldHaveTagsWithoutDryRun := dryRun && manifestToDeletedTagsCountMap != nil && manifest.Tags != nil && len(*manifest.Tags) > manifestToDeletedTagsCountMap[*manifest.Digest]
 			// If an image has tags, it should not be deleted. If it is a manifest list, we need to check for its children which might be untagged
-			if manifest.Tags != nil && len(*manifest.Tags) > 0 && !manifestWouldHaveTagsWithoutDryRun {
+			if manifest.Tags != nil && len(*manifest.Tags) > 0 && manifestWouldHaveTagsWithoutDryRun {
 				// If the media type is not set, we will have to identify the manifest type from its fields, in this case the manifests field.
 				// This should not really happen for this API but we will handle it gracefully.
 				if manifest.MediaType != nil {
