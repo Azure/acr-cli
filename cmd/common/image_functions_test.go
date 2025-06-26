@@ -2,9 +2,10 @@ package common
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"math/rand"
+	"math/big"
 	"sync"
 	"testing"
 
@@ -154,8 +155,8 @@ func TestAddIndexDependenciesToIgnoreListComplex(t *testing.T) {
 	)
 
 	for i := 0; i < numTests; i++ {
-		depth := rand.Intn(maxDepth-1) + 2      // depth between 2 and maxDepth
-		branching := rand.Intn(maxBranch-1) + 2 // branching between 2 and maxBranch
+		depth := secureRandomNum(2, maxDepth)      // depth between 2 and maxDepth
+		branching := secureRandomNum(2, maxBranch) // branching between 2 and maxBranch
 
 		t.Run(fmt.Sprintf("Depth%d_Branching%d", depth, branching), func(t *testing.T) {
 			t.Parallel()
@@ -232,7 +233,7 @@ func generateRecursiveTestCase(depth, branching int) (string, map[string]string,
 		manifests := []manifest{}
 		for i := 0; i < branching; i++ {
 			child := fmt.Sprintf("%s-%d", item.Digest, i)
-			mediaType := mediaTypes[rand.Intn(len(mediaTypes))]
+			mediaType := mediaTypes[secureRandomNum(0, len(mediaTypes))]
 
 			// Only add children to mockResponses if they are index types
 			if mediaType == "application/vnd.docker.distribution.manifest.list.v2+json" ||
@@ -371,4 +372,17 @@ func TestExtractSubmanifestsFromBytes(t *testing.T) {
 			}
 		})
 	}
+}
+
+func secureRandomNum(minDepth, maxDepth int) int {
+	if maxDepth <= minDepth {
+		// This is a function for testing so a panic is acceptable here
+		panic(fmt.Sprintf("maxDepth (%d) must be greater than minDepth (%d)", maxDepth, minDepth))
+	}
+
+	n, err := rand.Int(rand.Reader, big.NewInt(int64(maxDepth-minDepth)))
+	if err != nil {
+		return 0
+	}
+	return int(n.Int64()) + minDepth
 }
