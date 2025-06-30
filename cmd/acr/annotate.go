@@ -302,7 +302,8 @@ func annotateUntaggedManifests(ctx context.Context,
 		}
 		manifestsCount, annotateErr := annotator.Annotate(ctx, manifestsToAnnotate)
 		if annotateErr != nil {
-			return manifestsCount, annotateErr
+			annotatedManifestsCount += manifestsCount
+			return annotatedManifestsCount, annotateErr
 		}
 		annotatedManifestsCount += manifestsCount
 	} else {

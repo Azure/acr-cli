@@ -400,7 +400,7 @@ func TestAnnotateManifests(t *testing.T) {
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:2830cc0fcddc1bc2bd4aeab0ed5ee7087dab29a49e65151c77553e46a7ed5283").Return(doubleManifestV2WithoutTagsResult, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696").Return(EmptyListManifestsResult, nil).Once()
 		ref := fmt.Sprintf("%s/%s@sha256:63532043b5af6247377a472ad075a42bde35689918de1cf7f807714997e0e683", testLoginURL, testRepo)
-		mockOrasClient.On("Annotate", mock.Anything, ref, testArtifactType, annotationMap).Return(nil).Once()
+		mockOrasClient.On("Annotate", mock.Anything, ref, testArtifactType, annotationMap).Return(nil).Maybe() // Depending on scheduling, this may not be invoked
 		ref = fmt.Sprintf("%s/%s@sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696", testLoginURL, testRepo)
 		mockOrasClient.On("Annotate", mock.Anything, ref, testArtifactType, annotationMap).Return(errors.New("manifest not found")).Once()
 		annotatedManifests, err := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false)
