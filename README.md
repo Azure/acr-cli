@@ -208,6 +208,18 @@ acr purge \
     --repository-page-size 10
 ```
 
+#### Untag Limit flag
+To control the maximum number of tags that can be untagged in a single purge operation, the `--untag-limit` flag should be set. A zero or negative value means no limit. A default value of 0 will be used if `--untag-limit` is not specified.
+
+This is useful when the number of untagged manifests is very large and untagging too many manifests at once can timeout.
+```sh
+acr purge \
+    --registry <Registry Name> \
+    --filter <Repository Filter/Name>:<Regex Filter> \
+    --ago 30d \
+    --untag-limit 10000
+```
+
 ### Integration with ACR Tasks
 
 To run a locally built version of the ACR-CLI using ACR Tasks follow these steps:
