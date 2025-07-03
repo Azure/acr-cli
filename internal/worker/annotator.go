@@ -57,7 +57,7 @@ func (a *Annotator) Annotate(ctx context.Context, manifests []string) (int, erro
 			ref := fmt.Sprintf("%s/%s@%s", a.loginURL, a.repoName, digest)
 			if err := a.orasClient.Annotate(ctx, ref, a.artifactType, a.annotations); err != nil {
 				fmt.Printf("Failed to annotate %s/%s@%s, error: %v\n", a.loginURL, a.repoName, digest, err)
-				return err // TODO: Do we want to fail the whole job if one fails? This is the current behaviour.
+				return err // TODO: #469 Do we want to fail the whole job if one fails? This is the current behaviour.
 			}
 			annotatedImages.Add(1)
 			fmt.Printf("Annotated %s/%s@%s\n", a.loginURL, a.repoName, digest)

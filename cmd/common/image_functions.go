@@ -250,7 +250,7 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 			}
 
 			// _____MANIFEST IS UNTAGGED BUT MAY BE PROTECTED_____
-			// TODO: I am a little unclear as to why this was ever an option but respecting it for now. Its not used by the purge scenarios only for
+			// TODO: #468 I am a little unclear as to why this was ever an option but respecting it for now. Its not used by the purge scenarios only for
 			// the annotate command.
 			if preserveAllOCIManifests {
 				if *manifest.MediaType != v1.MediaTypeImageManifest {
