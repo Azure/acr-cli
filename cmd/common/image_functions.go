@@ -170,7 +170,8 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 	// or the manifest has subjects attached
 	ignoreList := sync.Map{}
 
-	// We will be adding to this map concurrently, so we need to use a mutex to lock it
+	// Represents the manifests that are candidates for deletion. This is a purely additive map, the ignoreList will be used to weed out
+	// candidates that are not deletable after all at the end.
 	var candidates = make(map[string]acr.ManifestAttributesBase)
 
 	// Read operations, specifically manifest gets are less throttled and so we can do more at once
@@ -377,45 +378,42 @@ func checkManifestDeletabilityAndGetDependencies(ctx context.Context, manifest a
 
 	mediaType := *manifest.MediaType
 
-	// Check if it's a type that could be a referrer (needs content inspection)
-	needsContentCheck := mediaType == mediaTypeArtifactManifest || mediaType == v1.MediaTypeImageManifest || mediaType == v1.MediaTypeImageIndex
-
-	// Only fetch manifest if we need to check its content
-	if !needsContentCheck {
-		// Regular manifest types (like Docker v2) that don't need content inspection
-		return true, dependentManifests, nil
-	}
-
-	// Fetch the manifest content only when needed
-	manifestBytes, err := acrClient.GetManifest(ctx, repoName, *manifest.Digest)
-	if err != nil {
-		errParsed := autorest.DetailedError{}
-		if errors.As(err, &errParsed) && errParsed.StatusCode == http.StatusNotFound {
-			fmt.Println("Manifest", *manifest.Digest, "not found, skip it")
-			return false, dependentManifests, nil
+	switch mediaType {
+	case v1.MediaTypeImageManifest, v1.MediaTypeImageIndex, mediaTypeArtifactManifest:
+		// Fetch the manifest content only when needed
+		manifestBytes, err := acrClient.GetManifest(ctx, repoName, *manifest.Digest)
+		if err != nil {
+			errParsed := autorest.DetailedError{}
+			if errors.As(err, &errParsed) && errParsed.StatusCode == http.StatusNotFound {
+				fmt.Println("Manifest", *manifest.Digest, "not found, skip it")
+				return false, dependentManifests, nil
+			}
+			return false, dependentManifests, err
 		}
-		return false, dependentManifests, err
-	}
 
-	// Check if it's an OCI artifact type (referrer) - these are not deletable
-	canDelete, err := checkOCIArtifactDeletability(manifestBytes, mediaType)
-	if err != nil {
-		return false, dependentManifests, err
-	}
-	// Image can be deleted, it has no subject (referrer)
-	if canDelete {
-		return true, dependentManifests, nil
-	}
-
-	// If we reach here, the manifest is an OCI index with a subject
-	if mediaType == v1.MediaTypeImageIndex {
-		dependentManifests, err = extractSubmanifestsFromBytes(manifestBytes)
+		// Check if it's an OCI artifact type (referrer) - these are not deletable
+		canDelete, err := checkOCIArtifactDeletability(manifestBytes, mediaType)
 		if err != nil {
 			return false, dependentManifests, err
 		}
-	}
+		// Image can be deleted, it has no subject (referrer)
+		if canDelete {
+			return true, dependentManifests, nil
+		}
 
-	return false, dependentManifests, nil
+		// If we reach here, the manifest is an OCI index with a subject
+		if mediaType == v1.MediaTypeImageIndex {
+			dependentManifests, err = extractSubmanifestsFromBytes(manifestBytes)
+			if err != nil {
+				return false, dependentManifests, err
+			}
+		}
+		return false, dependentManifests, nil
+
+	default:
+		// Regular manifest types (like Docker v2) that don't need content inspection
+		return true, dependentManifests, nil
+	}
 }
 
 // checkOCIArtifactDeletability checks if an OCI artifact manifest can be deleted based on whether it has a subject (referrer)

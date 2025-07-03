@@ -192,12 +192,13 @@ func annotateTags(ctx context.Context,
 			return -1, err
 		}
 		lastTag = newLastTag
-		if manifestsToAnnotate != nil {
-			count := len(manifestsToAnnotate)
+		count := len(manifestsToAnnotate)
+		if count > 0 {
 			if !dryRun {
-				_, annotateErr := annotator.Annotate(ctx, manifestsToAnnotate)
+				annotated, annotateErr := annotator.Annotate(ctx, manifestsToAnnotate)
 				if annotateErr != nil {
-					return -1, annotateErr
+					annotatedTagsCount += annotated
+					return annotatedTagsCount, annotateErr
 				}
 			}
 			annotatedTagsCount += count

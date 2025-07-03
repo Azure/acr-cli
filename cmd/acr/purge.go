@@ -108,17 +108,18 @@ func newPurgeCmd(rootParams *rootParameters) *cobra.Command {
 				fmt.Println("DRY RUN: The following output shows what WOULD be deleted if the purge command was executed. Nothing is deleted.")
 			}
 
-			// The number of concurrent requests is limited by the pool size.
-			concurrentRepoRoutines := purgeParams.concurrency
-			if concurrentRepoRoutines <= 0 {
-				concurrentRepoRoutines = defaultPoolSize
+			// The number of concurrent requests will be ultimately limited by what repoParallelism is set to. This value
+			// is at most maxPoolSize, and at least 1.
+			repoParallelism := purgeParams.concurrency
+			if repoParallelism <= 0 {
+				repoParallelism = defaultPoolSize
 				fmt.Printf("Specified concurrency value invalid. Set to default value: %d \n", defaultPoolSize)
-			} else if concurrentRepoRoutines > maxPoolSize {
-				concurrentRepoRoutines = maxPoolSize
+			} else if repoParallelism > maxPoolSize {
+				repoParallelism = maxPoolSize
 				fmt.Printf("Specified concurrency value too large. Set to maximum value: %d \n", maxPoolSize)
 			}
 
-			deletedTagsCount, deletedManifestsCount, err := purge(ctx, acrClient, loginURL, concurrentRepoRoutines, purgeParams.ago, purgeParams.keep, purgeParams.filterTimeout, purgeParams.untagged, tagFilters, purgeParams.dryRun)
+			deletedTagsCount, deletedManifestsCount, err := purge(ctx, acrClient, loginURL, repoParallelism, purgeParams.ago, purgeParams.keep, purgeParams.filterTimeout, purgeParams.untagged, tagFilters, purgeParams.dryRun)
 
 			if err != nil {
 				fmt.Printf("Failed to complete purge: %v \n", err)
@@ -155,7 +156,7 @@ func newPurgeCmd(rootParams *rootParameters) *cobra.Command {
 func purge(ctx context.Context,
 	acrClient api.AcrCLIClientInterface,
 	loginURL string,
-	concurrentRepoRoutines int,
+	repoParallelism int,
 	tagDeletionSince string,
 	tagsToKeep int,
 	filterTimeout int64,
@@ -165,14 +166,14 @@ func purge(ctx context.Context,
 
 	// In order to print a summary of the deleted tags/manifests the counters get updated everytime a repo is purged.
 	for repoName, tagRegex := range tagFilters {
-		singleDeletedTagsCount, manifestToTagsCountMap, err := purgeTags(ctx, acrClient, concurrentRepoRoutines, loginURL, repoName, tagDeletionSince, tagRegex, tagsToKeep, filterTimeout, dryRun)
+		singleDeletedTagsCount, manifestToTagsCountMap, err := purgeTags(ctx, acrClient, repoParallelism, loginURL, repoName, tagDeletionSince, tagRegex, tagsToKeep, filterTimeout, dryRun)
 		if err != nil {
 			return deletedTagsCount, deletedManifestsCount, fmt.Errorf("failed to purge tags: %w", err)
 		}
 		singleDeletedManifestsCount := 0
 		// If the untagged flag is set then also manifests are deleted.
 		if removeUtaggedManifests {
-			singleDeletedManifestsCount, err = purgeDanglingManifests(ctx, acrClient, concurrentRepoRoutines, loginURL, repoName, manifestToTagsCountMap, dryRun)
+			singleDeletedManifestsCount, err = purgeDanglingManifests(ctx, acrClient, repoParallelism, loginURL, repoName, manifestToTagsCountMap, dryRun)
 			if err != nil {
 				return deletedTagsCount, deletedManifestsCount, fmt.Errorf("failed to purge manifests: %w", err)
 			}
@@ -187,7 +188,7 @@ func purge(ctx context.Context,
 }
 
 // purgeTags deletes all tags that are older than the ago value and that match the tagFilter string.
-func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, poolSize int, loginURL string, repoName string, ago string, tagFilter string, keep int, regexpMatchTimeoutSeconds int64, dryRun bool) (int, map[string]int, error) {
+func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, repoParallelism int, loginURL string, repoName string, ago string, tagFilter string, keep int, regexpMatchTimeoutSeconds int64, dryRun bool) (int, map[string]int, error) {
 	fmt.Printf("Deleting tags for repository: %s\n", repoName)
 	manifestToTagsCountMap := make(map[string]int) // This map is used to keep track of how many tags would have been deleted per manifest.
 	agoDuration, err := parseDuration(ago)
@@ -201,13 +202,13 @@ func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, poolSiz
 
 	tagRegex, err := common.BuildRegexFilter(tagFilter, regexpMatchTimeoutSeconds)
 	if err != nil {
-		return -1, manifestToTagsCountMap, fmt.Errorf("failed to build Regex %s with error : %w", tagRegex, err)
+		return -1, manifestToTagsCountMap, fmt.Errorf("failed to build Regex %s with error: %w", tagRegex, err)
 	}
 	lastTag := ""
 	skippedTagsCount := 0
 	deletedTagsCount := 0
 	// In order to only have a limited amount of http requests, a purger is used that will start goroutines to delete tags.
-	purger := worker.NewPurger(poolSize, acrClient, loginURL, repoName)
+	purger := worker.NewPurger(repoParallelism, acrClient, loginURL, repoName)
 
 	// GetTagsToDelete will return an empty lastTag when there are no more tags.
 	for {
@@ -346,12 +347,12 @@ func getTagsToDelete(ctx context.Context,
 
 // purgeDanglingManifests deletes all manifests that do not have any tags associated with them.
 // except the ones that are referenced by a multiarch manifest or that have subject.
-func purgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, poolSize int, loginURL string, repoName string, manifestToTagsCountMap map[string]int, dryRun bool) (int, error) {
+func purgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, repoParallelism int, loginURL string, repoName string, manifestToTagsCountMap map[string]int, dryRun bool) (int, error) {
 	fmt.Printf("Deleting manifests for repository: %s\n", repoName)
 	// Contrary to getTagsToDelete, getManifestsToDelete gets all the Manifests at once, this was done because if there is a manifest that has no
 	// tag but is referenced by a multiarch manifest that has tags then it should not be deleted. Or if a manifest has no tag, but it has subject,
 	// then it should not be deleted.
-	manifestsToDelete, err := common.GetUntaggedManifests(ctx, poolSize, acrClient, repoName, false, manifestToTagsCountMap, dryRun)
+	manifestsToDelete, err := common.GetUntaggedManifests(ctx, repoParallelism, acrClient, repoName, false, manifestToTagsCountMap, dryRun)
 	if err != nil {
 		return -1, err
 	}
@@ -366,7 +367,7 @@ func purgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInter
 		return len(manifestsToDelete), nil
 	}
 	// In order to only have a limited amount of http requests, a purger is used that will start goroutines to delete manifests.
-	purger := worker.NewPurger(poolSize, acrClient, loginURL, repoName)
+	purger := worker.NewPurger(repoParallelism, acrClient, loginURL, repoName)
 	deletedManifestsCount, purgeErr := purger.PurgeManifests(ctx, manifestsToDelete)
 	if purgeErr != nil {
 		return -1, purgeErr
