@@ -192,12 +192,13 @@ func annotateTags(ctx context.Context,
 			return -1, err
 		}
 		lastTag = newLastTag
-		if manifestsToAnnotate != nil {
-			count := len(*manifestsToAnnotate)
+		count := len(manifestsToAnnotate)
+		if count > 0 {
 			if !dryRun {
-				_, annotateErr := annotator.Annotate(ctx, manifestsToAnnotate)
+				annotated, annotateErr := annotator.Annotate(ctx, manifestsToAnnotate)
 				if annotateErr != nil {
-					return -1, annotateErr
+					annotatedTagsCount += annotated
+					return annotatedTagsCount, annotateErr
 				}
 			}
 			annotatedTagsCount += count
@@ -219,7 +220,7 @@ func getManifestsToAnnotate(ctx context.Context,
 	loginURL string,
 	repoName string,
 	filter *regexp2.Regexp,
-	lastTag string, artifactType string, dryRun bool) (*[]string, string, error) {
+	lastTag string, artifactType string, dryRun bool) ([]string, string, error) {
 
 	resultTags, err := acrClient.GetAcrTags(ctx, repoName, "timedesc", lastTag)
 	if err != nil {
@@ -264,7 +265,7 @@ func getManifestsToAnnotate(ctx context.Context,
 		}
 
 		newLastTag = common.GetLastTagFromResponse(resultTags)
-		return &manifestsToAnnotate, newLastTag, nil
+		return manifestsToAnnotate, newLastTag, nil
 	}
 	return nil, "", nil
 }
@@ -287,7 +288,7 @@ func annotateUntaggedManifests(ctx context.Context,
 	// Contrary to getTagsToAnnotate, getManifests gets all the manifests at once.
 	// This was done because if there is a manifest that has no tag but is referenced by a multiarch manifest that has tags then it
 	// should not be annotated.
-	manifestsToAnnotate, err := common.GetUntaggedManifests(ctx, acrClient, loginURL, repoName, dryRun, false)
+	manifestsToAnnotate, err := common.GetUntaggedManifests(ctx, poolSize, acrClient, repoName, true, nil, dryRun)
 	if err != nil {
 		return -1, err
 	}
@@ -302,11 +303,12 @@ func annotateUntaggedManifests(ctx context.Context,
 		}
 		manifestsCount, annotateErr := annotator.Annotate(ctx, manifestsToAnnotate)
 		if annotateErr != nil {
-			return manifestsCount, annotateErr
+			annotatedManifestsCount += manifestsCount
+			return annotatedManifestsCount, annotateErr
 		}
 		annotatedManifestsCount += manifestsCount
 	} else {
-		annotatedManifestsCount = len(*manifestsToAnnotate)
+		annotatedManifestsCount = len(manifestsToAnnotate)
 	}
 
 	return annotatedManifestsCount, nil
