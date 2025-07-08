@@ -23,6 +23,8 @@ type Purger struct {
 // NewPurger creates a new Purger. Purgers are currently repository specific
 func NewPurger(repoParallelism int, acrClient api.AcrCLIClientInterface, loginURL string, repoName string) *Purger {
 	executeBase := Executer{
+		// Use a queue size 3x the pool size to buffer enough tasks and keep workers busy and avoiding
+		// slowdown due to task scheduling blocking.
 		pool:     pond.NewPool(repoParallelism, pond.WithQueueSize(repoParallelism*3), pond.WithNonBlocking(false)),
 		loginURL: loginURL,
 		repoName: repoName,

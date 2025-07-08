@@ -310,17 +310,12 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 		return nil, err
 	}
 
-	// Remove everything from the candidates list that is in the ignoreList
 	for _, manifest := range candidates {
-		if _, ok := ignoreList.Load(*manifest.Digest); ok {
-			// Remove the manifest from the candidates list
-			delete(candidates, *manifest.Digest)
+		// If the manifest is not in the ignore list, it should be deleted
+		if _, shouldBeIgnored := ignoreList.Load(*manifest.Digest); !shouldBeIgnored {
+			// Add the manifest to the list of manifests to delete
+			manifestsToDelete = append(manifestsToDelete, *manifest.Digest)
 		}
-	}
-
-	for _, manifest := range candidates {
-		// Add the manifest to the list of manifests to delete
-		manifestsToDelete = append(manifestsToDelete, *manifest.Digest)
 	}
 
 	return manifestsToDelete, nil

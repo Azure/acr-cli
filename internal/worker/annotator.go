@@ -35,6 +35,8 @@ func NewAnnotator(poolSize int, orasClient api.ORASClientInterface, loginURL str
 		return nil, err
 	}
 	executeBase := Executer{
+		// Use a queue size 3x the pool size to buffer enough tasks and keep workers busy and avoiding
+		// slowdown due to task scheduling blocking.
 		pool:     pond.NewPool(poolSize, pond.WithQueueSize(poolSize*3), pond.WithNonBlocking(false)),
 		loginURL: loginURL,
 		repoName: repoName,
