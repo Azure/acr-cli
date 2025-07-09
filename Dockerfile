@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/oss/go/microsoft/golang:1.24.4-fips-azurelinux3.0 AS gobuild-base
+FROM mcr.microsoft.com/oss/go/microsoft/golang:1.24.5-fips-azurelinux3.0 AS gobuild-base
 RUN tdnf check-update \
     && tdnf install -y \
         git \
