@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 
+	"github.com/Azure/acr-cli/internal/logger"
 	"github.com/spf13/cobra"
 )
 
@@ -16,6 +17,8 @@ type rootParameters struct {
 	username     string
 	password     string
 	configs      []string
+	logLevel     string
+	logFormat    string
 }
 
 func newRootCmd(args []string) *cobra.Command {
@@ -32,6 +35,13 @@ func newRootCmd(args []string) *cobra.Command {
 
 To start working with the CLI, run acr --help`,
 		SilenceUsage: true,
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			// Setup logger with configured level and format
+			logger.Setup(logger.Config{
+				Level:  rootParams.logLevel,
+				Format: rootParams.logFormat,
+			})
+		},
 	}
 
 	flags := cmd.PersistentFlags()
@@ -55,6 +65,8 @@ To start working with the CLI, run acr --help`,
 	cmd.PersistentFlags().StringVarP(&rootParams.registryName, "registry", "r", "", "Registry name")
 	cmd.PersistentFlags().StringVarP(&rootParams.username, "username", "u", "", "Registry username")
 	cmd.PersistentFlags().StringVarP(&rootParams.password, "password", "p", "", "Registry password")
+	cmd.PersistentFlags().StringVar(&rootParams.logLevel, "log-level", "info", "Log level (debug, info, warn, error)")
+	cmd.PersistentFlags().StringVar(&rootParams.logFormat, "log-format", "console", "Log format (console, json)")
 	cmd.Flags().BoolP("help", "h", false, "Print usage")
 	cmd.Flags().StringArrayVarP(&rootParams.configs, "config", "c", nil, "Auth config paths")
 	// No parameter is marked as required because the registry could be inferred from a task context, same with username and password
