@@ -55,9 +55,9 @@ func (a *Annotator) Annotate(ctx context.Context, manifests []string) (int, erro
 	log := logger.Get()
 	
 	log.Debug().
-		Str("repository", a.repoName).
-		Int("manifest_count", len(manifests)).
-		Str("artifact_type", a.artifactType).
+		Str(logger.FieldRepository, a.repoName).
+		Int(logger.FieldManifestCount, len(manifests)).
+		Str(logger.FieldArtifactType, a.artifactType).
 		Interface("annotations", a.annotations).
 		Msg("Starting concurrent manifest annotation")
 
@@ -68,28 +68,22 @@ func (a *Annotator) Annotate(ctx context.Context, manifests []string) (int, erro
 		group.SubmitErr(func() error {
 			ref := fmt.Sprintf("%s/%s@%s", a.loginURL, a.repoName, digest)
 			if err := a.orasClient.Annotate(ctx, ref, a.artifactType, a.annotations); err != nil {
-				// Keep fmt.Printf for user output consistency
-				fmt.Printf("Failed to annotate %s/%s@%s, error: %v\n", a.loginURL, a.repoName, digest, err)
-				
 				log.Error().
 					Err(err).
-					Str("repository", a.repoName).
-					Str("manifest", digest).
-					Str("ref", ref).
-					Str("artifact_type", a.artifactType).
+					Str(logger.FieldRepository, a.repoName).
+					Str(logger.FieldManifest, digest).
+					Str(logger.FieldRef, ref).
+					Str(logger.FieldArtifactType, a.artifactType).
 					Msg("Failed to annotate manifest")
 				return err // TODO: #469 Do we want to fail the whole job if one fails? This is the current behaviour.
 			}
 			annotatedImages.Add(1)
 			
-			// Keep fmt.Printf for user output consistency
-			fmt.Printf("Annotated %s/%s@%s\n", a.loginURL, a.repoName, digest)
-			
 			log.Info().
-				Str("repository", a.repoName).
-				Str("manifest", digest).
-				Str("ref", ref).
-				Str("artifact_type", a.artifactType).
+				Str(logger.FieldRepository, a.repoName).
+				Str(logger.FieldManifest, digest).
+				Str(logger.FieldRef, ref).
+				Str(logger.FieldArtifactType, a.artifactType).
 				Interface("annotations", a.annotations).
 				Msg("Successfully annotated manifest")
 			return nil
@@ -99,9 +93,9 @@ func (a *Annotator) Annotate(ctx context.Context, manifests []string) (int, erro
 	
 	finalCount := int(annotatedImages.Load())
 	log.Info().
-		Str("repository", a.repoName).
+		Str(logger.FieldRepository, a.repoName).
 		Int("annotated_count", finalCount).
-		Int("attempted_count", len(manifests)).
+		Int(logger.FieldAttemptedCount, len(manifests)).
 		Msg("Completed manifest annotation batch")
 		
 	return finalCount, err

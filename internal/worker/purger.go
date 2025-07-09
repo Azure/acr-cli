@@ -69,9 +69,9 @@ func (p *Purger) PurgeTags(ctx context.Context, tags []acr.TagAttributesBase) (i
 func (p *Purger) PurgeManifests(ctx context.Context, manifests []string) (int, error) {
 	log := logger.Get()
 	
-	log.Debug().
-		Str("repository", p.repoName).
-		Int("manifest_count", len(manifests)).
+	log.Info().
+		Str(logger.FieldRepository, p.repoName).
+		Int(logger.FieldManifestCount, len(manifests)).
 		Msg("Starting concurrent manifest deletion")
 
 	var deletedManifests atomic.Int64 // Count of successfully deleted manifests
@@ -84,9 +84,9 @@ func (p *Purger) PurgeManifests(ctx context.Context, manifests []string) (int, e
 				fmt.Printf("Deleted %s/%s@%s\n", p.loginURL, p.repoName, manifest)
 				
 				log.Info().
-					Str("repository", p.repoName).
-					Str("manifest", manifest).
-					Str("ref", fmt.Sprintf("%s/%s@%s", p.loginURL, p.repoName, manifest)).
+					Str(logger.FieldRepository, p.repoName).
+					Str(logger.FieldManifest, manifest).
+					Str(logger.FieldRef, fmt.Sprintf("%s/%s@%s", p.loginURL, p.repoName, manifest)).
 					Msg("Successfully deleted manifest")
 				
 				// Increment the count of successfully deleted manifests atomically
@@ -102,10 +102,10 @@ func (p *Purger) PurgeManifests(ctx context.Context, manifests []string) (int, e
 				fmt.Printf("Skipped %s/%s@%s, HTTP status: %d\n", p.loginURL, p.repoName, manifest, resp.StatusCode)
 				
 				log.Warn().
-					Str("repository", p.repoName).
-					Str("manifest", manifest).
-					Str("ref", fmt.Sprintf("%s/%s@%s", p.loginURL, p.repoName, manifest)).
-					Int("status_code", resp.StatusCode).
+					Str(logger.FieldRepository, p.repoName).
+					Str(logger.FieldManifest, manifest).
+					Str(logger.FieldRef, fmt.Sprintf("%s/%s@%s", p.loginURL, p.repoName, manifest)).
+					Int(logger.FieldStatusCode, resp.StatusCode).
 					Msg("Manifest not found during deletion, assuming already deleted")
 				return nil
 			}
@@ -115,9 +115,9 @@ func (p *Purger) PurgeManifests(ctx context.Context, manifests []string) (int, e
 			
 			log.Error().
 				Err(err).
-				Str("repository", p.repoName).
-				Str("manifest", manifest).
-				Str("ref", fmt.Sprintf("%s/%s@%s", p.loginURL, p.repoName, manifest)).
+				Str(logger.FieldRepository, p.repoName).
+				Str(logger.FieldManifest, manifest).
+				Str(logger.FieldRef, fmt.Sprintf("%s/%s@%s", p.loginURL, p.repoName, manifest)).
 				Msg("Failed to delete manifest")
 			return err
 
@@ -127,9 +127,9 @@ func (p *Purger) PurgeManifests(ctx context.Context, manifests []string) (int, e
 	
 	finalCount := int(deletedManifests.Load())
 	log.Info().
-		Str("repository", p.repoName).
-		Int("deleted_count", finalCount).
-		Int("attempted_count", len(manifests)).
+		Str(logger.FieldRepository, p.repoName).
+		Int(logger.FieldDeletedCount, finalCount).
+		Int(logger.FieldAttemptedCount, len(manifests)).
 		Msg("Completed manifest deletion batch")
 		
 	return finalCount, err

@@ -48,6 +48,23 @@ func parseLogLevel(level string) zerolog.Level {
 	}
 }
 
+// Common log field constants to avoid duplication and typos
+const (
+	FieldRepository     = "repository"
+	FieldManifest       = "manifest"
+	FieldTag            = "tag"
+	FieldDryRun         = "dry_run"
+	FieldReason         = "reason"
+	FieldStatusCode     = "status_code"
+	FieldRef            = "ref"
+	FieldArtifactType   = "artifact_type"
+	FieldManifestCount  = "manifest_count"
+	FieldTagCount       = "tag_count"
+	FieldDeletedCount   = "deleted_count"
+	FieldAttemptedCount = "attempted_count"
+	FieldMediaType      = "media_type"
+)
+
 // Get returns the global logger
 func Get() *zerolog.Logger {
 	return &log.Logger

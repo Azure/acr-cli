@@ -9,7 +9,6 @@ import (
 
 	"github.com/Azure/acr-cli/internal/api"
 	"github.com/Azure/acr-cli/internal/logger"
-	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )
 
@@ -84,20 +83,15 @@ func newManifestListCmd(manifestParams *manifestParameters) *cobra.Command {
 
 // listManifests will do the http requests and print the digest of all the manifest in the selected repository.
 func listManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string) error {
-	log := logger.Get()
+	log := logger.Get().With().Str(logger.FieldRepository, repoName).Logger()
 	
-	log.Debug().
-		Str("repository", repoName).
-		Msg("Starting manifest listing")
+	log.Debug().Msg("Starting manifest listing")
 
 	lastManifestDigest := ""
 	resultManifests, err := acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
 	if err != nil {
-		log.Error().
-			Err(err).
-			Str("repository", repoName).
-			Msg("Failed to get manifests for listing")
-		return errors.Wrap(err, "failed to list manifests")
+		log.Error().Err(err).Msg("Failed to get manifests for listing")
+		return fmt.Errorf("failed to list manifests: %w", err)
 	}
 
 	fmt.Printf("Listing manifests for the %q repository:\n", repoName)
@@ -110,10 +104,7 @@ func listManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, log
 			manifestDigest := *manifest.Digest
 			fmt.Printf("%s/%s@%s\n", loginURL, repoName, manifestDigest)
 			
-			log.Debug().
-				Str("repository", repoName).
-				Str("manifest", manifestDigest).
-				Msg("Listed manifest")
+			log.Debug().Str(logger.FieldManifest, manifestDigest).Msg("Listed manifest")
 			totalManifests++
 		}
 		// Since the GetAcrManifests supports pagination when supplied with the last digest that was returned the last manifest
@@ -122,18 +113,12 @@ func listManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, log
 		lastManifestDigest = *manifests[len(manifests)-1].Digest
 		resultManifests, err = acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
 		if err != nil {
-			log.Error().
-				Err(err).
-				Str("repository", repoName).
-				Msg("Failed to get next page of manifests")
-			return errors.Wrap(err, "failed to list manifests")
+			log.Error().Err(err).Msg("Failed to get next page of manifests")
+			return fmt.Errorf("failed to list manifests: %w", err)
 		}
 	}
 	
-	log.Info().
-		Str("repository", repoName).
-		Int("total_manifests", totalManifests).
-		Msg("Completed manifest listing")
+	log.Info().Int("total_manifests", totalManifests).Msg("Completed manifest listing")
 	return nil
 }
 
@@ -168,41 +153,33 @@ func newManifestDeleteCmd(manifestParams *manifestParameters) *cobra.Command {
 
 // deleteManifests receives an array of manifests digest and deletes them using the supplied acrClient.
 func deleteManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, loginURL string, repoName string, args []string) error {
-	log := logger.Get()
+	log := logger.Get().With().Str(logger.FieldRepository, repoName).Logger()
 	
-	log.Info().
-		Str("repository", repoName).
-		Int("manifest_count", len(args)).
-		Msg("Starting manifest deletion")
+	log.Info().Int(logger.FieldManifestCount, len(args)).Msg("Starting manifest deletion")
 
 	for i := 0; i < len(args); i++ {
 		_, err := acrClient.DeleteManifest(ctx, repoName, args[i])
 		if err != nil {
 			log.Error().
 				Err(err).
-				Str("repository", repoName).
-				Str("manifest", args[i]).
+				Str(logger.FieldManifest, args[i]).
 				Int("position", i+1).
 				Int("total", len(args)).
 				Msg("Failed to delete manifest")
 			// If there is an error (this includes not found and not allowed operations) the deletion of the images is stopped and an error is returned.
-			return errors.Wrap(err, "failed to delete manifests")
+			return fmt.Errorf("failed to delete manifests: %w", err)
 		}
 		
 		fmt.Printf("%s/%s@%s\n", loginURL, repoName, args[i])
 		
 		log.Info().
-			Str("repository", repoName).
-			Str("manifest", args[i]).
-			Str("ref", fmt.Sprintf("%s/%s@%s", loginURL, repoName, args[i])).
+			Str(logger.FieldManifest, args[i]).
+			Str(logger.FieldRef, fmt.Sprintf("%s/%s@%s", loginURL, repoName, args[i])).
 			Int("position", i+1).
 			Int("total", len(args)).
 			Msg("Successfully deleted manifest")
 	}
 	
-	log.Info().
-		Str("repository", repoName).
-		Int("deleted_count", len(args)).
-		Msg("Completed manifest deletion")
+	log.Info().Int(logger.FieldDeletedCount, len(args)).Msg("Completed manifest deletion")
 	return nil
 }

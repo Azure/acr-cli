@@ -63,6 +63,30 @@ make vendor
 
 The following are examples of commands that the CLI currently supports.
 
+### Global Flags
+
+The ACR CLI supports the following global flags that can be used with any command:
+
+#### Structured Logging Flags
+
+- `--log-level` (debug, info, warn, error) - Controls the verbosity of log output. Defaults to `info`.
+- `--log-format` (console, json) - Controls the output format of logs. Defaults to `console` for better CLI usability.
+
+**Examples:**
+
+```sh
+# Enable debug logging for troubleshooting
+acr --log-level debug purge -r myregistry --filter "repo:.*" --ago 7d
+
+# Use JSON format for log aggregation systems  
+acr --log-format json purge -r myregistry --filter "repo:.*" --ago 7d
+
+# Combined usage
+acr --log-level debug --log-format json purge -r myregistry --filter "repo:.*" --ago 7d
+```
+
+For detailed information about structured logging, see [docs/structured-logging.md](docs/structured-logging.md).
+
 ### Login Command
 
 If you are currently logged into an Azure Container Registry the program should be able to read your stored credentials, if not you can do:
