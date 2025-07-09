@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 
 	"github.com/Azure/acr-cli/internal/api"
+	"github.com/Azure/acr-cli/internal/logger"
 	"github.com/alitto/pond/v2"
 )
 
@@ -51,6 +52,15 @@ func NewAnnotator(poolSize int, orasClient api.ORASClientInterface, loginURL str
 
 // AnnotateManifests annotates a list of manifests concurrently and returns a count of annotated images and the first error occurred.
 func (a *Annotator) Annotate(ctx context.Context, manifests []string) (int, error) {
+	log := logger.Get()
+	
+	log.Debug().
+		Str("repository", a.repoName).
+		Int("manifest_count", len(manifests)).
+		Str("artifact_type", a.artifactType).
+		Interface("annotations", a.annotations).
+		Msg("Starting concurrent manifest annotation")
+
 	var annotatedImages atomic.Int64
 	group := a.pool.NewGroup()
 
@@ -58,16 +68,43 @@ func (a *Annotator) Annotate(ctx context.Context, manifests []string) (int, erro
 		group.SubmitErr(func() error {
 			ref := fmt.Sprintf("%s/%s@%s", a.loginURL, a.repoName, digest)
 			if err := a.orasClient.Annotate(ctx, ref, a.artifactType, a.annotations); err != nil {
+				// Keep fmt.Printf for user output consistency
 				fmt.Printf("Failed to annotate %s/%s@%s, error: %v\n", a.loginURL, a.repoName, digest, err)
+				
+				log.Error().
+					Err(err).
+					Str("repository", a.repoName).
+					Str("manifest", digest).
+					Str("ref", ref).
+					Str("artifact_type", a.artifactType).
+					Msg("Failed to annotate manifest")
 				return err // TODO: #469 Do we want to fail the whole job if one fails? This is the current behaviour.
 			}
 			annotatedImages.Add(1)
+			
+			// Keep fmt.Printf for user output consistency
 			fmt.Printf("Annotated %s/%s@%s\n", a.loginURL, a.repoName, digest)
+			
+			log.Info().
+				Str("repository", a.repoName).
+				Str("manifest", digest).
+				Str("ref", ref).
+				Str("artifact_type", a.artifactType).
+				Interface("annotations", a.annotations).
+				Msg("Successfully annotated manifest")
 			return nil
 		})
 	}
 	err := group.Wait()
-	return int(annotatedImages.Load()), err
+	
+	finalCount := int(annotatedImages.Load())
+	log.Info().
+		Str("repository", a.repoName).
+		Int("annotated_count", finalCount).
+		Int("attempted_count", len(manifests)).
+		Msg("Completed manifest annotation batch")
+		
+	return finalCount, err
 }
 
 // convertListToMap takes a list of annotations and converts it into a map, where the keys are the contents before the = and the values

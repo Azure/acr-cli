@@ -10,6 +10,7 @@ import (
 
 	"github.com/Azure/acr-cli/cmd/common"
 	"github.com/Azure/acr-cli/internal/api"
+	"github.com/Azure/acr-cli/internal/logger"
 	"github.com/Azure/acr-cli/internal/worker"
 	"github.com/dlclark/regexp2"
 	"github.com/spf13/cobra"
@@ -163,8 +164,17 @@ func annotateTags(ctx context.Context,
 	dryRun bool) (int, error) {
 
 	if !dryRun {
+		log := logger.Get()
+		log.Info().
+			Str("repository", repoName).
+			Msg("Starting tag annotation for repository")
 		fmt.Printf("\nAnnotating tags for repository: %s\n", repoName)
 	} else {
+		log := logger.Get()
+		log.Info().
+			Str("repository", repoName).
+			Bool("dry_run", true).
+			Msg("Dry run: would annotate tags for repository")
 		fmt.Printf("\nTags for this repository would be annotated: %s\n", repoName)
 	}
 
@@ -225,6 +235,11 @@ func getManifestsToAnnotate(ctx context.Context,
 	resultTags, err := acrClient.GetAcrTags(ctx, repoName, "timedesc", lastTag)
 	if err != nil {
 		if resultTags != nil && resultTags.Response.Response != nil && resultTags.StatusCode == http.StatusNotFound {
+			log := logger.Get()
+			log.Warn().
+				Str("repository", repoName).
+				Int("status_code", resultTags.StatusCode).
+				Msg("Repository not found during annotation operation")
 			fmt.Printf("%s repository not found\n", repoName)
 			return nil, "", nil
 		}
@@ -257,6 +272,12 @@ func getManifestsToAnnotate(ctx context.Context,
 					// Only print what would be annotated during a dry-run. Successfully annotated manifests
 					// will be logged after the annotation.
 					if dryRun {
+						log := logger.Get()
+						log.Debug().
+							Str("repository", repoName).
+							Str("tag", *tag.Name).
+							Str("manifest", *tag.Digest).
+							Msg("Tag marked for annotation in dry run")
 						fmt.Printf("%s/%s:%s\n", loginURL, repoName, *tag.Name)
 					}
 					manifestsToAnnotate = append(manifestsToAnnotate, *tag.Digest)
@@ -280,8 +301,17 @@ func annotateUntaggedManifests(ctx context.Context,
 	annotations []string,
 	dryRun bool) (int, error) {
 	if !dryRun {
+		log := logger.Get()
+		log.Info().
+			Str("repository", repoName).
+			Msg("Starting manifest annotation for repository")
 		fmt.Printf("Annotating manifests for repository: %s\n", repoName)
 	} else {
+		log := logger.Get()
+		log.Info().
+			Str("repository", repoName).
+			Bool("dry_run", true).
+			Msg("Dry run: would annotate manifests for repository")
 		fmt.Printf("Manifests for this repository would be annotated: %s\n", repoName)
 	}
 

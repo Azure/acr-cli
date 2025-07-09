@@ -15,6 +15,7 @@ import (
 
 	"github.com/Azure/acr-cli/acr"
 	"github.com/Azure/acr-cli/internal/api"
+	"github.com/Azure/acr-cli/internal/logger"
 	"github.com/Azure/acr-cli/internal/tag"
 
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
@@ -285,19 +286,36 @@ func ApplyFilterAndGetFilteredList(ctx context.Context, acrClient api.AcrCLIClie
 
 // Prints the filtered result to the console
 func PrintFilteredResult(filteredResult []FilteredRepository, showPatchTags bool) {
+	log := logger.Get()
+	
+	log.Info().
+		Int("result_count", len(filteredResult)).
+		Bool("show_patch_tags", showPatchTags).
+		Msg("Printing filtered repository results")
+	
 	if len(filteredResult) == 0 {
 		fmt.Println("No matching repository and tag found!")
+		log.Info().Msg("No matching repositories found")
 	} else if showPatchTags {
 		fmt.Println("Listing repositories and tags matching the filter with corresponding latest patch tag (if present):")
 		fmt.Printf("%s,%s,%s\n", "Repo", "Tag", "LatestPatchTag")
 		for _, result := range filteredResult {
 			fmt.Printf("%s,%s,%s\n", result.Repository, result.Tag, result.PatchTag)
+			log.Debug().
+				Str("repository", result.Repository).
+				Str("tag", result.Tag).
+				Str("patch_tag", result.PatchTag).
+				Msg("Repository result with patch tag")
 		}
 	} else {
 		fmt.Println("Listing repositories and tags matching the filter:")
 		fmt.Printf("%s,%s\n", "Repo", "Tag")
 		for _, result := range filteredResult {
 			fmt.Printf("%s,%s\n", result.Repository, result.Tag)
+			log.Debug().
+				Str("repository", result.Repository).
+				Str("tag", result.Tag).
+				Msg("Repository result")
 		}
 	}
 	fmt.Println("Matches found:", len(filteredResult))
@@ -305,13 +323,25 @@ func PrintFilteredResult(filteredResult []FilteredRepository, showPatchTags bool
 
 // Prints the artifacts not found to the console
 func PrintNotFoundArtifacts(artifactsNotFound []FilteredRepository) {
+	log := logger.Get()
+	
 	if len(artifactsNotFound) > 0 {
+		log.Warn().
+			Int("not_found_count", len(artifactsNotFound)).
+			Msg("Some artifacts specified in filter were not found")
+		
 		fmt.Printf("%s\n", "Artifacts specified in the filter that do not exist:")
 		fmt.Printf("%s,%s\n", "Repo", "Tag")
 		for _, result := range artifactsNotFound {
 			fmt.Printf("%s,%s\n", result.Repository, result.Tag)
+			log.Debug().
+				Str("repository", result.Repository).
+				Str("tag", result.Tag).
+				Msg("Artifact not found")
 		}
 		fmt.Println("Not found:", len(artifactsNotFound))
+	} else {
+		log.Debug().Msg("All specified artifacts were found")
 	}
 }
 
