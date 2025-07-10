@@ -10,6 +10,7 @@ import (
 
 	"github.com/Azure/acr-cli/cmd/common"
 	"github.com/Azure/acr-cli/internal/api"
+	"github.com/Azure/acr-cli/internal/logger"
 	"github.com/Azure/acr-cli/internal/worker"
 	"github.com/dlclark/regexp2"
 	"github.com/spf13/cobra"
@@ -162,9 +163,18 @@ func annotateTags(ctx context.Context,
 	regexpMatchTimeoutSeconds int64,
 	dryRun bool) (int, error) {
 
+	log := logger.Get()
+
 	if !dryRun {
+		log.Info().
+			Str(logger.FieldRepository, repoName).
+			Msg("Starting tag annotation for repository")
 		fmt.Printf("\nAnnotating tags for repository: %s\n", repoName)
 	} else {
+		log.Info().
+			Str(logger.FieldRepository, repoName).
+			Bool(logger.FieldDryRun, true).
+			Msg("Dry run: would annotate tags for repository")
 		fmt.Printf("\nTags for this repository would be annotated: %s\n", repoName)
 	}
 
@@ -222,10 +232,15 @@ func getManifestsToAnnotate(ctx context.Context,
 	filter *regexp2.Regexp,
 	lastTag string, artifactType string, dryRun bool) ([]string, string, error) {
 
+	log := logger.Get()
+
 	resultTags, err := acrClient.GetAcrTags(ctx, repoName, "timedesc", lastTag)
 	if err != nil {
 		if resultTags != nil && resultTags.Response.Response != nil && resultTags.StatusCode == http.StatusNotFound {
-			fmt.Printf("%s repository not found\n", repoName)
+			log.Warn().
+				Str(logger.FieldRepository, repoName).
+				Int(logger.FieldStatusCode, resultTags.StatusCode).
+				Msg("Repository not found during annotation operation")
 			return nil, "", nil
 		}
 		return nil, "", err
@@ -254,10 +269,15 @@ func getManifestsToAnnotate(ctx context.Context,
 					return nil, "", err
 				}
 				if !skip {
-					// Only print what would be annotated during a dry-run. Successfully annotated manifests
+					// Only log what would be annotated during a dry-run. Successfully annotated manifests
 					// will be logged after the annotation.
 					if dryRun {
-						fmt.Printf("%s/%s:%s\n", loginURL, repoName, *tag.Name)
+						log.Debug().
+							Str(logger.FieldRepository, repoName).
+							Str(logger.FieldTag, *tag.Name).
+							Str(logger.FieldManifest, *tag.Digest).
+							Bool(logger.FieldDryRun, true).
+							Msg("Tag marked for annotation in dry run")
 					}
 					manifestsToAnnotate = append(manifestsToAnnotate, *tag.Digest)
 				}
@@ -279,9 +299,19 @@ func annotateUntaggedManifests(ctx context.Context,
 	repoName string, artifactType string,
 	annotations []string,
 	dryRun bool) (int, error) {
+	
+	log := logger.Get()
+	
 	if !dryRun {
+		log.Info().
+			Str(logger.FieldRepository, repoName).
+			Msg("Starting manifest annotation for repository")
 		fmt.Printf("Annotating manifests for repository: %s\n", repoName)
 	} else {
+		log.Info().
+			Str(logger.FieldRepository, repoName).
+			Bool(logger.FieldDryRun, true).
+			Msg("Dry run: would annotate manifests for repository")
 		fmt.Printf("Manifests for this repository would be annotated: %s\n", repoName)
 	}
 

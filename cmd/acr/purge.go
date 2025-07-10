@@ -14,6 +14,7 @@ import (
 	"github.com/Azure/acr-cli/acr"
 	"github.com/Azure/acr-cli/cmd/common"
 	"github.com/Azure/acr-cli/internal/api"
+	"github.com/Azure/acr-cli/internal/logger"
 	"github.com/Azure/acr-cli/internal/worker"
 	"github.com/dlclark/regexp2"
 	"github.com/spf13/cobra"
@@ -348,29 +349,75 @@ func getTagsToDelete(ctx context.Context,
 // purgeDanglingManifests deletes all manifests that do not have any tags associated with them.
 // except the ones that are referenced by a multiarch manifest or that have subject.
 func purgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, repoParallelism int, loginURL string, repoName string, manifestToTagsCountMap map[string]int, dryRun bool) (int, error) {
-	fmt.Printf("Deleting manifests for repository: %s\n", repoName)
+	log := logger.Get()
+	
+	log.Info().
+		Str("repository", repoName).
+		Bool("dry_run", dryRun).
+		Msg("Starting manifest purge operation")
+
 	// Contrary to getTagsToDelete, getManifestsToDelete gets all the Manifests at once, this was done because if there is a manifest that has no
 	// tag but is referenced by a multiarch manifest that has tags then it should not be deleted. Or if a manifest has no tag, but it has subject,
 	// then it should not be deleted.
 	manifestsToDelete, err := common.GetUntaggedManifests(ctx, repoParallelism, acrClient, repoName, false, manifestToTagsCountMap, dryRun)
 	if err != nil {
+		log.Error().
+			Err(err).
+			Str("repository", repoName).
+			Msg("Failed to get untagged manifests")
 		return -1, err
 	}
+
+	log.Info().
+		Str("repository", repoName).
+		Int("candidate_count", len(manifestsToDelete)).
+		Msg("Found candidate manifests for deletion")
 
 	// If dryRun is set to true then no manifests will be deleted, but the number of manifests that would be deleted is returned. Additionally,
 	// the manifests that would be deleted are printed to the console. We also need to account for the manifests that would be deleted from the tag
 	// filtering first as that would influence the untagged manifests that would be deleted.
 	if dryRun {
+		log.Info().
+			Str("repository", repoName).
+			Int("count", len(manifestsToDelete)).
+			Msg("Dry run: manifests that would be deleted")
+		
 		for _, manifest := range manifestsToDelete {
+			// Keep the fmt.Printf for user output consistency
 			fmt.Printf("Would delete: %s/%s@%s\n", loginURL, repoName, manifest)
+			
+			log.Debug().
+				Str("repository", repoName).
+				Str("manifest", manifest).
+				Str("ref", fmt.Sprintf("%s/%s@%s", loginURL, repoName, manifest)).
+				Msg("Manifest marked for deletion in dry run")
 		}
 		return len(manifestsToDelete), nil
 	}
+	
 	// In order to only have a limited amount of http requests, a purger is used that will start goroutines to delete manifests.
+	log.Debug().
+		Str("repository", repoName).
+		Int("parallelism", repoParallelism).
+		Int("manifest_count", len(manifestsToDelete)).
+		Msg("Starting concurrent manifest deletion")
+		
 	purger := worker.NewPurger(repoParallelism, acrClient, loginURL, repoName)
 	deletedManifestsCount, purgeErr := purger.PurgeManifests(ctx, manifestsToDelete)
 	if purgeErr != nil {
+		log.Error().
+			Err(purgeErr).
+			Str("repository", repoName).
+			Int("attempted_count", len(manifestsToDelete)).
+			Msg("Failed to purge manifests")
 		return -1, purgeErr
 	}
+	
+	log.Info().
+		Str("repository", repoName).
+		Int("deleted_count", deletedManifestsCount).
+		Int("attempted_count", len(manifestsToDelete)).
+		Msg("Successfully completed manifest purge operation")
+		
 	return deletedManifestsCount, nil
 }

@@ -17,6 +17,7 @@ import (
 	"github.com/Azure/acr-cli/acr"
 	"github.com/Azure/acr-cli/acr/acrapi"
 	"github.com/Azure/acr-cli/internal/api"
+	"github.com/Azure/acr-cli/internal/logger"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/alitto/pond/v2"
@@ -155,14 +156,26 @@ func GetLastTagFromResponse(resultTags *acr.RepositoryTagsType) string {
 // Param manifestToTagsCountMap is an optional map that can be used to pass the count of tags for each manifest that we know would be deleted if the command is exectued
 // under dryRun conditions. Its ignored if the dryRun flag is false.
 func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCLIClientInterface, repoName string, preserveAllOCIManifests bool, manifestToDeletedTagsCountMap map[string]int, dryRun bool) ([]string, error) {
+	log := logger.Get().With().Str(logger.FieldRepository, repoName).Logger()
+	
+	log.Debug().
+		Int("pool_size", poolSize).
+		Bool("preserve_all_oci_manifests", preserveAllOCIManifests).
+		Bool(logger.FieldDryRun, dryRun).
+		Msg("Starting untagged manifest evaluation")
+
 	lastManifestDigest := ""
 	var manifestsToDelete []string
 	resultManifests, err := acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
 	if err != nil {
 		if resultManifests != nil && resultManifests.Response.Response != nil && resultManifests.StatusCode == http.StatusNotFound {
+			log.Warn().
+				Int(logger.FieldStatusCode, resultManifests.StatusCode).
+				Msg("Repository not found, skipping manifest evaluation")
 			fmt.Printf("%s repository not found\n", repoName)
 			return manifestsToDelete, nil
 		}
+		log.Error().Err(err).Msg("Failed to get manifests from repository")
 		return nil, err
 	}
 
@@ -202,9 +215,17 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 			// If the manifest cannot be deleted or written to we can skip them (ACR will not allow deletion of these manifests)
 			if manifest.ChangeableAttributes != nil {
 				if manifest.ChangeableAttributes.DeleteEnabled != nil && !(*manifest.ChangeableAttributes.DeleteEnabled) {
+					log.Debug().
+						Str(logger.FieldManifest, *manifest.Digest).
+						Str(logger.FieldReason, "delete_disabled").
+						Msg("Manifest excluded from purge - deletion disabled by attributes")
 					continue
 				}
 				if manifest.ChangeableAttributes.WriteEnabled != nil && !(*manifest.ChangeableAttributes.WriteEnabled) {
+					log.Debug().
+						Str(logger.FieldManifest, *manifest.Digest).
+						Str(logger.FieldReason, "write_disabled").
+						Msg("Manifest excluded from purge - write disabled by attributes")
 					continue
 				}
 			}
@@ -215,13 +236,36 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 			if manifest.Tags != nil && len(*manifest.Tags) > 0 &&
 				(!dryRun || (manifestToDeletedTagsCountMap == nil || len(*manifest.Tags) > manifestToDeletedTagsCountMap[*manifest.Digest])) {
 
+				tagsRemaining := len(*manifest.Tags)
+				if manifestToDeletedTagsCountMap != nil {
+					tagsRemaining = len(*manifest.Tags) - manifestToDeletedTagsCountMap[*manifest.Digest]
+				}
+				
+				log.Debug().
+					Str(logger.FieldManifest, *manifest.Digest).
+					Str(logger.FieldReason, "has_tags").
+					Int(logger.FieldTagCount, len(*manifest.Tags)).
+					Int("tags_remaining_after_purge", tagsRemaining).
+					Bool(logger.FieldDryRun, dryRun).
+					Msg("Manifest excluded from purge - has remaining tags")
+
 				// If the media type is not set, we will have to identify the manifest type from its fields, in this case the manifests field.
 				// This should not really happen for this API but we will handle it gracefully.
 				if manifest.MediaType != nil {
 					// If the manifest is not a list type, we can skip searching for its children
 					if *manifest.MediaType != v1.MediaTypeImageIndex && *manifest.MediaType != mediaTypeDockerManifestList {
+						log.Debug().
+							Str(logger.FieldManifest, *manifest.Digest).
+							Str(logger.FieldMediaType, *manifest.MediaType).
+							Str(logger.FieldReason, "tagged_non_list").
+							Msg("Manifest excluded from purge - tagged non-list manifest")
 						continue
 					}
+					
+					log.Debug().
+						Str(logger.FieldManifest, *manifest.Digest).
+						Str(logger.FieldMediaType, *manifest.MediaType).
+						Msg("Processing tagged index/list manifest dependencies")
 				}
 				group.SubmitErr(func() error {
 					// For tagged indexes/lists, we need to get dependencies and add them to ignore list
@@ -231,6 +275,10 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 						errParsed := autorest.DetailedError{}
 						if errors.As(err, &errParsed) && errParsed.StatusCode == http.StatusNotFound {
 							// If manifest not found, skip it
+							log.Warn().
+								Str(logger.FieldManifest, *manifest.Digest).
+								Interface(logger.FieldStatusCode, errParsed.StatusCode).
+								Msg("Manifest not found when trying to get dependencies, skipping")
 							return nil
 						}
 						return err
@@ -257,7 +305,17 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 					// Add the manifest to the candidates list
 					if _, ok := candidates[*manifest.Digest]; !ok {
 						candidates[*manifest.Digest] = manifest
+						log.Debug().
+							Str(logger.FieldManifest, *manifest.Digest).
+							Str(logger.FieldMediaType, *manifest.MediaType).
+							Msg("Manifest added as candidate - preserve OCI manifests enabled, non-image manifest")
 					}
+				} else {
+					log.Debug().
+						Str(logger.FieldManifest, *manifest.Digest).
+						Str(logger.FieldMediaType, *manifest.MediaType).
+						Str(logger.FieldReason, "oci_image_preserved").
+						Msg("Manifest excluded from purge - OCI image manifest preservation enabled")
 				}
 				continue
 			}
@@ -272,15 +330,27 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 			group.SubmitErr(func() error {
 				canDelete, dependentManifests, err := checkManifestDeletabilityAndGetDependencies(ctx, manifest, acrClient, repoName)
 				if err != nil {
-					return err
+					return fmt.Errorf("error checking manifest %s deletability in repository %s: %w", *manifest.Digest, repoName, err)
 				}
 				if canDelete {
 					// Manifest is okay to delete
+					log.Debug().
+						Str(logger.FieldManifest, *manifest.Digest).
+						Msg("Manifest confirmed as safe to delete")
 					return nil
 				}
 
+				log.Debug().
+					Str(logger.FieldManifest, *manifest.Digest).
+					Str(logger.FieldReason, "has_subject_or_referrer").
+					Msg("Manifest excluded from purge - has subject or is a referrer")
+
 				// If the manifest has dependencies (is an index), add them to the ignore list
 				if len(dependentManifests) > 0 {
+					log.Debug().
+						Str(logger.FieldManifest, *manifest.Digest).
+						Int("dependent_count", len(dependentManifests)).
+						Msg("Adding dependent manifests to ignore list")
 					return addDependentManifestsToIgnoreList(ctx, dependentManifests, acrClient, repoName, &ignoreList)
 				}
 
@@ -293,6 +363,9 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 			// subsequently but that is not a problem.
 			if _, ok := candidates[*manifest.Digest]; !ok {
 				candidates[*manifest.Digest] = manifest
+				log.Debug().
+					Str(logger.FieldManifest, *manifest.Digest).
+					Msg("Manifest added as deletion candidate")
 			}
 		}
 
@@ -307,16 +380,37 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 
 	// Wait for all the goroutines to finish or return an error if one of them failed
 	if err := group.Wait(); err != nil {
+		log.Error().Err(err).Msg("Error occurred during manifest evaluation")
 		return nil, err
 	}
 
+	log.Debug().
+		Int("total_candidates", len(candidates)).
+		Msg("Completed manifest evaluation, filtering final deletion list")
+
+	finalIgnoredCount := 0
 	for _, manifest := range candidates {
 		// If the manifest is not in the ignore list, it should be deleted
 		if _, shouldBeIgnored := ignoreList.Load(*manifest.Digest); !shouldBeIgnored {
 			// Add the manifest to the list of manifests to delete
 			manifestsToDelete = append(manifestsToDelete, *manifest.Digest)
+			log.Debug().
+				Str(logger.FieldManifest, *manifest.Digest).
+				Msg("Manifest confirmed for deletion")
+		} else {
+			finalIgnoredCount++
+			log.Debug().
+				Str(logger.FieldManifest, *manifest.Digest).
+				Str(logger.FieldReason, "is_dependency").
+				Msg("Manifest excluded from final deletion list - is a dependency of another manifest")
 		}
 	}
+
+	log.Info().
+		Int("candidates_evaluated", len(candidates)).
+		Int("final_deletion_count", len(manifestsToDelete)).
+		Int("protected_count", finalIgnoredCount).
+		Msg("Completed untagged manifest evaluation")
 
 	return manifestsToDelete, nil
 }
@@ -335,6 +429,12 @@ func findDirectDependentManifests(ctx context.Context, manifestDigest string, ac
 		errParsed := azure.RequestError{}
 		if errors.As(err, &errParsed) && errParsed.StatusCode == http.StatusNotFound {
 			// If the manifest is not found, we can return an empty list
+			log := logger.Get()
+			log.Warn().
+				Str(logger.FieldRepository, repoName).
+				Str(logger.FieldManifest, manifestDigest).
+				Interface(logger.FieldStatusCode, errParsed.StatusCode).
+				Msg("Manifest not found when finding dependencies, returning empty list")
 			return []dependentManifestResult{}, nil
 		}
 		return nil, err
