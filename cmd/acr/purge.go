@@ -195,7 +195,11 @@ func purge(ctx context.Context,
 
 // purgeTags deletes all tags that are older than the ago value and that match the tagFilter string.
 func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, repoParallelism int, loginURL string, repoName string, ago string, tagFilter string, keep int, regexpMatchTimeoutSeconds int64, dryRun bool, includeLocked bool) (int, map[string]int, error) {
-	fmt.Printf("Deleting tags for repository: %s\n", repoName)
+	if dryRun {
+		fmt.Printf("Would delete tags for repository: %s\n", repoName)
+	} else {
+		fmt.Printf("Deleting tags for repository: %s\n", repoName)
+	}
 	manifestToTagsCountMap := make(map[string]int) // This map is used to keep track of how many tags would have been deleted per manifest.
 	agoDuration, err := parseDuration(ago)
 	if err != nil {
@@ -357,7 +361,11 @@ func getTagsToDelete(ctx context.Context,
 // purgeDanglingManifests deletes all manifests that do not have any tags associated with them.
 // except the ones that are referenced by a multiarch manifest or that have subject.
 func purgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, repoParallelism int, loginURL string, repoName string, manifestToTagsCountMap map[string]int, dryRun bool, includeLocked bool) (int, error) {
-	fmt.Printf("Deleting manifests for repository: %s\n", repoName)
+	if dryRun {
+		fmt.Printf("Would delete manifests for repository: %s\n", repoName)
+	} else {
+		fmt.Printf("Deleting manifests for repository: %s\n", repoName)
+	}
 	// Contrary to getTagsToDelete, getManifestsToDelete gets all the Manifests at once, this was done because if there is a manifest that has no
 	// tag but is referenced by a multiarch manifest that has tags then it should not be deleted. Or if a manifest has no tag, but it has subject,
 	// then it should not be deleted.
