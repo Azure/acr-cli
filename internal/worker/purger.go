@@ -18,10 +18,11 @@ import (
 type Purger struct {
 	Executer
 	acrClient api.AcrCLIClientInterface
+	includeLocked bool
 }
 
 // NewPurger creates a new Purger. Purgers are currently repository specific
-func NewPurger(repoParallelism int, acrClient api.AcrCLIClientInterface, loginURL string, repoName string) *Purger {
+func NewPurger(repoParallelism int, acrClient api.AcrCLIClientInterface, loginURL string, repoName string, includeLocked bool) *Purger {
 	executeBase := Executer{
 		// Use a queue size 3x the pool size to buffer enough tasks and keep workers busy and avoiding
 		// slowdown due to task scheduling blocking.
@@ -32,6 +33,7 @@ func NewPurger(repoParallelism int, acrClient api.AcrCLIClientInterface, loginUR
 	return &Purger{
 		Executer:  executeBase,
 		acrClient: acrClient,
+		includeLocked: includeLocked,
 	}
 }
 
@@ -41,6 +43,26 @@ func (p *Purger) PurgeTags(ctx context.Context, tags []acr.TagAttributesBase) (i
 	group := p.pool.NewGroup()
 	for _, tag := range tags {
 		group.SubmitErr(func() error {
+			// If include-locked is enabled and tag is locked, unlock it first
+			if p.includeLocked && tag.ChangeableAttributes != nil {
+				if (tag.ChangeableAttributes.DeleteEnabled != nil && !*tag.ChangeableAttributes.DeleteEnabled) ||
+					(tag.ChangeableAttributes.WriteEnabled != nil && !*tag.ChangeableAttributes.WriteEnabled) {
+					
+					enabledTrue := true
+					unlockAttrs := &acr.ChangeableAttributes{
+						DeleteEnabled: &enabledTrue,
+						WriteEnabled:  &enabledTrue,
+					}
+					
+					_, unlockErr := p.acrClient.UpdateAcrTagAttributes(ctx, p.repoName, *tag.Name, unlockAttrs)
+					if unlockErr != nil {
+						fmt.Printf("Failed to unlock %s/%s:%s, error: %v\n", p.loginURL, p.repoName, *tag.Name, unlockErr)
+						return unlockErr
+					}
+					fmt.Printf("Unlocked %s/%s:%s\n", p.loginURL, p.repoName, *tag.Name)
+				}
+			}
+			
 			resp, err := p.acrClient.DeleteAcrTag(ctx, p.repoName, *tag.Name)
 			if err == nil {
 				fmt.Printf("Deleted %s/%s:%s\n", p.loginURL, p.repoName, *tag.Name)
@@ -70,22 +92,45 @@ func (p *Purger) PurgeManifests(ctx context.Context, manifests []string) (int, e
 	group := p.pool.NewGroup()
 	for _, manifest := range manifests {
 		group.SubmitErr(func() error {
+			// If include-locked is enabled, we need to check if manifest is locked and unlock it first
+			if p.includeLocked {
+				manifestAttrs, err := p.acrClient.GetAcrManifestAttributes(ctx, p.repoName, manifest)
+				if err == nil && manifestAttrs.ManifestAttributes != nil && manifestAttrs.ManifestAttributes.ChangeableAttributes != nil {
+					if (manifestAttrs.ManifestAttributes.ChangeableAttributes.DeleteEnabled != nil && !*manifestAttrs.ManifestAttributes.ChangeableAttributes.DeleteEnabled) ||
+						(manifestAttrs.ManifestAttributes.ChangeableAttributes.WriteEnabled != nil && !*manifestAttrs.ManifestAttributes.ChangeableAttributes.WriteEnabled) {
+						
+						enabledTrue := true
+						unlockAttrs := &acr.ChangeableAttributes{
+							DeleteEnabled: &enabledTrue,
+							WriteEnabled:  &enabledTrue,
+						}
+						
+						_, unlockErr := p.acrClient.UpdateAcrManifestAttributes(ctx, p.repoName, manifest, unlockAttrs)
+						if unlockErr != nil {
+							fmt.Printf("Failed to unlock %s/%s@%s, error: %v\n", p.loginURL, p.repoName, manifest, unlockErr)
+							return unlockErr
+						}
+						fmt.Printf("Unlocked %s/%s@%s\n", p.loginURL, p.repoName, manifest)
+					}
+				}
+			}
+			
 			resp, err := p.acrClient.DeleteManifest(ctx, p.repoName, manifest)
 			if err == nil {
-				fmt.Printf("Deleted %s/%s:%s\n", p.loginURL, p.repoName, manifest)
+				fmt.Printf("Deleted %s/%s@%s\n", p.loginURL, p.repoName, manifest)
 				// Increment the count of successfully deleted tags atomically
 				deletedManifests.Add(1)
 				return nil
 			}
 
 			if resp != nil && resp.Response != nil && resp.StatusCode == http.StatusNotFound {
-				// If the tag is not found it can be assumed to have been deleted.
+				// If the manifest is not found it can be assumed to have been deleted.
 				deletedManifests.Add(1)
-				fmt.Printf("Skipped %s/%s:%s, HTTP status: %d\n", p.loginURL, p.repoName, manifest, resp.StatusCode)
+				fmt.Printf("Skipped %s/%s@%s, HTTP status: %d\n", p.loginURL, p.repoName, manifest, resp.StatusCode)
 				return nil
 			}
 
-			fmt.Printf("Failed to delete %s/%s:%s, error: %v\n", p.loginURL, p.repoName, manifest, err)
+			fmt.Printf("Failed to delete %s/%s@%s, error: %v\n", p.loginURL, p.repoName, manifest, err)
 			return err
 
 		})
