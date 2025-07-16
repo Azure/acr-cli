@@ -210,6 +210,9 @@ acr purge \
 
 #### Include-locked flag
 To delete locked manifests and tags (where deleteEnabled or writeEnabled is false), the `--include-locked` flag should be set. This will unlock them before deletion.
+
+**Warning:** The `--include-locked` flag will unlock and delete images that have been locked for protection. Use this flag with caution as it bypasses the image lock mechanism. For more information about image locking, see [Lock a container image in an Azure container registry](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-image-lock).
+
 ```sh
 acr purge \
     --registry <Registry Name> \
