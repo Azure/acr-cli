@@ -154,7 +154,7 @@ func GetLastTagFromResponse(resultTags *acr.RepositoryTagsType) string {
 // the manifest should also not have a tag and not have a subject manifest.
 // Param manifestToTagsCountMap is an optional map that can be used to pass the count of tags for each manifest that we know would be deleted if the command is exectued
 // under dryRun conditions. Its ignored if the dryRun flag is false.
-func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCLIClientInterface, repoName string, preserveAllOCIManifests bool, manifestToDeletedTagsCountMap map[string]int, dryRun bool) ([]string, error) {
+func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCLIClientInterface, repoName string, preserveAllOCIManifests bool, manifestToDeletedTagsCountMap map[string]int, dryRun bool, includeLocked bool) ([]string, error) {
 	lastManifestDigest := ""
 	var manifestsToDelete []string
 	resultManifests, err := acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
@@ -200,7 +200,8 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 
 			// _____MANIFEST HAS DELETION AS DISALLOWED BY ATTRIBUTES_____
 			// If the manifest cannot be deleted or written to we can skip them (ACR will not allow deletion of these manifests)
-			if manifest.ChangeableAttributes != nil {
+			// Unless --include-locked flag is set, in which case we will unlock them first
+			if !includeLocked && manifest.ChangeableAttributes != nil {
 				if manifest.ChangeableAttributes.DeleteEnabled != nil && !(*manifest.ChangeableAttributes.DeleteEnabled) {
 					continue
 				}

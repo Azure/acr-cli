@@ -52,6 +52,7 @@ type annotateParameters struct {
 	untagged      bool
 	dryRun        bool
 	concurrency   int
+	includeLocked bool
 }
 
 // newAnnotateCmd defines the annotate command
@@ -93,6 +94,8 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 			// In order to print a summary of the annotated tags/manifests, the counters get updated every time a repo is annotated.
 			annotatedTagsCount := 0
 			annotatedManifestsCount := 0
+			skippedTagsCount := 0
+			skippedManifestsCount := 0
 
 			poolSize := annotateParams.concurrency
 			if poolSize <= 0 {
@@ -103,23 +106,26 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 				fmt.Printf("Specified concurrency value too large. Set to maximum value: %d \n", maxPoolSize)
 			}
 			for repoName, tagRegex := range tagFilters {
-				singleAnnotatedTagsCount, err := annotateTags(ctx, acrClient, orasClient, poolSize, loginURL, repoName, annotateParams.artifactType, annotateParams.annotations, tagRegex, annotateParams.filterTimeout, annotateParams.dryRun)
+				singleAnnotatedTagsCount, singleSkippedTagsCount, err := annotateTags(ctx, acrClient, orasClient, poolSize, loginURL, repoName, annotateParams.artifactType, annotateParams.annotations, tagRegex, annotateParams.filterTimeout, annotateParams.dryRun, annotateParams.includeLocked)
 				if err != nil {
 					return fmt.Errorf("failed to annotate tags: %w", err)
 				}
 
 				singleAnnotatedManifestsCount := 0
+				var singleSkippedManifestsCount int
 				// If the untagged flag is set, then manifests with no tags are also annotated..
 				if annotateParams.untagged {
-					singleAnnotatedManifestsCount, err = annotateUntaggedManifests(ctx, acrClient, orasClient, poolSize, loginURL, repoName, annotateParams.artifactType, annotateParams.annotations, annotateParams.dryRun)
+					singleAnnotatedManifestsCount, singleSkippedManifestsCount, err = annotateUntaggedManifests(ctx, acrClient, orasClient, poolSize, loginURL, repoName, annotateParams.artifactType, annotateParams.annotations, annotateParams.dryRun, annotateParams.includeLocked)
 					if err != nil {
 						return fmt.Errorf("failed to annotate manifests: %w", err)
 					}
+					skippedManifestsCount += singleSkippedManifestsCount
 				}
 
 				// After every repository is annotated, the counters are updated
 				annotatedTagsCount += singleAnnotatedTagsCount
 				annotatedManifestsCount += singleAnnotatedManifestsCount
+				skippedTagsCount += singleSkippedTagsCount
 			}
 
 			// After all repos have been annotated, the summary is printed
@@ -129,6 +135,12 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 			} else {
 				fmt.Printf("\nNumber of annotated tags: %d", annotatedTagsCount)
 				fmt.Printf("\nNumber of annotated manifests: %d\n", annotatedManifestsCount)
+			}
+			if skippedTagsCount > 0 {
+				fmt.Printf("%d tags skipped as they are locked\n", skippedTagsCount)
+			}
+			if skippedManifestsCount > 0 {
+				fmt.Printf("%d manifests skipped as they are locked\n", skippedManifestsCount)
 			}
 			return nil
 		},
@@ -141,6 +153,7 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 	cmd.Flags().StringSliceVarP(&annotateParams.annotations, "annotations", "a", []string{}, "The configurable annotation key value that can be specified one or more times")
 	cmd.Flags().BoolVar(&annotateParams.untagged, "untagged", false, "If the untagged flag is set, all the manifests that do not have any tags associated to them will also be annotated, except if they belong to a manifest list that contains at least one tag")
 	cmd.Flags().BoolVar(&annotateParams.dryRun, "dry-run", false, "If the dry-run flag is set, no manifest or tag will be annotated. The output would be the same as if they were annotated")
+	cmd.Flags().BoolVar(&annotateParams.includeLocked, "include-locked", false, "If the include-locked flag is set, locked manifests and tags (where writeEnabled is false) will be annotated")
 	cmd.Flags().IntVar(&annotateParams.concurrency, "concurrency", defaultPoolSize, annotatedConcurrencyDescription)
 	cmd.Flags().BoolP("help", "h", false, "Print usage")
 	cmd.MarkFlagRequired("filter")
@@ -160,7 +173,8 @@ func annotateTags(ctx context.Context,
 	annotations []string,
 	tagFilter string,
 	regexpMatchTimeoutSeconds int64,
-	dryRun bool) (int, error) {
+	dryRun bool,
+	includeLocked bool) (int, int, error) {
 
 	if !dryRun {
 		fmt.Printf("\nAnnotating tags for repository: %s\n", repoName)
@@ -170,35 +184,37 @@ func annotateTags(ctx context.Context,
 
 	tagRegex, err := common.BuildRegexFilter(tagFilter, regexpMatchTimeoutSeconds)
 	if err != nil {
-		return -1, err
+		return -1, 0, err
 	}
 
 	lastTag := ""
 	annotatedTagsCount := 0
+	totalSkippedCount := 0
 
 	var annotator *worker.Annotator
 	if !dryRun {
 		// In order to only have a limited amount of http requests, an annotator is used that will start goroutines to annotate tags.
 		annotator, err = worker.NewAnnotator(poolSize, orasClient, loginURL, repoName, artifactType, annotations)
 		if err != nil {
-			return -1, err
+			return -1, 0, err
 		}
 	}
 
 	for {
 		// GetTagsToAnnotate will return an empty lastTag when there are no more tags.
-		manifestsToAnnotate, newLastTag, err := getManifestsToAnnotate(ctx, acrClient, orasClient, loginURL, repoName, tagRegex, lastTag, artifactType, dryRun)
+		manifestsToAnnotate, newLastTag, skippedCount, err := getManifestsToAnnotate(ctx, acrClient, orasClient, loginURL, repoName, tagRegex, lastTag, artifactType, dryRun, includeLocked)
 		if err != nil {
-			return -1, err
+			return -1, 0, err
 		}
 		lastTag = newLastTag
 		count := len(manifestsToAnnotate)
+		totalSkippedCount += skippedCount
 		if count > 0 {
 			if !dryRun {
 				annotated, annotateErr := annotator.Annotate(ctx, manifestsToAnnotate)
 				if annotateErr != nil {
 					annotatedTagsCount += annotated
-					return annotatedTagsCount, annotateErr
+					return annotatedTagsCount, totalSkippedCount, annotateErr
 				}
 			}
 			annotatedTagsCount += count
@@ -207,7 +223,7 @@ func annotateTags(ctx context.Context,
 			break
 		}
 	}
-	return annotatedTagsCount, nil
+	return annotatedTagsCount, totalSkippedCount, nil
 }
 
 // getManifestsToAnnotate gets all manifests that should be annotated according to the filter flag.
@@ -220,38 +236,40 @@ func getManifestsToAnnotate(ctx context.Context,
 	loginURL string,
 	repoName string,
 	filter *regexp2.Regexp,
-	lastTag string, artifactType string, dryRun bool) ([]string, string, error) {
+	lastTag string, artifactType string, dryRun bool, includeLocked bool) ([]string, string, int, error) {
 
 	resultTags, err := acrClient.GetAcrTags(ctx, repoName, "timedesc", lastTag)
 	if err != nil {
 		if resultTags != nil && resultTags.Response.Response != nil && resultTags.StatusCode == http.StatusNotFound {
 			fmt.Printf("%s repository not found\n", repoName)
-			return nil, "", nil
+			return nil, "", 0, nil
 		}
-		return nil, "", err
+		return nil, "", 0, err
 	}
 
 	newLastTag := ""
 	if resultTags != nil && resultTags.TagsAttributes != nil && len(*resultTags.TagsAttributes) > 0 {
 		tags := *resultTags.TagsAttributes
 		manifestsToAnnotate := []string{}
+		skippedCount := 0
 		for _, tag := range tags {
 			matches, err := filter.MatchString(*tag.Name)
 			if err != nil {
 				// The only error that regexp2 will return is a timeout error
-				return nil, "", err
+				return nil, "", 0, err
 			}
 			if !matches {
 				// If a tag does not match the regex then it's not added to the list
 				continue
 			}
 
-			// If a tag is changable, then it is returned as a tag to annotate
-			if *tag.ChangeableAttributes.WriteEnabled {
+			// If a tag is changeable, then it is returned as a tag to annotate
+			// With --include-locked flag, locked tags are also eligible for annotation
+			if includeLocked || *tag.ChangeableAttributes.WriteEnabled {
 				ref := fmt.Sprintf("%s/%s:%s", loginURL, repoName, *tag.Name)
 				skip, err := orasClient.DiscoverLifecycleAnnotation(ctx, ref, artifactType)
 				if err != nil {
-					return nil, "", err
+					return nil, "", 0, err
 				}
 				if !skip {
 					// Only print what would be annotated during a dry-run. Successfully annotated manifests
@@ -261,13 +279,16 @@ func getManifestsToAnnotate(ctx context.Context,
 					}
 					manifestsToAnnotate = append(manifestsToAnnotate, *tag.Digest)
 				}
+			} else {
+				// Tag is locked and --include-locked is not set, skip it
+				skippedCount++
 			}
 		}
 
 		newLastTag = common.GetLastTagFromResponse(resultTags)
-		return manifestsToAnnotate, newLastTag, nil
+		return manifestsToAnnotate, newLastTag, skippedCount, nil
 	}
-	return nil, "", nil
+	return nil, "", 0, nil
 }
 
 // annotateUntaggedManifests annotates all manifests that do not have any tags associated with them except the ones
@@ -278,7 +299,7 @@ func annotateUntaggedManifests(ctx context.Context,
 	poolSize int, loginURL string,
 	repoName string, artifactType string,
 	annotations []string,
-	dryRun bool) (int, error) {
+	dryRun bool, includeLocked bool) (int, int, error) {
 	if !dryRun {
 		fmt.Printf("Annotating manifests for repository: %s\n", repoName)
 	} else {
@@ -288,9 +309,9 @@ func annotateUntaggedManifests(ctx context.Context,
 	// Contrary to getTagsToAnnotate, getManifests gets all the manifests at once.
 	// This was done because if there is a manifest that has no tag but is referenced by a multiarch manifest that has tags then it
 	// should not be annotated.
-	manifestsToAnnotate, err := common.GetUntaggedManifests(ctx, poolSize, acrClient, repoName, true, nil, dryRun)
+	manifestsToAnnotate, err := common.GetUntaggedManifests(ctx, poolSize, acrClient, repoName, true, nil, dryRun, includeLocked)
 	if err != nil {
-		return -1, err
+		return -1, 0, err
 	}
 
 	var annotator *worker.Annotator
@@ -299,18 +320,19 @@ func annotateUntaggedManifests(ctx context.Context,
 		// In order to only have a limited amount of http requests, an annotator is used that will start goroutines to annotate manifests.
 		annotator, err = worker.NewAnnotator(poolSize, orasClient, loginURL, repoName, artifactType, annotations)
 		if err != nil {
-			return -1, err
+			return -1, 0, err
 		}
 		manifestsCount, annotateErr := annotator.Annotate(ctx, manifestsToAnnotate)
 		if annotateErr != nil {
 			annotatedManifestsCount += manifestsCount
-			return annotatedManifestsCount, annotateErr
+			return annotatedManifestsCount, 0, annotateErr
 		}
 		annotatedManifestsCount += manifestsCount
 	} else {
 		annotatedManifestsCount = len(manifestsToAnnotate)
 	}
 
-	return annotatedManifestsCount, nil
+	// For untagged manifests, skipped count is 0 since locked manifests are handled by GetUntaggedManifests
+	return annotatedManifestsCount, 0, nil
 
 }

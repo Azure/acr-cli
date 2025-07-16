@@ -208,6 +208,16 @@ acr purge \
     --repository-page-size 10
 ```
 
+#### Include-locked flag
+To delete locked manifests and tags (where deleteEnabled or writeEnabled is false), the `--include-locked` flag should be set. This will unlock them before deletion.
+```sh
+acr purge \
+    --registry <Registry Name> \
+    --filter <Repository Filter/Name>:<Regex Filter> \
+    --ago 30d \
+    --include-locked
+```
+
 ### Integration with ACR Tasks
 
 To run a locally built version of the ACR-CLI using ACR Tasks follow these steps:
