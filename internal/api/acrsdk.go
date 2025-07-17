@@ -295,6 +295,48 @@ func (c *AcrCLIClient) GetManifest(ctx context.Context, repoName string, referen
 	return manifestBytes, nil
 }
 
+// GetAcrManifestAttributes gets the attributes of a manifest.
+func (c *AcrCLIClient) GetAcrManifestAttributes(ctx context.Context, repoName string, reference string) (*acrapi.ManifestAttributes, error) {
+	if c.isExpired() {
+		if err := refreshAcrCLIClientToken(ctx, c); err != nil {
+			return nil, err
+		}
+	}
+	manifestAttrs, err := c.AutorestClient.GetAcrManifestAttributes(ctx, repoName, reference)
+	if err != nil {
+		return &manifestAttrs, err
+	}
+	return &manifestAttrs, nil
+}
+
+// UpdateAcrTagAttributes updates tag attributes to enable/disable deletion and writing.
+func (c *AcrCLIClient) UpdateAcrTagAttributes(ctx context.Context, repoName string, reference string, value *acrapi.ChangeableAttributes) (*autorest.Response, error) {
+	if c.isExpired() {
+		if err := refreshAcrCLIClientToken(ctx, c); err != nil {
+			return nil, err
+		}
+	}
+	resp, err := c.AutorestClient.UpdateAcrTagAttributes(ctx, repoName, reference, value)
+	if err != nil {
+		return &resp, err
+	}
+	return &resp, nil
+}
+
+// UpdateAcrManifestAttributes updates manifest attributes to enable/disable deletion and writing.
+func (c *AcrCLIClient) UpdateAcrManifestAttributes(ctx context.Context, repoName string, reference string, value *acrapi.ChangeableAttributes) (*autorest.Response, error) {
+	if c.isExpired() {
+		if err := refreshAcrCLIClientToken(ctx, c); err != nil {
+			return nil, err
+		}
+	}
+	resp, err := c.AutorestClient.UpdateAcrManifestAttributes(ctx, repoName, reference, value)
+	if err != nil {
+		return &resp, err
+	}
+	return &resp, nil
+}
+
 // AcrCLIClientInterface defines the required methods that the acr-cli will need to use.
 type AcrCLIClientInterface interface {
 	GetAcrTags(ctx context.Context, repoName string, orderBy string, last string) (*acrapi.RepositoryTagsType, error)
@@ -302,4 +344,7 @@ type AcrCLIClientInterface interface {
 	GetAcrManifests(ctx context.Context, repoName string, orderBy string, last string) (*acrapi.Manifests, error)
 	DeleteManifest(ctx context.Context, repoName string, reference string) (*autorest.Response, error)
 	GetManifest(ctx context.Context, repoName string, reference string) ([]byte, error)
+	GetAcrManifestAttributes(ctx context.Context, repoName string, reference string) (*acrapi.ManifestAttributes, error)
+	UpdateAcrTagAttributes(ctx context.Context, repoName string, reference string, value *acrapi.ChangeableAttributes) (*autorest.Response, error)
+	UpdateAcrManifestAttributes(ctx context.Context, repoName string, reference string, value *acrapi.ChangeableAttributes) (*autorest.Response, error)
 }
