@@ -56,10 +56,11 @@ func (p *Purger) PurgeTags(ctx context.Context, tags []acr.TagAttributesBase) (i
 					
 					_, unlockErr := p.acrClient.UpdateAcrTagAttributes(ctx, p.repoName, *tag.Name, unlockAttrs)
 					if unlockErr != nil {
-						fmt.Printf("Failed to unlock %s/%s:%s, error: %v\n", p.loginURL, p.repoName, *tag.Name, unlockErr)
-						return unlockErr
+						fmt.Printf("Warning: Failed to unlock %s/%s:%s, error: %v. Will attempt deletion anyway.\n", p.loginURL, p.repoName, *tag.Name, unlockErr)
+						// Continue to attempt deletion even if unlock fails
+					} else {
+						fmt.Printf("Unlocked %s/%s:%s\n", p.loginURL, p.repoName, *tag.Name)
 					}
-					fmt.Printf("Unlocked %s/%s:%s\n", p.loginURL, p.repoName, *tag.Name)
 				}
 			}
 			
@@ -87,37 +88,35 @@ func (p *Purger) PurgeTags(ctx context.Context, tags []acr.TagAttributesBase) (i
 }
 
 // PurgeManifests purges a list of manifests concurrently, and returns a count of deleted manifests and the first error occurred.
-func (p *Purger) PurgeManifests(ctx context.Context, manifests []string) (int, error) {
+func (p *Purger) PurgeManifests(ctx context.Context, manifests []acr.ManifestAttributesBase) (int, error) {
 	var deletedManifests atomic.Int64 // Count of successfully deleted tags
 	group := p.pool.NewGroup()
 	for _, manifest := range manifests {
 		group.SubmitErr(func() error {
-			// If include-locked is enabled, we need to check if manifest is locked and unlock it first
-			if p.includeLocked {
-				manifestAttrs, err := p.acrClient.GetAcrManifestAttributes(ctx, p.repoName, manifest)
-				if err == nil && manifestAttrs.ManifestAttributes != nil && manifestAttrs.ManifestAttributes.ChangeableAttributes != nil {
-					if (manifestAttrs.ManifestAttributes.ChangeableAttributes.DeleteEnabled != nil && !*manifestAttrs.ManifestAttributes.ChangeableAttributes.DeleteEnabled) ||
-						(manifestAttrs.ManifestAttributes.ChangeableAttributes.WriteEnabled != nil && !*manifestAttrs.ManifestAttributes.ChangeableAttributes.WriteEnabled) {
-						
-						enabledTrue := true
-						unlockAttrs := &acr.ChangeableAttributes{
-							DeleteEnabled: &enabledTrue,
-							WriteEnabled:  &enabledTrue,
-						}
-						
-						_, unlockErr := p.acrClient.UpdateAcrManifestAttributes(ctx, p.repoName, manifest, unlockAttrs)
-						if unlockErr != nil {
-							fmt.Printf("Failed to unlock %s/%s@%s, error: %v\n", p.loginURL, p.repoName, manifest, unlockErr)
-							return unlockErr
-						}
-						fmt.Printf("Unlocked %s/%s@%s\n", p.loginURL, p.repoName, manifest)
+			// If include-locked is enabled and manifest is locked, unlock it first
+			if p.includeLocked && manifest.ChangeableAttributes != nil {
+				if (manifest.ChangeableAttributes.DeleteEnabled != nil && !*manifest.ChangeableAttributes.DeleteEnabled) ||
+					(manifest.ChangeableAttributes.WriteEnabled != nil && !*manifest.ChangeableAttributes.WriteEnabled) {
+					
+					enabledTrue := true
+					unlockAttrs := &acr.ChangeableAttributes{
+						DeleteEnabled: &enabledTrue,
+						WriteEnabled:  &enabledTrue,
+					}
+					
+					_, unlockErr := p.acrClient.UpdateAcrManifestAttributes(ctx, p.repoName, *manifest.Digest, unlockAttrs)
+					if unlockErr != nil {
+						fmt.Printf("Warning: Failed to unlock %s/%s@%s, error: %v. Will attempt deletion anyway.\n", p.loginURL, p.repoName, *manifest.Digest, unlockErr)
+						// Continue to attempt deletion even if unlock fails
+					} else {
+						fmt.Printf("Unlocked %s/%s@%s\n", p.loginURL, p.repoName, *manifest.Digest)
 					}
 				}
 			}
 			
-			resp, err := p.acrClient.DeleteManifest(ctx, p.repoName, manifest)
+			resp, err := p.acrClient.DeleteManifest(ctx, p.repoName, *manifest.Digest)
 			if err == nil {
-				fmt.Printf("Deleted %s/%s@%s\n", p.loginURL, p.repoName, manifest)
+				fmt.Printf("Deleted %s/%s@%s\n", p.loginURL, p.repoName, *manifest.Digest)
 				// Increment the count of successfully deleted tags atomically
 				deletedManifests.Add(1)
 				return nil
@@ -126,11 +125,11 @@ func (p *Purger) PurgeManifests(ctx context.Context, manifests []string) (int, e
 			if resp != nil && resp.Response != nil && resp.StatusCode == http.StatusNotFound {
 				// If the manifest is not found it can be assumed to have been deleted.
 				deletedManifests.Add(1)
-				fmt.Printf("Skipped %s/%s@%s, HTTP status: %d\n", p.loginURL, p.repoName, manifest, resp.StatusCode)
+				fmt.Printf("Skipped %s/%s@%s, HTTP status: %d\n", p.loginURL, p.repoName, *manifest.Digest, resp.StatusCode)
 				return nil
 			}
 
-			fmt.Printf("Failed to delete %s/%s@%s, error: %v\n", p.loginURL, p.repoName, manifest, err)
+			fmt.Printf("Failed to delete %s/%s@%s, error: %v\n", p.loginURL, p.repoName, *manifest.Digest, err)
 			return err
 
 		})
