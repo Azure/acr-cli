@@ -5,10 +5,14 @@ package main
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"testing"
+	"time"
 
+	"github.com/Azure/acr-cli/acr"
 	"github.com/Azure/acr-cli/cmd/common"
 	"github.com/Azure/acr-cli/cmd/mocks"
+	"github.com/Azure/go-autorest/autorest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -500,6 +504,142 @@ func TestAnnotateManifests(t *testing.T) {
 	})
 }
 
+// TestIncludeLockedFlagAnnotate tests the --include-locked flag functionality in annotate command
+func TestIncludeLockedFlagAnnotate(t *testing.T) {
+	// Test that with include-locked flag, locked tags are included for annotation
+	t.Run("IncludeLockedIncludesLockedTag", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		mockOrasClient := &mocks.ORASClientInterface{}
+		
+		// Create a locked tag result
+		lockedTagResult := &acr.RepositoryTagsType{
+			Response: autorest.Response{
+				Response: &http.Response{
+					StatusCode: 200,
+				},
+			},
+			Registry:  &testLoginURL,
+			ImageName: &testRepo,
+			TagsAttributes: &[]acr.TagAttributesBase{{
+				Name:                 &tagName,
+				LastUpdateTime:       &lastUpdateTimeTest,
+				ChangeableAttributes: &acr.ChangeableAttributes{WriteEnabled: &writeDisabledBool},
+				Digest:               &digest,
+			}},
+		}
+		
+		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(lockedTagResult, nil).Once()
+		mockOrasClient.On("DiscoverLifecycleAnnotation", mock.Anything, fmt.Sprintf("%s/%s:%s", testLoginURL, testRepo, tagName), testArtifactType).Return(false, nil).Once()
+		
+		regex, _ := common.BuildRegexFilter(".*", 60)
+		manifests, _, skipped, err := getManifestsToAnnotate(testCtx, mockClient, mockOrasClient, testLoginURL, testRepo, 
+			regex, "", testArtifactType, false, true) // include-locked = true
+		
+		assert.Equal(1, len(manifests), "Should include locked tag when include-locked is true")
+		assert.Equal(0, skipped, "Should not skip any tags")
+		assert.Equal(nil, err, "Error should be nil")
+		mockClient.AssertExpectations(t)
+		mockOrasClient.AssertExpectations(t)
+	})
+	
+	// Test that without include-locked flag, locked tags are filtered out
+	t.Run("NoIncludeLockedSkipsLockedTag", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		mockOrasClient := &mocks.ORASClientInterface{}
+		
+		// Create a locked tag result
+		lockedTagResult := &acr.RepositoryTagsType{
+			Response: autorest.Response{
+				Response: &http.Response{
+					StatusCode: 200,
+				},
+			},
+			Registry:  &testLoginURL,
+			ImageName: &testRepo,
+			TagsAttributes: &[]acr.TagAttributesBase{{
+				Name:                 &tagName,
+				LastUpdateTime:       &lastUpdateTimeTest,
+				ChangeableAttributes: &acr.ChangeableAttributes{WriteEnabled: &writeDisabledBool},
+				Digest:               &digest,
+			}},
+		}
+		
+		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(lockedTagResult, nil).Once()
+		
+		regex, _ := common.BuildRegexFilter(".*", 60)
+		manifests, _, skipped, err := getManifestsToAnnotate(testCtx, mockClient, mockOrasClient, testLoginURL, testRepo, 
+			regex, "", testArtifactType, false, false) // include-locked = false
+		
+		assert.Equal(0, len(manifests), "Should not include locked tag when include-locked is false")
+		assert.Equal(1, skipped, "Should skip locked tags")
+		assert.Equal(nil, err, "Error should be nil")
+		mockClient.AssertExpectations(t)
+		mockOrasClient.AssertExpectations(t)
+	})
+	
+	// Test that with include-locked flag, locked untagged manifests are included
+	t.Run("IncludeLockedIncludesLockedManifest", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		mockOrasClient := &mocks.ORASClientInterface{}
+		
+		// Create a locked manifest without tags
+		lockedManifest := &acr.Manifests{
+			Registry:  &testLoginURL,
+			ImageName: &testRepo,
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{{
+				LastUpdateTime:       &lastUpdateTimeTest,
+				ChangeableAttributes: &acr.ChangeableAttributes{WriteEnabled: &writeDisabledBool},
+				Digest:               &digest,
+				MediaType:            &dockerV2MediaType,
+				Tags:                 nil, // No tags - untagged manifest
+			}},
+		}
+		
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(lockedManifest, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", digest).Return(EmptyListManifestsResult, nil).Once()
+		
+		mockOrasClient.On("Annotate", mock.Anything, fmt.Sprintf("%s/%s@%s", testLoginURL, testRepo, digest), testArtifactType, annotationMap).Return(nil).Once()
+		
+		annotatedManifests, err := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false, true)
+		assert.Equal(1, annotatedManifests, "Should annotate locked manifest when include-locked is true")
+		assert.Equal(nil, err, "Error should be nil")
+		mockClient.AssertExpectations(t)
+		mockOrasClient.AssertExpectations(t)
+	})
+	
+	// Test dry run with include-locked shows locked manifests
+	t.Run("DryRunWithIncludeLockedShowsLockedManifests", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		mockOrasClient := &mocks.ORASClientInterface{}
+		
+		// Create a locked manifest without tags
+		lockedManifest := &acr.Manifests{
+			Registry:  &testLoginURL,
+			ImageName: &testRepo,
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{{
+				LastUpdateTime:       &lastUpdateTimeTest,
+				ChangeableAttributes: &acr.ChangeableAttributes{WriteEnabled: &writeDisabledBool},
+				Digest:               &digest,
+				MediaType:            &dockerV2MediaType,
+				Tags:                 nil, // No tags - untagged manifest
+			}},
+		}
+		
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(lockedManifest, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", digest).Return(EmptyListManifestsResult, nil).Once()
+		
+		annotatedManifests, err := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], true, true)
+		assert.Equal(1, annotatedManifests, "Should count locked manifest in dry run when include-locked is true")
+		assert.Equal(nil, err, "Error should be nil")
+		mockClient.AssertExpectations(t)
+		mockOrasClient.AssertExpectations(t)
+	})
+}
+
 // TestDryRun contains the tests for dry-runs of annotateTags and annotateUntaggedManifests.
 //
 //	It is called when the --dry-run flag is set.
@@ -696,9 +836,10 @@ func TestDryRunAnnotate(t *testing.T) {
 	})
 }
 
-// TODO: Add tests for --include-locked flag functionality in annotate command when it is implemented
-// The annotate command currently handles locked images by filtering them out in GetUntaggedManifests
-// and getManifestsToAnnotate functions, but doesn't support unlocking them like the purge command does.
+// Note: The annotate command currently handles locked images by filtering them out in GetUntaggedManifests
+// and getManifestsToAnnotate functions when --include-locked is not set. When --include-locked is set,
+// locked manifests are included for annotation. Unlike the purge command, annotate does not unlock
+// manifests before annotating them.
 
 // All the variables used in the tests are defined here
 var (
@@ -709,4 +850,7 @@ var (
 	annotationMap      = map[string]string{
 		"vnd.microsoft.artifact.lifecycle.end-of-life.date": "2024-03-21",
 	}
+	// Variables for testing --include-locked flag
+	writeDisabledBool = false
+	lastUpdateTimeTest = time.Now().Add(-15 * time.Minute).UTC().Format(time.RFC3339Nano)
 )
