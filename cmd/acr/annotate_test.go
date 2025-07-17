@@ -275,7 +275,7 @@ func TestAnnotateManifests(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(notFoundManifestResponse, errors.New("testRepo not found")).Once()
-		annotatedManifests, _, err := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false, false)
+		annotatedManifests, err := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false, false)
 		assert.Equal(0, annotatedManifests, "Number of annotated elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -288,7 +288,7 @@ func TestAnnotateManifests(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(nil, errors.New("unauthorized")).Once()
-		annotatedManifests, _, err := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false, false)
+		annotatedManifests, err := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false, false)
 		assert.Equal(-1, annotatedManifests, "Number of annotated elements should be -1")
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
@@ -302,7 +302,7 @@ func TestAnnotateManifests(t *testing.T) {
 		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleManifestV2WithTagsResult, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:2830cc0fcddc1bc2bd4aeab0ed5ee7087dab29a49e65151c77553e46a7ed5283").Return(EmptyListManifestsResult, nil).Once()
-		annotatedManifests, _, err := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false, false)
+		annotatedManifests, err := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false, false)
 		assert.Equal(0, annotatedManifests, "Number of annotated elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -316,7 +316,7 @@ func TestAnnotateManifests(t *testing.T) {
 		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleManifestV2WithTagsResult, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:2830cc0fcddc1bc2bd4aeab0ed5ee7087dab29a49e65151c77553e46a7ed5283").Return(nil, errors.New("error getting manifests")).Once()
-		annotatedManifests, _, err := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false, false)
+		annotatedManifests, err := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false, false)
 		assert.Equal(-1, annotatedManifests, "Number of annotated elements should be -1")
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
@@ -333,7 +333,7 @@ func TestAnnotateManifests(t *testing.T) {
 		mockClient.On("GetManifest", mock.Anything, testRepo, "sha256:d88fb54ba4424dada7c928c6af332ed1c49065ad85eafefb6f26664695015119").Return(nil, errors.New("error getting manifest")).Once()
 		// Despite the failure, the GetAcrManifests method may be called again before the failure happens
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:d88fb54ba4424dada7c928c6af332ed1c49065ad85eafefb6f26664695015119").Return(nil, nil).Maybe()
-		annotatedManifests, _, err := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false, false)
+		annotatedManifests, err := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false, false)
 		assert.Equal(-1, annotatedManifests, "Number of annotated elements should be -1")
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
@@ -349,7 +349,7 @@ func TestAnnotateManifests(t *testing.T) {
 		mockClient.On("GetManifest", mock.Anything, testRepo, "sha256:d88fb54ba4424dada7c928c6af332ed1c49065ad85eafefb6f26664695015119").Return(nil, errors.New("error getting manifest")).Once()
 		// Despite the failure, the GetAcrManifests method may be called again before the failure happens
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:d88fb54ba4424dada7c928c6af332ed1c49065ad85eafefb6f26664695015119").Return(nil, nil).Maybe()
-		annotatedManifests, _, err := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false, false)
+		annotatedManifests, err := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false, false)
 		assert.Equal(-1, annotatedManifests, "Number of annotated elements should be -1")
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
@@ -363,7 +363,7 @@ func TestAnnotateManifests(t *testing.T) {
 		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleManifestV2WithTagsResult, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:2830cc0fcddc1bc2bd4aeab0ed5ee7087dab29a49e65151c77553e46a7ed5283").Return(EmptyListManifestsResult, nil).Once()
-		annotatedManifests, _, err := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testBadAnnotations[:], false, false)
+		annotatedManifests, err := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testBadAnnotations[:], false, false)
 		assert.Equal(-1, annotatedManifests, "Number of annotated elements should be -1")
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
@@ -384,7 +384,7 @@ func TestAnnotateManifests(t *testing.T) {
 		mockOrasClient.On("Annotate", mock.Anything, ref, testArtifactType, annotationMap).Return(nil).Once()
 		ref = fmt.Sprintf("%s/%s@sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696", testLoginURL, testRepo)
 		mockOrasClient.On("Annotate", mock.Anything, ref, testArtifactType, annotationMap).Return(nil).Once()
-		annotatedManifests, _, err := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false, false)
+		annotatedManifests, err := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false, false)
 		assert.Equal(2, annotatedManifests, "Number of annotated elements should be 2")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -403,7 +403,7 @@ func TestAnnotateManifests(t *testing.T) {
 		mockOrasClient.On("Annotate", mock.Anything, ref, testArtifactType, annotationMap).Return(nil).Maybe() // Depending on scheduling, this may not be invoked
 		ref = fmt.Sprintf("%s/%s@sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696", testLoginURL, testRepo)
 		mockOrasClient.On("Annotate", mock.Anything, ref, testArtifactType, annotationMap).Return(errors.New("manifest not found")).Once()
-		annotatedManifests, _, err := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false, false)
+		annotatedManifests, err := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false, false)
 		assert.True(annotatedManifests == 1 || annotatedManifests == 0, "Number of annotated elements should be 1 or 0")
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
@@ -422,7 +422,7 @@ func TestAnnotateManifests(t *testing.T) {
 		mockOrasClient.On("Annotate", mock.Anything, ref, testArtifactType, annotationMap).Return(errors.New("error annotating manifest")).Once()
 		ref = fmt.Sprintf("%s/%s@sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696", testLoginURL, testRepo)
 		mockOrasClient.On("Annotate", mock.Anything, ref, testArtifactType, annotationMap).Return(nil).Maybe()
-		annotatedManifests, _, err := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false, false)
+		annotatedManifests, err := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false, false)
 		assert.True(annotatedManifests == 1 || annotatedManifests == 0, "Number of annotated elements should be 1 or 0")
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
@@ -442,7 +442,7 @@ func TestAnnotateManifests(t *testing.T) {
 		mockOrasClient.On("Annotate", mock.Anything, ref, testArtifactType, annotationMap).Return(nil).Maybe()
 		ref = fmt.Sprintf("%s/%s@sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696", testLoginURL, testRepo)
 		mockOrasClient.On("Annotate", mock.Anything, ref, testArtifactType, annotationMap).Return(errors.New("error annotating manifest")).Once()
-		annotatedManifests, _, err := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false, false)
+		annotatedManifests, err := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false, false)
 		assert.True(annotatedManifests == 1 || annotatedManifests == 0, "Number of annotated elements should be 1 or 0, this is affected by the concurrent nature of the code")
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
@@ -462,7 +462,7 @@ func TestAnnotateManifests(t *testing.T) {
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696").Return(EmptyListManifestsResult, nil).Once()
 		ref := fmt.Sprintf("%s/%s@sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696", testLoginURL, testRepo)
 		mockOrasClient.On("Annotate", mock.Anything, ref, testArtifactType, annotationMap).Return(nil).Once()
-		annotatedManifests, _, err := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false, false)
+		annotatedManifests, err := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false, false)
 		assert.Equal(1, annotatedManifests, "Number of annotated elements should be 1")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -477,7 +477,7 @@ func TestAnnotateManifests(t *testing.T) {
 		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(deleteDisabledOneManifestResult, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", digest).Return(EmptyListManifestsResult, nil).Once()
-		annotatedManifests, _, err := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false, false)
+		annotatedManifests, err := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false, false)
 		assert.Equal(0, annotatedManifests, "Number of deleted elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -492,7 +492,7 @@ func TestAnnotateManifests(t *testing.T) {
 		mockOrasClient := &mocks.ORASClientInterface{}
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(writeDisabledOneManifestResult, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", digest).Return(EmptyListManifestsResult, nil).Once()
-		annotatedManifests, _, err := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false, false)
+		annotatedManifests, err := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], false, false)
 		assert.Equal(0, annotatedManifests, "Number of annotated elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -513,7 +513,7 @@ func TestDryRunAnnotate(t *testing.T) {
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(notFoundManifestResponse, errors.New("testRepo not found")).Once()
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(notFoundTagResponse, errors.New("testRepo not found")).Once()
 		annotatedTags, _, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], "[\\s\\S]*", defaultRegexpMatchTimeoutSeconds, true, false)
-		annotatedManifests, _, errManifests := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], true, false)
+		annotatedManifests, errManifests := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], true, false)
 		assert.Equal(0, annotatedTags, "Number of annotated elements should be 0")
 		assert.Equal(0, annotatedManifests, "Number of annotated elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
@@ -583,7 +583,7 @@ func TestDryRunAnnotate(t *testing.T) {
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(EmptyListTagsResult, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(nil, errors.New("testRepo not found")).Once()
 		annotatedTags, _, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], "[\\s\\S]*", defaultRegexpMatchTimeoutSeconds, true, false)
-		annotatedManifests, _, errManifests := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], true, false)
+		annotatedManifests, errManifests := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], true, false)
 		assert.Equal(0, annotatedTags, "Number of annotated elements should be 0")
 		assert.Equal(-1, annotatedManifests, "Number of annotated elements should be -1")
 		assert.Equal(nil, err, "Error should be nil")
@@ -599,7 +599,7 @@ func TestDryRunAnnotate(t *testing.T) {
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(EmptyListTagsResult, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(nil, errors.New("error fetching tags")).Once()
 		annotatedTags, _, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], "[\\s\\S]*", defaultRegexpMatchTimeoutSeconds, true, false)
-		annotatedManifests, _, errManifests := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], true, false)
+		annotatedManifests, errManifests := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], true, false)
 		assert.Equal(0, annotatedTags, "Number of annotated elements should be 0")
 		assert.Equal(-1, annotatedManifests, "Number of annotated elements should be -1")
 		assert.Equal(nil, err, "Error should be nil")
@@ -617,7 +617,7 @@ func TestDryRunAnnotate(t *testing.T) {
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", multiArchDigest).Return(EmptyListManifestsResult, nil).Maybe() // This is to ensure that the GetAcrManifests method may be called again before the failure happens
 		mockClient.On("GetManifest", mock.Anything, testRepo, "sha256:d88fb54ba4424dada7c928c6af332ed1c49065ad85eafefb6f26664695015119").Return(nil, errors.New("error getting manifest")).Once()
 		annotatedTags, _, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], "^lat.*", defaultRegexpMatchTimeoutSeconds, true, false)
-		annotatedManifests, _, errManifests := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], true, false)
+		annotatedManifests, errManifests := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], true, false)
 		assert.Equal(0, annotatedTags, "Number of annotated elements should be 0")
 		assert.Equal(-1, annotatedManifests, "Number of annotated elements should be -1")
 		assert.Equal(nil, err, "Error should be nil")
@@ -635,7 +635,7 @@ func TestDryRunAnnotate(t *testing.T) {
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", multiArchDigest).Return(nil, nil).Maybe() // This is to ensure that the GetAcrManifests method may be called again before the failure happens
 		mockClient.On("GetManifest", mock.Anything, testRepo, "sha256:d88fb54ba4424dada7c928c6af332ed1c49065ad85eafefb6f26664695015119").Return([]byte("invalid json"), nil).Once()
 		annotatedTags, _, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], "^lat.*", defaultRegexpMatchTimeoutSeconds, true, false)
-		annotatedManifests, _, errManifests := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], true, false)
+		annotatedManifests, errManifests := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], true, false)
 		assert.Equal(0, annotatedTags, "Number of annotated elements should be 0")
 		assert.Equal(-1, annotatedManifests, "Number of annotated elements should be -1")
 		assert.Equal(nil, err, "Error should be nil")
@@ -654,7 +654,7 @@ func TestDryRunAnnotate(t *testing.T) {
 		// GetAcrManifests call fails first.
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:d88fb54ba4424dada7c928c6af332ed1c49065ad85eafefb6f26664695015119").Return(nil, errors.New("error fetching manifests")).Once()
 		annotatedTags, _, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], "^lat.*", defaultRegexpMatchTimeoutSeconds, true, false)
-		annotatedManifests, _, errManifests := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], true, false)
+		annotatedManifests, errManifests := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], true, false)
 		assert.Equal(0, annotatedTags, "Number of annotated tags should be 0")
 		assert.Equal(-1, annotatedManifests, "Number of annotated manifests should be -1")
 		assert.Equal(nil, err, "Error should be nil")
@@ -674,7 +674,7 @@ func TestDryRunAnnotate(t *testing.T) {
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:d88fb54ba4424dada7c928c6af332ed1c49065ad85eafefb6f26664695015119").Return(doubleManifestV2WithoutTagsResult, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696").Return(EmptyListManifestsResult, nil).Once()
 		annotatedTags, _, err := annotateTags(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], "^lat.*", defaultRegexpMatchTimeoutSeconds, true, false)
-		annotatedManifests, _, errManifests := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], true, false)
+		annotatedManifests, errManifests := annotateUntaggedManifests(testCtx, mockClient, mockOrasClient, defaultPoolSize, testLoginURL, testRepo, testArtifactType, testAnnotations[:], true, false)
 		assert.Equal(0, annotatedTags, "Number of annotated elements should be 0")
 		assert.Equal(1, annotatedManifests, "Number of annotated elements should be 1")
 		assert.Equal(nil, err, "Error should be nil")
@@ -695,6 +695,10 @@ func TestDryRunAnnotate(t *testing.T) {
 		mockClient.AssertExpectations(t)
 	})
 }
+
+// TODO: Add tests for --include-locked flag functionality in annotate command when it is implemented
+// The annotate command currently handles locked images by filtering them out in GetUntaggedManifests
+// and getManifestsToAnnotate functions, but doesn't support unlocking them like the purge command does.
 
 // All the variables used in the tests are defined here
 var (

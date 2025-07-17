@@ -1423,11 +1423,6 @@ func TestIncludeLockedFlag(t *testing.T) {
 		}
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(deleteDisabledDanglingManifest, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", digest).Return(EmptyListManifestsResult, nil).Once()
-		mockClient.On("GetAcrManifestAttributes", mock.Anything, testRepo, digest).Return(&acr.ManifestAttributes{
-			ManifestAttributes: &acr.ManifestAttributesBase{
-				ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &deleteDisabled, WriteEnabled: &writeEnabled},
-			},
-		}, nil).Once()
 		mockClient.On("UpdateAcrManifestAttributes", mock.Anything, testRepo, digest, mock.MatchedBy(func(attrs *acr.ChangeableAttributes) bool {
 			return attrs.DeleteEnabled != nil && *attrs.DeleteEnabled && attrs.WriteEnabled != nil && *attrs.WriteEnabled
 		})).Return(&deletedResponse, nil).Once()
@@ -1449,16 +1444,17 @@ func TestIncludeLockedFlag(t *testing.T) {
 		mockClient.AssertExpectations(t)
 	})
 
-	// Test error handling when unlock fails
+	// Test error handling when unlock fails but deletion continues
 	t.Run("IncludeLockedUnlockError", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(DeleteDisabledOneTagResult, nil).Once()
 		mockClient.On("UpdateAcrTagAttributes", mock.Anything, testRepo, tagName, mock.Anything).Return(nil, errors.New("unlock failed")).Once()
+		// Even though unlock fails, we still attempt deletion
+		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, tagName).Return(&deletedResponse, nil).Once()
 		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, "0m", ".*", 0, 60, false, true)
-		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1 on error")
-		assert.NotNil(err, "Error should not be nil")
-		assert.Contains(err.Error(), "unlock failed")
+		assert.Equal(1, deletedTags, "Number of deleted elements should be 1 as deletion succeeded despite unlock failure")
+		assert.Nil(err, "Error should be nil as deletion succeeded")
 		mockClient.AssertExpectations(t)
 	})
 }
