@@ -379,7 +379,7 @@ func purgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInter
 	// filtering first as that would influence the untagged manifests that would be deleted.
 	if dryRun {
 		for _, manifest := range manifestsToDelete {
-			fmt.Printf("Would delete: %s/%s@%s\n", loginURL, repoName, manifest)
+			fmt.Printf("Would delete: %s/%s@%s\n", loginURL, repoName, *manifest.Digest)
 		}
 		return len(manifestsToDelete), nil
 	}

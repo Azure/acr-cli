@@ -115,7 +115,8 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 				var singleSkippedManifestsCount int
 				// If the untagged flag is set, then manifests with no tags are also annotated..
 				if annotateParams.untagged {
-					singleAnnotatedManifestsCount, singleSkippedManifestsCount, err = annotateUntaggedManifests(ctx, acrClient, orasClient, poolSize, loginURL, repoName, annotateParams.artifactType, annotateParams.annotations, annotateParams.dryRun, annotateParams.includeLocked)
+					singleAnnotatedManifestsCount, err = annotateUntaggedManifests(ctx, acrClient, orasClient, poolSize, loginURL, repoName, annotateParams.artifactType, annotateParams.annotations, annotateParams.dryRun, annotateParams.includeLocked)
+					singleSkippedManifestsCount = 0 // Skipped manifests are handled by GetUntaggedManifests
 					if err != nil {
 						return fmt.Errorf("failed to annotate manifests: %w", err)
 					}
@@ -299,7 +300,7 @@ func annotateUntaggedManifests(ctx context.Context,
 	poolSize int, loginURL string,
 	repoName string, artifactType string,
 	annotations []string,
-	dryRun bool, includeLocked bool) (int, int, error) {
+	dryRun bool, includeLocked bool) (int, error) {
 	if !dryRun {
 		fmt.Printf("Annotating manifests for repository: %s\n", repoName)
 	} else {
@@ -311,7 +312,7 @@ func annotateUntaggedManifests(ctx context.Context,
 	// should not be annotated.
 	manifestsToAnnotate, err := common.GetUntaggedManifests(ctx, poolSize, acrClient, repoName, true, nil, dryRun, includeLocked)
 	if err != nil {
-		return -1, 0, err
+		return -1, err
 	}
 
 	var annotator *worker.Annotator
@@ -320,19 +321,31 @@ func annotateUntaggedManifests(ctx context.Context,
 		// In order to only have a limited amount of http requests, an annotator is used that will start goroutines to annotate manifests.
 		annotator, err = worker.NewAnnotator(poolSize, orasClient, loginURL, repoName, artifactType, annotations)
 		if err != nil {
-			return -1, 0, err
+			return -1, err
 		}
-		manifestsCount, annotateErr := annotator.Annotate(ctx, manifestsToAnnotate)
+		// Convert ManifestAttributesBase to digest strings for annotator
+		manifestDigests := make([]string, 0, len(manifestsToAnnotate))
+		for _, manifest := range manifestsToAnnotate {
+			if manifest.Digest != nil {
+				manifestDigests = append(manifestDigests, *manifest.Digest)
+			}
+		}
+		manifestsCount, annotateErr := annotator.Annotate(ctx, manifestDigests)
 		if annotateErr != nil {
 			annotatedManifestsCount += manifestsCount
-			return annotatedManifestsCount, 0, annotateErr
+			return annotatedManifestsCount, annotateErr
 		}
 		annotatedManifestsCount += manifestsCount
 	} else {
 		annotatedManifestsCount = len(manifestsToAnnotate)
+		// In dry run mode, print which manifests would be annotated
+		for _, manifest := range manifestsToAnnotate {
+			if manifest.Digest != nil {
+				fmt.Printf("Would annotate: %s/%s@%s\n", loginURL, repoName, *manifest.Digest)
+			}
+		}
 	}
 
-	// For untagged manifests, skipped count is 0 since locked manifests are handled by GetUntaggedManifests
-	return annotatedManifestsCount, 0, nil
+	return annotatedManifestsCount, nil
 
 }
