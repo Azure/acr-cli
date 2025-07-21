@@ -112,15 +112,12 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 				}
 
 				singleAnnotatedManifestsCount := 0
-				var singleSkippedManifestsCount int
 				// If the untagged flag is set, then manifests with no tags are also annotated..
 				if annotateParams.untagged {
 					singleAnnotatedManifestsCount, err = annotateUntaggedManifests(ctx, acrClient, orasClient, poolSize, loginURL, repoName, annotateParams.artifactType, annotateParams.annotations, annotateParams.dryRun, annotateParams.includeLocked)
-					singleSkippedManifestsCount = 0 // Skipped manifests are handled by GetUntaggedManifests
 					if err != nil {
 						return fmt.Errorf("failed to annotate manifests: %w", err)
 					}
-					skippedManifestsCount += singleSkippedManifestsCount
 				}
 
 				// After every repository is annotated, the counters are updated
