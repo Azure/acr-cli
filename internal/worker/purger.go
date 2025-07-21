@@ -72,11 +72,18 @@ func (p *Purger) PurgeTags(ctx context.Context, tags []acr.TagAttributesBase) (i
 				return nil
 			}
 
-			if resp != nil && resp.Response != nil && resp.StatusCode == http.StatusNotFound {
-				// If the tag is not found it can be assumed to have been deleted.
-				deletedTags.Add(1)
-				fmt.Printf("Skipped %s/%s:%s, HTTP status: %d\n", p.loginURL, p.repoName, *tag.Name, resp.StatusCode)
-				return nil
+			if resp != nil && resp.Response != nil {
+				switch resp.StatusCode {
+				case http.StatusNotFound:
+					// If the tag is not found it can be assumed to have been deleted.
+					deletedTags.Add(1)
+					fmt.Printf("Skipped %s/%s:%s, HTTP status: %d\n", p.loginURL, p.repoName, *tag.Name, resp.StatusCode)
+					return nil
+				case http.StatusMethodNotAllowed:
+					// Method not allowed - tag may be locked or operation not permitted
+					fmt.Printf("Skipped %s/%s:%s, operation not allowed, HTTP status: %d\n", p.loginURL, p.repoName, *tag.Name, resp.StatusCode)
+					return nil
+				}
 			}
 
 			fmt.Printf("Failed to delete %s/%s:%s, error: %v\n", p.loginURL, p.repoName, *tag.Name, err)
@@ -122,11 +129,18 @@ func (p *Purger) PurgeManifests(ctx context.Context, manifests []acr.ManifestAtt
 				return nil
 			}
 
-			if resp != nil && resp.Response != nil && resp.StatusCode == http.StatusNotFound {
-				// If the manifest is not found it can be assumed to have been deleted.
-				deletedManifests.Add(1)
-				fmt.Printf("Skipped %s/%s@%s, HTTP status: %d\n", p.loginURL, p.repoName, *manifest.Digest, resp.StatusCode)
-				return nil
+			if resp != nil && resp.Response != nil {
+				switch resp.StatusCode {
+				case http.StatusNotFound:
+					// If the manifest is not found it can be assumed to have been deleted.
+					deletedManifests.Add(1)
+					fmt.Printf("Skipped %s/%s@%s, HTTP status: %d\n", p.loginURL, p.repoName, *manifest.Digest, resp.StatusCode)
+					return nil
+				case http.StatusMethodNotAllowed:
+					// Method not allowed - manifest may be locked or operation not permitted
+					fmt.Printf("Skipped %s/%s@%s, operation not allowed, HTTP status: %d\n", p.loginURL, p.repoName, *manifest.Digest, resp.StatusCode)
+					return nil
+				}
 			}
 
 			fmt.Printf("Failed to delete %s/%s@%s, error: %v\n", p.loginURL, p.repoName, *manifest.Digest, err)
