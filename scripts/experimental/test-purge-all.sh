@@ -33,7 +33,7 @@ RESOURCE_GROUP=""
 DEBUG="${DEBUG:-0}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ACR_CLI="${SCRIPT_DIR}/../bin/acr"
+ACR_CLI="${SCRIPT_DIR}/../../bin/acr"
 
 # Colors for output
 RED='\033[0;31m'
@@ -306,7 +306,7 @@ fi
 # Build ACR CLI if needed
 if [ ! -f "$ACR_CLI" ]; then
     echo "Building ACR CLI..."
-    (cd "$SCRIPT_DIR/.." && make binaries)
+    (cd "$SCRIPT_DIR/../.." && make binaries)
 fi
 
 # Login to ACR
