@@ -637,8 +637,6 @@ run_benchmark_tests() {
 
     local num_repos=3
     local images_per_repo="${NUM_IMAGES:-500}"
-    local warmup_runs="${WARMUP_RUNS:-3}"
-    local min_runs="${MIN_RUNS:-10}"
 
     # Phase 1: Generate test data
     echo -e "\n${YELLOW}Phase 1: Generating Test Data${NC}"
@@ -652,10 +650,9 @@ run_benchmark_tests() {
 
     # Test single repository with varying concurrency
     echo -e "\n${CYAN}Single Repository Performance (${images_per_repo} images)${NC}"
-    echo -e "${YELLOW}Running hyperfine benchmarks with ${warmup_runs} warmup runs and minimum ${min_runs} iterations...${NC}\n"
+    echo -e "${YELLOW}Running hyperfine benchmarks (single run)...${NC}\n"
     "$HYPERFINE_CMD" \
-        --warmup "$warmup_runs" \
-        --min-runs "$min_runs" \
+        --runs 1 \
         --parameter-list concurrency 1,5,10,20 \
         "$ACR_CLI purge --registry $REGISTRY --filter 'benchmark-repo-1:.*' --ago 0d --concurrency {concurrency} --dry-run"
 
@@ -663,10 +660,9 @@ run_benchmark_tests() {
 
     # Test multiple repositories
     echo -e "\n${CYAN}Multiple Repository Performance (${num_repos} repos, $((num_repos * images_per_repo)) total images)${NC}"
-    echo -e "${YELLOW}Running hyperfine benchmarks for multiple repositories...${NC}\n"
+    echo -e "${YELLOW}Running hyperfine benchmarks for multiple repositories (single run)...${NC}\n"
     "$HYPERFINE_CMD" \
-        --warmup "$warmup_runs" \
-        --min-runs "$min_runs" \
+        --runs 1 \
         --parameter-list concurrency 5,10,20,30 \
         "$ACR_CLI purge --registry $REGISTRY --filter 'benchmark-repo-.*:.*' --ago 0d --concurrency {concurrency} --dry-run"
 
@@ -674,10 +670,9 @@ run_benchmark_tests() {
 
     # Test pattern complexity
     echo -e "\n${CYAN}Pattern Complexity Impact${NC}"
-    echo -e "${YELLOW}Running hyperfine benchmarks comparing regex pattern complexity...${NC}\n"
+    echo -e "${YELLOW}Running hyperfine benchmarks comparing regex pattern complexity (single run)...${NC}\n"
     "$HYPERFINE_CMD" \
-        --warmup "$warmup_runs" \
-        --min-runs "$min_runs" \
+        --runs 1 \
         --command-name "simple-pattern" "$ACR_CLI purge --registry $REGISTRY --filter 'benchmark-repo-1:.*' --ago 0d --concurrency 10 --dry-run" \
         --command-name "complex-pattern" "$ACR_CLI purge --registry $REGISTRY --filter 'benchmark-repo-1:v[0-9]{3}[024680]' --ago 0d --concurrency 10 --dry-run" \
         --command-name "very-complex-pattern" "$ACR_CLI purge --registry $REGISTRY --filter 'benchmark-repo-1:v00[0-9][024]' --ago 0d --concurrency 10 --dry-run"
@@ -686,7 +681,7 @@ run_benchmark_tests() {
 
     # Test repository scaling
     echo -e "\n${CYAN}Repository Scaling Performance${NC}"
-    echo -e "${YELLOW}Running hyperfine benchmarks for repository count scaling...${NC}\n"
+    echo -e "${YELLOW}Running hyperfine benchmarks for repository count scaling (single run)...${NC}\n"
     local commands=()
     for num in 1 2 3; do
         commands+=("--command-name")
@@ -695,8 +690,7 @@ run_benchmark_tests() {
     done
 
     "$HYPERFINE_CMD" \
-        --warmup "$warmup_runs" \
-        --min-runs "$min_runs" \
+        --runs 1 \
         "${commands[@]}"
 
     echo -e "\n${GREEN}Repository scaling benchmark completed${NC}"
@@ -718,8 +712,7 @@ run_benchmark_tests() {
 
     echo -e "\n${YELLOW}Running comparison benchmark...${NC}"
     "$HYPERFINE_CMD" \
-        --warmup 2 \
-        --min-runs 5 \
+        --runs 1 \
         --command-name "dry-run" "$ACR_CLI purge --registry $REGISTRY --filter '${del_repo}:v0[0-2][0-9]' --ago 0d --dry-run" \
         --command-name "actual-delete" "$ACR_CLI purge --registry $REGISTRY --filter '${del_repo}:v0[0-2][0-9]' --ago 0d"
 
@@ -735,8 +728,7 @@ run_benchmark_tests() {
 
     echo -e "\n${YELLOW}Running deletion concurrency benchmark...${NC}"
     "$HYPERFINE_CMD" \
-        --warmup 1 \
-        --min-runs 3 \
+        --runs 1 \
         --prepare "echo 'Starting deletion test...'" \
         --command-name "concurrency-5" "$ACR_CLI purge --registry $REGISTRY --filter '${del_repo_prefix}-conc5:.*' --ago 0d --concurrency 5" \
         --command-name "concurrency-10" "$ACR_CLI purge --registry $REGISTRY --filter '${del_repo_prefix}-conc10:.*' --ago 0d --concurrency 10" \
@@ -756,8 +748,7 @@ run_benchmark_tests() {
 
     echo -e "\n${YELLOW}Running locked image deletion benchmark...${NC}"
     "$HYPERFINE_CMD" \
-        --warmup 1 \
-        --min-runs 3 \
+        --runs 1 \
         --setup "echo 'Testing locked image handling...'" \
         --command-name "without-include-locked" "$ACR_CLI purge --registry $REGISTRY --filter '${lock_del_repo}:.*' --ago 0d" \
         --command-name "with-include-locked" "$ACR_CLI purge --registry $REGISTRY --filter '${lock_del_repo}:.*' --ago 0d --include-locked"
@@ -806,8 +797,7 @@ run_deletion_benchmarks_hyperfine() {
     generate_test_images "$del_repo" "$del_images_per_test"
 
     "$HYPERFINE_CMD" \
-        --warmup 2 \
-        --min-runs 5 \
+        --runs 1 \
         --command-name "dry-run" "$ACR_CLI purge --registry $REGISTRY --filter '${del_repo}:v.*' --ago 0d --dry-run" \
         --command-name "actual-delete" "$ACR_CLI purge --registry $REGISTRY --filter '${del_repo}:v.*' --ago 0d"
 
@@ -826,8 +816,7 @@ run_deletion_benchmarks_hyperfine() {
     done
 
     "$HYPERFINE_CMD" \
-        --warmup 1 \
-        --min-runs 3 \
+        --runs 1 \
         "${commands[@]}"
 
     # Test 3: Large-scale Deletion Performance
@@ -840,8 +829,7 @@ run_deletion_benchmarks_hyperfine() {
     generate_test_images "$large_repo" "$large_count" 20
 
     "$HYPERFINE_CMD" \
-        --warmup 1 \
-        --runs 3 \
+        --runs 1 \
         --command-name "delete-${large_count}-images" "$ACR_CLI purge --registry $REGISTRY --filter '${large_repo}:.*' --ago 0d --concurrency 20"
 
     # Test 4: Locked Image Handling Performance
@@ -857,8 +845,7 @@ run_deletion_benchmarks_hyperfine() {
     done
 
     "$HYPERFINE_CMD" \
-        --warmup 1 \
-        --runs 5 \
+        --runs 1 \
         --setup "echo 'Testing locked image handling...'" \
         --command-name "skip-locked" "$ACR_CLI purge --registry $REGISTRY --filter '${lock_repo}:.*' --ago 0d" \
         --command-name "include-locked" "$ACR_CLI purge --registry $REGISTRY --filter '${lock_repo}:.*' --ago 0d --include-locked"
