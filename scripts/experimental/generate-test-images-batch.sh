@@ -87,7 +87,7 @@ if docker manifest --help >/dev/null 2>&1; then
     
     # Create a single layer that we'll reuse
     BLOB_FILE="$TEMP_DIR/layer.tar"
-    echo "test" | tar -cf "$BLOB_FILE" -
+    echo "test" > "$TEMP_DIR/test.txt" && tar -cf "$BLOB_FILE" -C "$TEMP_DIR" test.txt
     
     # Note: Full manifest manipulation would require direct registry API access
     # For now, we'll stick with the parallel push method
