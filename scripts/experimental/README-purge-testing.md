@@ -17,7 +17,7 @@ A unified test script that combines all test scenarios into one comprehensive su
 
 ```bash
 # Basic usage
-./scripts/test-purge-all.sh [registry] [test_mode] [num_images]
+./scripts/experimental/test-purge-all.sh [registry] [test_mode] [num_images]
 
 # Test modes:
 # - all: Run all test suites (default)
@@ -29,19 +29,19 @@ A unified test script that combines all test scenarios into one comprehensive su
 
 # Examples:
 # Use temporary registry for all tests
-./scripts/test-purge-all.sh
+./scripts/experimental/test-purge-all.sh
 
 # Use existing registry for minimal tests
-./scripts/test-purge-all.sh myregistry.azurecr.io minimal
+./scripts/experimental/test-purge-all.sh myregistry.azurecr.io minimal
 
 # Run comprehensive tests with custom image count
-./scripts/test-purge-all.sh myregistry.azurecr.io comprehensive 100
+./scripts/experimental/test-purge-all.sh myregistry.azurecr.io comprehensive 100
 
 # Run performance benchmarks
-./scripts/test-purge-all.sh myregistry.azurecr.io benchmark
+./scripts/experimental/test-purge-all.sh myregistry.azurecr.io benchmark
 
 # Debug mode for troubleshooting
-DEBUG=1 ./scripts/test-purge-all.sh myregistry.azurecr.io debug
+DEBUG=1 ./scripts/experimental/test-purge-all.sh myregistry.azurecr.io debug
 ```
 
 Features:
