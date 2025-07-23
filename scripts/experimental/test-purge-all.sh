@@ -33,7 +33,7 @@ fi
 
 REGISTRY="${1:-}"
 TEST_MODE="${2:-all}"  # Options: all, minimal, comprehensive, benchmark, benchmark-delete, debug, interactive, or specific test names
-NUM_IMAGES="${3:-50}"
+NUM_IMAGES="${3:-500}"
 TEMP_REGISTRY_CREATED=false
 TEMP_REGISTRY_NAME=""
 RESOURCE_GROUP=""
@@ -636,7 +636,7 @@ run_benchmark_tests() {
     fi
 
     local num_repos=3
-    local images_per_repo=50
+    local images_per_repo="${NUM_IMAGES:-500}"
     local warmup_runs="${WARMUP_RUNS:-3}"
     local min_runs="${MIN_RUNS:-10}"
 
@@ -707,7 +707,7 @@ run_benchmark_tests() {
 
     # Create separate repositories for deletion tests
     local del_repo_prefix="benchmark-delete"
-    local del_images_per_test=30
+    local del_images_per_test="${NUM_IMAGES:-500}"
 
     # Test 1: Compare dry-run vs actual deletion
     echo -e "\n${CYAN}Dry-run vs Actual Deletion Comparison${NC}"
@@ -796,7 +796,7 @@ run_deletion_benchmark_tests() {
 
 # Deletion benchmarks with hyperfine
 run_deletion_benchmarks_hyperfine() {
-    local del_images_per_test="${NUM_IMAGES:-50}"
+    local del_images_per_test="${NUM_IMAGES:-500}"
 
     # Test 1: Dry-run vs Actual Deletion Performance
     echo -e "\n${CYAN}Test 1: Dry-run vs Actual Deletion Performance${NC}"
@@ -868,7 +868,7 @@ run_deletion_benchmarks_hyperfine() {
 
 # Basic deletion benchmarks without hyperfine
 run_deletion_benchmarks_basic() {
-    local del_images_per_test="${NUM_IMAGES:-50}"
+    local del_images_per_test="${NUM_IMAGES:-500}"
 
     echo -e "\n${CYAN}Test 1: Dry-run vs Actual Deletion${NC}"
 
@@ -923,7 +923,7 @@ run_benchmark_tests_basic() {
     echo -e "\n${CYAN}Running basic benchmarks without hyperfine${NC}"
 
     local num_repos=3
-    local images_per_repo=50
+    local images_per_repo="${NUM_IMAGES:-500}"
 
     # Phase 1: Generate test data
     echo -e "\n${YELLOW}Phase 1: Generating Test Data${NC}"
@@ -996,7 +996,7 @@ run_benchmark_tests_basic() {
     echo -e "\n${CYAN}Comparing Dry-run vs Actual Deletion${NC}"
 
     local del_repo="benchmark-delete-basic"
-    generate_test_images "$del_repo" 30
+    generate_test_images "$del_repo" "${NUM_IMAGES:-500}"
 
     # Dry run timing
     echo "Testing dry-run performance..."
