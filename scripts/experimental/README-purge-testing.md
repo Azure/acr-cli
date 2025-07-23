@@ -62,39 +62,6 @@ Test coverage includes:
 - Age-based filtering
 - Edge cases and error handling
 
-### 2. generate-test-images.sh
-
-Standalone script to generate test images in your ACR. Used internally by test scripts but can be run independently.
-
-```bash
-# Use existing registry
-./scripts/generate-test-images.sh <registry> <repository> [num_images]
-
-# Create temporary registry (will be cleaned up after)
-./scripts/generate-test-images.sh
-
-# Examples:
-./scripts/generate-test-images.sh myregistry.azurecr.io test-repo 100
-./scripts/generate-test-images.sh  # Creates temp registry with 100 images
-```
-
-This creates images with various tag patterns:
-- Version tags: `v001`, `v002`, etc.
-- Date tags: `20250122-1`, `20250122-2`, etc.
-- Build tags: `build-0001`, `build-0002`, etc.
-- Latest tags: `latest-10`, `latest-20`, etc. (every 10th image)
-- Dev tags: `dev-5`, `dev-10`, etc. (every 5th image)
-
-### 3. Individual Test Scripts (Legacy)
-
-The following scripts are now integrated into `test-purge-all.sh` but remain available for specific use cases:
-
-- **test-purge-minimal.sh**: Quick basic functionality tests
-- **test-purge-comprehensive.sh**: Full test suite with automated assertions
-- **test-purge-real-acr.sh**: Interactive test harness with manual confirmations
-- **benchmark-purge.sh**: Performance benchmarking suite
-- **test-purge-debug.sh**: Detailed debugging for lock and keep parameter behavior
-
 ## Test Scenarios
 
 The test harness covers:
@@ -135,11 +102,68 @@ acr purge --registry myregistry.azurecr.io --filter 'test-repo:v001' --ago 0d --
 
 ## Performance Testing
 
-To test performance with large numbers of images:
+### Benchmark Mode with Hyperfine
 
-1. Generate many images (e.g., 1000+):
+The `test-purge-all.sh` script includes a comprehensive benchmark mode that automatically uses Hyperfine when available for accurate performance measurements:
+
+```bash
+# Run complete benchmark suite using Makefile
+make benchmark
+
+# Or run directly with a registry
+./scripts/experimental/test-purge-all.sh myregistry.azurecr.io benchmark
+
+# Use temporary registry for benchmarks
+./scripts/experimental/test-purge-all.sh "" benchmark
+
+# Configure benchmark parameters
+WARMUP_RUNS=5 MIN_RUNS=20 ./scripts/experimental/test-purge-all.sh "" benchmark
+```
+
+The benchmark mode will:
+- Check for Hyperfine and use it if available (falls back to basic timing if not)
+- Automatically set up test data with multiple repositories
+- Test single repository performance with varying concurrency (1, 5, 10, 20 workers)
+- Test multiple repository performance
+- Measure pattern complexity impact (simple vs complex regex)
+- Test repository scaling performance
+- Generate detailed reports in JSON and Markdown formats
+- Create a comprehensive summary report
+
+#### Benchmark Output Files
+When using Hyperfine, the following files are generated:
+- `benchmark-summary.md` - Overall summary of all benchmark results
+- `benchmark-single-repo.{json,md}` - Single repository performance results
+- `benchmark-multi-repo.{json,md}` - Multiple repository performance results
+- `benchmark-patterns.{json,md}` - Pattern complexity comparison
+- `benchmark-repo-scaling.{json,md}` - Repository count scaling results
+
+#### Prerequisites for Hyperfine Benchmarks
+- Install hyperfine: `cargo install hyperfine` (or via package manager)
+- Azure CLI authenticated
+- Docker running
+
+### Quick Performance Tests
+
+For quick performance validation:
+
+```bash
+# Run minimal test suite (includes basic performance metrics)
+make benchmark-quick
+
+# Or directly
+./scripts/experimental/test-purge-all.sh myregistry.azurecr.io minimal
+```
+
+### Manual Performance Testing
+
+To test performance manually with custom scenarios:
+
+1. Generate test images:
    ```bash
-   ./scripts/generate-test-images.sh myregistry.azurecr.io perf-test 1000
+   # Function is available after sourcing the script
+   source ./scripts/experimental/test-purge-all.sh
+   generate_test_images "perf-test" 1000
    ```
 
 2. Test with different concurrency levels:

@@ -588,6 +588,141 @@ run_comprehensive_tests() {
 run_benchmark_tests() {
     echo -e "\n${BLUE}=== Benchmark Test Suite ===${NC}"
     
+    # Check if hyperfine is available
+    echo -e "${CYAN}Checking for hyperfine...${NC}"
+    
+    # Try to find hyperfine in common locations
+    HYPERFINE_CMD=""
+    if command -v hyperfine >/dev/null 2>&1; then
+        HYPERFINE_CMD="hyperfine"
+    elif [ -f "$HOME/.cargo/bin/hyperfine" ]; then
+        HYPERFINE_CMD="$HOME/.cargo/bin/hyperfine"
+    elif [ -f "/usr/local/bin/hyperfine" ]; then
+        HYPERFINE_CMD="/usr/local/bin/hyperfine"
+    fi
+    
+    if [ -n "$HYPERFINE_CMD" ]; then
+        echo -e "${GREEN}✓ Hyperfine found: $($HYPERFINE_CMD --version)${NC}"
+    else
+        echo -e "${YELLOW}Warning: hyperfine not found. Falling back to basic timing.${NC}"
+        echo "Install hyperfine for more accurate benchmarks: cargo install hyperfine"
+        echo "PATH: $PATH"
+        run_benchmark_tests_basic
+        return
+    fi
+    
+    local num_repos=3
+    local images_per_repo=50
+    local warmup_runs="${WARMUP_RUNS:-3}"
+    local min_runs="${MIN_RUNS:-10}"
+    
+    # Phase 1: Generate test data
+    echo -e "\n${YELLOW}Phase 1: Generating Test Data${NC}"
+    for repo_num in $(seq 1 "$num_repos"); do
+        local repo="benchmark-repo-${repo_num}"
+        generate_test_images "$repo" "$images_per_repo"
+    done
+    
+    # Phase 2: Run benchmarks with hyperfine
+    echo -e "\n${YELLOW}Phase 2: Running Benchmarks with Hyperfine${NC}"
+    
+    # Test single repository with varying concurrency
+    echo -e "\n${CYAN}Single Repository Performance (${images_per_repo} images)${NC}"
+    echo -e "${YELLOW}Running hyperfine benchmarks with ${warmup_runs} warmup runs and minimum ${min_runs} iterations...${NC}\n"
+    "$HYPERFINE_CMD" \
+        --warmup "$warmup_runs" \
+        --min-runs "$min_runs" \
+        --export-json "benchmark-single-repo.json" \
+        --export-markdown "benchmark-single-repo.md" \
+        --parameter-list concurrency 1,5,10,20 \
+        "$ACR_CLI purge --registry $REGISTRY --filter 'benchmark-repo-1:.*' --ago 0d --concurrency {concurrency} --dry-run"
+    
+    echo -e "\n${GREEN}Single repository benchmark completed. Results saved to benchmark-single-repo.{json,md}${NC}"
+    
+    # Test multiple repositories
+    echo -e "\n${CYAN}Multiple Repository Performance (${num_repos} repos, $((num_repos * images_per_repo)) total images)${NC}"
+    echo -e "${YELLOW}Running hyperfine benchmarks for multiple repositories...${NC}\n"
+    "$HYPERFINE_CMD" \
+        --warmup "$warmup_runs" \
+        --min-runs "$min_runs" \
+        --export-json "benchmark-multi-repo.json" \
+        --export-markdown "benchmark-multi-repo.md" \
+        --parameter-list concurrency 5,10,20,30 \
+        "$ACR_CLI purge --registry $REGISTRY --filter 'benchmark-repo-.*:.*' --ago 0d --concurrency {concurrency} --dry-run"
+    
+    echo -e "\n${GREEN}Multiple repository benchmark completed. Results saved to benchmark-multi-repo.{json,md}${NC}"
+    
+    # Test pattern complexity
+    echo -e "\n${CYAN}Pattern Complexity Impact${NC}"
+    echo -e "${YELLOW}Running hyperfine benchmarks comparing regex pattern complexity...${NC}\n"
+    "$HYPERFINE_CMD" \
+        --warmup "$warmup_runs" \
+        --min-runs "$min_runs" \
+        --export-json "benchmark-patterns.json" \
+        --export-markdown "benchmark-patterns.md" \
+        --command-name "simple-pattern" "$ACR_CLI purge --registry $REGISTRY --filter 'benchmark-repo-1:.*' --ago 0d --concurrency 10 --dry-run" \
+        --command-name "complex-pattern" "$ACR_CLI purge --registry $REGISTRY --filter 'benchmark-repo-1:v[0-9]{3}[024680]' --ago 0d --concurrency 10 --dry-run" \
+        --command-name "very-complex-pattern" "$ACR_CLI purge --registry $REGISTRY --filter 'benchmark-repo-1:v00[0-9][024]' --ago 0d --concurrency 10 --dry-run"
+    
+    echo -e "\n${GREEN}Pattern complexity benchmark completed. Results saved to benchmark-patterns.{json,md}${NC}"
+    
+    # Test repository scaling
+    echo -e "\n${CYAN}Repository Scaling Performance${NC}"
+    echo -e "${YELLOW}Running hyperfine benchmarks for repository count scaling...${NC}\n"
+    local commands=()
+    for num in 1 2 3; do
+        commands+=("--command-name")
+        commands+=("${num}-repos")
+        commands+=("$ACR_CLI purge --registry $REGISTRY --filter 'benchmark-repo-[1-${num}]:.*' --ago 0d --concurrency 10 --dry-run")
+    done
+    
+    "$HYPERFINE_CMD" \
+        --warmup "$warmup_runs" \
+        --min-runs "$min_runs" \
+        --export-json "benchmark-repo-scaling.json" \
+        --export-markdown "benchmark-repo-scaling.md" \
+        "${commands[@]}"
+    
+    echo -e "\n${GREEN}Repository scaling benchmark completed. Results saved to benchmark-repo-scaling.{json,md}${NC}"
+    
+    # Generate summary report
+    echo -e "\n${YELLOW}Generating Summary Report${NC}"
+    cat > "benchmark-summary.md" <<EOF
+# ACR CLI Performance Benchmark Summary
+
+Generated: $(date)
+Registry: $REGISTRY
+Test Images: $images_per_repo per repository
+
+## Results
+
+### Single Repository Performance
+$(cat benchmark-single-repo.md 2>/dev/null || echo "Not available")
+
+### Multiple Repository Performance
+$(cat benchmark-multi-repo.md 2>/dev/null || echo "Not available")
+
+### Pattern Complexity Impact
+$(cat benchmark-patterns.md 2>/dev/null || echo "Not available")
+
+### Repository Scaling
+$(cat benchmark-repo-scaling.md 2>/dev/null || echo "Not available")
+
+## Test Configuration
+- Warmup runs: $warmup_runs
+- Minimum runs: $min_runs
+- ACR CLI: $ACR_CLI
+EOF
+    
+    echo -e "\n${GREEN}Benchmark completed! Results saved to:${NC}"
+    echo "  - benchmark-summary.md (overall summary)"
+    echo "  - benchmark-*.{json,md} (detailed results)"
+}
+
+# Fallback benchmark function without hyperfine
+run_benchmark_tests_basic() {
+    echo -e "\n${CYAN}Running basic benchmarks without hyperfine${NC}"
+    
     local num_repos=3
     local images_per_repo=50
     
@@ -1033,79 +1168,6 @@ run_comprehensive_tests() {
     run_test_comp_age
 }
 
-run_benchmark_tests() {
-    echo -e "\n${BLUE}=== Benchmark Test Suite ===${NC}"
-    
-    local num_repos=3
-    local images_per_repo=50
-    
-    # Phase 1: Generate test data
-    echo -e "\n${YELLOW}Phase 1: Generating Test Data${NC}"
-    for repo_num in $(seq 1 "$num_repos"); do
-        local repo="benchmark-repo-${repo_num}"
-        generate_test_images "$repo" "$images_per_repo"
-    done
-    
-    # Phase 2: Run benchmarks
-    echo -e "\n${YELLOW}Phase 2: Running Benchmarks${NC}"
-    
-    # Test single repository with varying concurrency
-    echo -e "\n${CYAN}Single Repository Performance${NC}"
-    local repo="benchmark-repo-1"
-    for concurrency in 1 5 10 20; do
-        echo "Testing concurrency=$concurrency..."
-        local duration=$(measure_time "$ACR_CLI" purge \
-            --registry "$REGISTRY" \
-            --filter "$repo:.*" \
-            --ago 0d \
-            --concurrency "$concurrency" \
-            --dry-run >/dev/null 2>&1)
-        
-        local images_per_sec=$(calc "$images_per_repo / $duration" 2>/dev/null | xargs printf "%.2f" 2>/dev/null || echo "0.00")
-        echo -e "${GREEN}  Duration: ${duration}s, Throughput: ${images_per_sec} images/sec${NC}"
-    done
-    
-    # Test multiple repositories
-    echo -e "\n${CYAN}Multiple Repository Performance${NC}"
-    local total_images=$((num_repos * images_per_repo))
-    for concurrency in 10 20; do
-        echo "Testing concurrency=$concurrency..."
-        local duration=$(measure_time "$ACR_CLI" purge \
-            --registry "$REGISTRY" \
-            --filter "benchmark-repo-.*:.*" \
-            --ago 0d \
-            --concurrency "$concurrency" \
-            --dry-run >/dev/null 2>&1)
-        
-        local images_per_sec=$(calc "$total_images / $duration" 2>/dev/null | xargs printf "%.2f" 2>/dev/null || echo "0.00")
-        echo -e "${GREEN}  Duration: ${duration}s, Throughput: ${images_per_sec} images/sec${NC}"
-    done
-    
-    # Test pattern complexity
-    echo -e "\n${CYAN}Pattern Complexity Impact${NC}"
-    
-    # Simple pattern
-    duration=$(measure_time "$ACR_CLI" purge \
-        --registry "$REGISTRY" \
-        --filter "benchmark-repo-1:.*" \
-        --ago 0d \
-        --concurrency 10 \
-        --dry-run >/dev/null 2>&1)
-    echo "Simple pattern duration: ${duration}s"
-    
-    # Complex pattern
-    duration=$(measure_time "$ACR_CLI" purge \
-        --registry "$REGISTRY" \
-        --filter "benchmark-repo-1:v[0-9]{3}[024680]" \
-        --ago 0d \
-        --concurrency 10 \
-        --dry-run >/dev/null 2>&1)
-    echo "Complex pattern duration: ${duration}s"
-    
-    # Generate summary
-    echo -e "\n${YELLOW}Benchmark Summary${NC}"
-    echo "Benchmark tests completed successfully"
-}
 
 run_debug_tests() {
     echo -e "\n${BLUE}=== Debug Test Suite ===${NC}"
