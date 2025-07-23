@@ -850,6 +850,52 @@ run_deletion_benchmarks_hyperfine() {
         --command-name "skip-locked" "$ACR_CLI purge --registry $REGISTRY --filter '${lock_repo}:.*' --ago 0d" \
         --command-name "include-locked" "$ACR_CLI purge --registry $REGISTRY --filter '${lock_repo}:.*' --ago 0d --include-locked"
 
+    # Test 5: Direct comparison of locked vs unlocked repositories
+    echo -e "\n${CYAN}Test 5: Locked vs Unlocked Repository Comparison${NC}"
+    echo -e "${YELLOW}Creating two identical repositories with same number of images${NC}"
+    
+    local compare_images="${NUM_IMAGES:-500}"
+    local unlocked_repo="benchmark-compare-unlocked"
+    local locked_repo="benchmark-compare-locked"
+    
+    # Create unlocked repository
+    echo "Creating ${compare_images} unlocked images..."
+    generate_test_images "$unlocked_repo" "$compare_images"
+    
+    # Create locked repository
+    echo "Creating ${compare_images} locked images..."
+    generate_test_images "$locked_repo" "$compare_images"
+    
+    # Lock all images in the locked repository
+    echo -e "${YELLOW}Locking all images in ${locked_repo}...${NC}"
+    for i in $(seq 1 "$compare_images"); do
+        lock_image "$locked_repo" "v$(printf "%03d" "$i")" false false
+        # Show progress every 50 images
+        if [ $((i % 50)) -eq 0 ]; then
+            echo "  Locked $i/$compare_images images..."
+        fi
+    done
+    echo -e "${GREEN}All images locked${NC}"
+    
+    echo -e "\n${YELLOW}Running comparison benchmark...${NC}"
+    echo "Both repositories have exactly ${compare_images} images"
+    echo "- ${unlocked_repo}: All images unlocked"
+    echo "- ${locked_repo}: All images locked"
+    
+    "$HYPERFINE_CMD" \
+        --runs 1 \
+        --setup "echo 'Comparing locked vs unlocked repositories...'" \
+        --command-name "purge-unlocked-repo" "$ACR_CLI purge --registry $REGISTRY --filter '${unlocked_repo}:.*' --ago 0d" \
+        --command-name "purge-locked-repo-skip" "$ACR_CLI purge --registry $REGISTRY --filter '${locked_repo}:.*' --ago 0d" \
+        --command-name "purge-locked-repo-include" "$ACR_CLI purge --registry $REGISTRY --filter '${locked_repo}:.*' --ago 0d --include-locked"
+    
+    # Verify results
+    echo -e "\n${CYAN}Verification:${NC}"
+    local unlocked_remaining=$(count_tags "$unlocked_repo")
+    local locked_remaining=$(count_tags "$locked_repo")
+    echo "- Unlocked repository remaining images: $unlocked_remaining"
+    echo "- Locked repository remaining images: $locked_remaining"
+
     echo -e "\n${GREEN}Deletion benchmarks completed!${NC}"
 }
 
@@ -901,6 +947,72 @@ run_deletion_benchmarks_basic() {
         local throughput=$(awk -v n="$del_images_per_test" -v d="$duration" 'BEGIN {printf "%.1f", n/d}')
         echo "Duration: ${duration}s, Throughput: ${throughput} images/sec"
     done
+
+    # Test 3: Direct comparison of locked vs unlocked repositories
+    echo -e "\n${CYAN}Test 3: Locked vs Unlocked Repository Comparison${NC}"
+    
+    local compare_images="${NUM_IMAGES:-500}"
+    local unlocked_repo="benchmark-compare-unlocked-basic"
+    local locked_repo="benchmark-compare-locked-basic"
+    
+    # Create unlocked repository
+    echo "Creating ${compare_images} unlocked images..."
+    generate_test_images "$unlocked_repo" "$compare_images"
+    
+    # Create locked repository
+    echo "Creating ${compare_images} locked images..."
+    generate_test_images "$locked_repo" "$compare_images"
+    
+    # Lock all images in the locked repository
+    echo -e "${YELLOW}Locking all images in ${locked_repo}...${NC}"
+    for i in $(seq 1 "$compare_images"); do
+        lock_image "$locked_repo" "v$(printf "%03d" "$i")" false false
+        # Show progress every 50 images
+        if [ $((i % 50)) -eq 0 ]; then
+            echo "  Locked $i/$compare_images images..."
+        fi
+    done
+    echo -e "${GREEN}All images locked${NC}"
+    
+    echo -e "\n${YELLOW}Running comparison tests...${NC}"
+    echo "Both repositories have exactly ${compare_images} images"
+    
+    # Test unlocked repository
+    echo -e "\n${BLUE}Purging unlocked repository...${NC}"
+    local unlocked_duration=$(measure_time "$ACR_CLI" purge \
+        --registry "$REGISTRY" \
+        --filter "$unlocked_repo:.*" \
+        --ago 0d >/dev/null 2>&1)
+    echo "Unlocked repo deletion: ${unlocked_duration}s"
+    
+    # Test locked repository without --include-locked
+    echo -e "\n${BLUE}Purging locked repository (skip locked)...${NC}"
+    local locked_skip_duration=$(measure_time "$ACR_CLI" purge \
+        --registry "$REGISTRY" \
+        --filter "$locked_repo:.*" \
+        --ago 0d >/dev/null 2>&1)
+    echo "Locked repo (skip): ${locked_skip_duration}s"
+    
+    # Test locked repository with --include-locked
+    echo -e "\n${BLUE}Purging locked repository (include locked)...${NC}"
+    local locked_include_duration=$(measure_time "$ACR_CLI" purge \
+        --registry "$REGISTRY" \
+        --filter "$locked_repo:.*" \
+        --ago 0d \
+        --include-locked >/dev/null 2>&1)
+    echo "Locked repo (include): ${locked_include_duration}s"
+    
+    # Verify results
+    echo -e "\n${CYAN}Results Summary:${NC}"
+    echo "- Unlocked repo deletion: ${unlocked_duration}s"
+    echo "- Locked repo (skip locked): ${locked_skip_duration}s"
+    echo "- Locked repo (include locked): ${locked_include_duration}s"
+    
+    local speedup=$(awk -v skip="$locked_skip_duration" -v unlocked="$unlocked_duration" 'BEGIN {
+        if (unlocked > 0) printf "%.1fx", skip/unlocked
+        else print "N/A"
+    }')
+    echo -e "\n${GREEN}Skipping locked images was ${speedup} faster than deleting unlocked images${NC}"
 
     echo -e "\n${GREEN}Deletion benchmarks completed!${NC}"
 }
