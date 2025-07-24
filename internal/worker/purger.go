@@ -17,7 +17,7 @@ import (
 // Purger purges tags or manifests concurrently.
 type Purger struct {
 	Executer
-	acrClient api.AcrCLIClientInterface
+	acrClient     api.AcrCLIClientInterface
 	includeLocked bool
 }
 
@@ -31,8 +31,8 @@ func NewPurger(repoParallelism int, acrClient api.AcrCLIClientInterface, loginUR
 		repoName: repoName,
 	}
 	return &Purger{
-		Executer:  executeBase,
-		acrClient: acrClient,
+		Executer:      executeBase,
+		acrClient:     acrClient,
 		includeLocked: includeLocked,
 	}
 }
@@ -47,13 +47,13 @@ func (p *Purger) PurgeTags(ctx context.Context, tags []acr.TagAttributesBase) (i
 			if p.includeLocked && tag.ChangeableAttributes != nil {
 				if (tag.ChangeableAttributes.DeleteEnabled != nil && !*tag.ChangeableAttributes.DeleteEnabled) ||
 					(tag.ChangeableAttributes.WriteEnabled != nil && !*tag.ChangeableAttributes.WriteEnabled) {
-					
+
 					enabledTrue := true
 					unlockAttrs := &acr.ChangeableAttributes{
 						DeleteEnabled: &enabledTrue,
 						WriteEnabled:  &enabledTrue,
 					}
-					
+
 					_, unlockErr := p.acrClient.UpdateAcrTagAttributes(ctx, p.repoName, *tag.Name, unlockAttrs)
 					if unlockErr != nil {
 						fmt.Printf("Warning: Failed to unlock %s/%s:%s, error: %v. Will attempt deletion anyway.\n", p.loginURL, p.repoName, *tag.Name, unlockErr)
@@ -63,7 +63,7 @@ func (p *Purger) PurgeTags(ctx context.Context, tags []acr.TagAttributesBase) (i
 					}
 				}
 			}
-			
+
 			resp, err := p.acrClient.DeleteAcrTag(ctx, p.repoName, *tag.Name)
 			if err == nil {
 				fmt.Printf("Deleted %s/%s:%s\n", p.loginURL, p.repoName, *tag.Name)
@@ -104,13 +104,13 @@ func (p *Purger) PurgeManifests(ctx context.Context, manifests []acr.ManifestAtt
 			if p.includeLocked && manifest.ChangeableAttributes != nil {
 				if (manifest.ChangeableAttributes.DeleteEnabled != nil && !*manifest.ChangeableAttributes.DeleteEnabled) ||
 					(manifest.ChangeableAttributes.WriteEnabled != nil && !*manifest.ChangeableAttributes.WriteEnabled) {
-					
+
 					enabledTrue := true
 					unlockAttrs := &acr.ChangeableAttributes{
 						DeleteEnabled: &enabledTrue,
 						WriteEnabled:  &enabledTrue,
 					}
-					
+
 					_, unlockErr := p.acrClient.UpdateAcrManifestAttributes(ctx, p.repoName, *manifest.Digest, unlockAttrs)
 					if unlockErr != nil {
 						fmt.Printf("Warning: Failed to unlock %s/%s@%s, error: %v. Will attempt deletion anyway.\n", p.loginURL, p.repoName, *manifest.Digest, unlockErr)
@@ -120,7 +120,7 @@ func (p *Purger) PurgeManifests(ctx context.Context, manifests []acr.ManifestAtt
 					}
 				}
 			}
-			
+
 			resp, err := p.acrClient.DeleteManifest(ctx, p.repoName, *manifest.Digest)
 			if err == nil {
 				fmt.Printf("Deleted %s/%s@%s\n", p.loginURL, p.repoName, *manifest.Digest)
