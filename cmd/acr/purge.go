@@ -109,7 +109,7 @@ func newPurgeCmd(rootParams *rootParameters) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			
+
 			// Validate flag combinations
 			if purgeParams.untaggedOnly {
 				// When untagged-only is set, ago and keep flags are not applicable
@@ -128,7 +128,7 @@ func newPurgeCmd(rootParams *rootParameters) *cobra.Command {
 					return fmt.Errorf("--ago is required when not using --untagged-only")
 				}
 			}
-			
+
 			// A map is used to collect the regex tags for every repository.
 			var tagFilters map[string]string
 			if purgeParams.untaggedOnly && len(purgeParams.filters) == 0 {
@@ -149,7 +149,7 @@ func newPurgeCmd(rootParams *rootParameters) *cobra.Command {
 			} else {
 				tagFilters = make(map[string]string)
 			}
-			
+
 			// A clarification message for --dry-run.
 			if purgeParams.dryRun {
 				fmt.Println("DRY RUN: The following output shows what WOULD be deleted if the purge command was executed. Nothing is deleted.")
@@ -220,7 +220,7 @@ func purge(ctx context.Context,
 	for repoName, tagRegex := range tagFilters {
 		var singleDeletedTagsCount int
 		var manifestToTagsCountMap map[string]int
-		
+
 		// Skip tag deletion if untagged-only mode is enabled
 		if !untaggedOnly {
 			singleDeletedTagsCount, manifestToTagsCountMap, err = purgeTags(ctx, acrClient, repoParallelism, loginURL, repoName, tagDeletionSince, tagRegex, tagsToKeep, filterTimeout, dryRun, includeLocked)
@@ -231,7 +231,7 @@ func purge(ctx context.Context,
 			// Initialize empty map for untagged-only mode
 			manifestToTagsCountMap = make(map[string]int)
 		}
-		
+
 		singleDeletedManifestsCount := 0
 		// If the untagged flag is set or untagged-only mode is enabled, delete manifests
 		if removeUtaggedManifests {
