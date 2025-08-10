@@ -98,20 +98,7 @@ func newPurgeCmd(rootParams *rootParameters) *cobra.Command {
 		Long:    newPurgeCmdLongMessage,
 		Example: purgeExampleMessage,
 		RunE: func(_ *cobra.Command, _ []string) error {
-			// This context is used for all the http requests.
-			ctx := context.Background()
-			registryName, err := purgeParams.GetRegistryName()
-			if err != nil {
-				return err
-			}
-			loginURL := api.LoginURL(registryName)
-			// An acrClient with authentication is generated, if the authentication cannot be resolved an error is returned.
-			acrClient, err := api.GetAcrCLIClientWithAuth(loginURL, purgeParams.username, purgeParams.password, purgeParams.configs)
-			if err != nil {
-				return err
-			}
-
-			// Validate flag combinations
+			// Validate flag combinations before authentication
 			if purgeParams.untaggedOnly {
 				// When untagged-only is set, ago and keep flags are not applicable
 				if purgeParams.ago != "" {
@@ -128,6 +115,19 @@ func newPurgeCmd(rootParams *rootParameters) *cobra.Command {
 				if purgeParams.ago == "" {
 					return fmt.Errorf("--ago is required when not using --untagged-only")
 				}
+			}
+
+			// This context is used for all the http requests.
+			ctx := context.Background()
+			registryName, err := purgeParams.GetRegistryName()
+			if err != nil {
+				return err
+			}
+			loginURL := api.LoginURL(registryName)
+			// An acrClient with authentication is generated, if the authentication cannot be resolved an error is returned.
+			acrClient, err := api.GetAcrCLIClientWithAuth(loginURL, purgeParams.username, purgeParams.password, purgeParams.configs)
+			if err != nil {
+				return err
 			}
 
 			// A map is used to collect the regex tags for every repository.
