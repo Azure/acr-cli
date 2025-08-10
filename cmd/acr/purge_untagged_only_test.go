@@ -99,16 +99,8 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		
-		// Mock GetRepositories to return multiple repos
-		repos := []string{"repo1", "repo2", "repo3"}
-		reposResult := &acr.Repositories{
-			Response: autorest.Response{
-				Response: &http.Response{
-					StatusCode: 200,
-				},
-			},
-			Names: &repos,
-		}
+		// We won't test GetRepositories here since the purge function is called 
+		// with already-created tagFilters. Instead test that all repos are processed.
 		
 		emptyManifestsResult := &acr.Manifests{
 			Response: autorest.Response{
@@ -121,10 +113,8 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 			ManifestsAttributes: &[]acr.ManifestAttributesBase{},
 		}
 		
-		// Mock repository listing
-		mockClient.On("GetRepositories", mock.Anything, "", int32(100)).Return(reposResult, nil).Once()
-		
 		// Mock manifest calls for each repo (no untagged manifests in this test)
+		repos := []string{"repo1", "repo2", "repo3"}
 		for _, repo := range repos {
 			mockClient.On("GetAcrManifests", mock.Anything, repo, "", "").Return(emptyManifestsResult, nil).Once()
 		}
@@ -196,7 +186,7 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 		// Mock manifest calls for specific repo
 		mockClient.On("GetAcrManifests", mock.Anything, "specific-repo", "", "").Return(manifestsResult, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, "specific-repo", "", manifestDigest).Return(emptyManifestsResult, nil).Once()
-		mockClient.On("GetManifest", mock.Anything, "specific-repo", manifestDigest).Return([]byte(`{"schemaVersion": 2}`), nil).Once()
+		// Note: GetManifest is not called for untagged manifests
 		localDeletedResponse := &autorest.Response{
 			Response: &http.Response{
 				StatusCode: 202,
@@ -265,7 +255,7 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 		// Mock manifest calls but NO delete calls in dry-run
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(manifestsResult, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", manifestDigest).Return(emptyManifestsResult, nil).Once()
-		mockClient.On("GetManifest", mock.Anything, testRepo, manifestDigest).Return([]byte(`{"schemaVersion": 2}`), nil).Once()
+		// Note: GetManifest is not called for untagged manifests
 		// No DeleteManifest call expected in dry-run mode
 		
 		deletedTagsCount, deletedManifestsCount, err := purge(
@@ -340,8 +330,7 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 		// Without --include-locked, only unlocked manifest should be deleted
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(manifestsResult, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", unlockedDigest).Return(emptyManifestsResult, nil).Once()
-		mockClient.On("GetManifest", mock.Anything, testRepo, lockedDigest).Return([]byte(`{"schemaVersion": 2}`), nil).Once()
-		mockClient.On("GetManifest", mock.Anything, testRepo, unlockedDigest).Return([]byte(`{"schemaVersion": 2}`), nil).Once()
+		// Note: GetManifest is not called for untagged manifests
 		localDeletedResponse := &autorest.Response{
 			Response: &http.Response{
 				StatusCode: 202,
@@ -412,9 +401,15 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 		// With --include-locked, locked manifest should be unlocked and deleted
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(manifestsResult, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", lockedDigest).Return(emptyManifestsResult, nil).Once()
-		mockClient.On("GetManifest", mock.Anything, testRepo, lockedDigest).Return([]byte(`{"schemaVersion": 2}`), nil).Once()
+		// Note: GetManifest is not called for untagged manifests
 		// Expect unlock and delete for locked manifest
-		mockClient.On("UpdateAcrManifestAttributes", mock.Anything, testRepo, lockedDigest, mock.Anything).Return(nil).Once()
+		// UpdateAcrManifestAttributes returns an interface, not just nil
+		updateResponse := &autorest.Response{
+			Response: &http.Response{
+				StatusCode: 200,
+			},
+		}
+		mockClient.On("UpdateAcrManifestAttributes", mock.Anything, testRepo, lockedDigest, mock.Anything).Return(updateResponse, nil).Once()
 		localDeletedResponse := &autorest.Response{
 			Response: &http.Response{
 				StatusCode: 202,

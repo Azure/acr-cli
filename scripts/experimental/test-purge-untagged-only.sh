@@ -302,8 +302,18 @@ run_basic_tests() {
     
     # Test 4: --untagged and --untagged-only are mutually exclusive
     echo -n "Testing --untagged with --untagged-only (should fail)... "
-    error_output=$("$ACR_CLI" purge --registry "$REGISTRY" --untagged --untagged-only 2>&1 || true)
-    assert_contains "$error_output" "mutually exclusive" "--untagged and --untagged-only should be mutually exclusive"
+    error_output=$("$ACR_CLI" purge --registry "$REGISTRY" --untagged --untagged-only --filter "test:.*" --ago 1d 2>&1 || true)
+    # Cobra uses different error message, check for either
+    if echo "$error_output" | grep -qE "(mutually exclusive|are set none of the others can be)"; then
+        echo -e "${GREEN}✓ --untagged and --untagged-only should be mutually exclusive${NC}"
+        ((TESTS_PASSED++))
+    else
+        echo -e "${RED}✗ --untagged and --untagged-only should be mutually exclusive${NC}"
+        echo -e "  Should contain: mutually exclusive or similar"
+        echo -e "  Got: $error_output"
+        ((TESTS_FAILED++))
+        FAILED_TESTS+=("--untagged and --untagged-only should be mutually exclusive")
+    fi
 }
 
 run_comprehensive_tests() {
