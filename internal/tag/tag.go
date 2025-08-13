@@ -12,6 +12,7 @@ import (
 	"github.com/pkg/errors"
 )
 
+// ListTagsError represents an error that occurred while listing tags.
 type ListTagsError struct {
 	msg string
 }

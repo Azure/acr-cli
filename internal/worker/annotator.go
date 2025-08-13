@@ -14,6 +14,7 @@ import (
 	"github.com/alitto/pond/v2"
 )
 
+// Executer provides the base functionality for concurrent task execution.
 type Executer struct {
 	pool     pond.Pool
 	loginURL string
@@ -49,7 +50,7 @@ func NewAnnotator(poolSize int, orasClient api.ORASClientInterface, loginURL str
 	}, nil
 }
 
-// AnnotateManifests annotates a list of manifests concurrently and returns a count of annotated images and the first error occurred.
+// Annotate annotates a list of manifests concurrently and returns a count of annotated images and the first error occurred.
 func (a *Annotator) Annotate(ctx context.Context, manifests []string) (int, error) {
 	var annotatedImages atomic.Int64
 	group := a.pool.NewGroup()

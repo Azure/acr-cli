@@ -27,13 +27,17 @@ import (
 	"oras.land/oras-go/v2/registry/remote/retry"
 )
 
+// TagConvention represents the tag naming convention used for patch tags.
 type TagConvention string
 
 const (
+	// Incremental represents the incremental tag convention using numeric suffixes (e.g., tag-1, tag-2).
 	Incremental TagConvention = "incremental"
+	// Floating represents the floating tag convention using -patched suffix.
 	Floating    TagConvention = "floating"
 )
 
+// IsValid validates that the TagConvention is either incremental or floating.
 func (tc TagConvention) IsValid() error {
 	switch tc {
 	case Incremental, Floating:
@@ -69,7 +73,7 @@ type FilteredRepository struct {
 	PatchTag   string
 }
 
-// Reads the filter policy from the specified repository and tag and returns the Filter struct
+// GetFilterFromFilterPolicy reads the filter policy from the specified repository and tag and returns the Filter struct.
 func GetFilterFromFilterPolicy(ctx context.Context, filterPolicy string, loginURL string, username string, password string) (Filter, error) {
 	filterPolicyPattern := `^[^:]+:[^:]+$`
 	re := regexp.MustCompile(filterPolicyPattern)
@@ -119,7 +123,7 @@ func GetFilterFromFilterPolicy(ctx context.Context, filterPolicy string, loginUR
 	return filter, nil
 }
 
-// Reads the filter json from the specified file path and returns the Filter struct
+// GetFilterFromFilePath reads the filter json from the specified file path and returns the Filter struct.
 func GetFilterFromFilePath(filePath string) (Filter, error) {
 	file, err := os.ReadFile(filePath)
 	if err != nil {
@@ -134,7 +138,7 @@ func GetFilterFromFilePath(filePath string) (Filter, error) {
 	return filter, nil
 }
 
-// Validates the filter and returns an error if the filter is invalid
+// ValidateFilter validates the filter and returns an error if the filter is invalid.
 func (filter *Filter) ValidateFilter() error {
 	fmt.Println("Validating filter...")
 	const versionV1 = "v1"
@@ -180,7 +184,7 @@ func (filter *Filter) ValidateFilter() error {
 	return nil
 }
 
-// Applies filter to filter out the repositories and tags from the ACR according to the specified criteria and returns the FilteredRepository struct
+// ApplyFilterAndGetFilteredList applies filter to filter out the repositories and tags from the ACR according to the specified criteria and returns the FilteredRepository struct.
 func ApplyFilterAndGetFilteredList(ctx context.Context, acrClient api.AcrCLIClientInterface, filter Filter) ([]FilteredRepository, []FilteredRepository, error) {
 
 	var filteredRepos []FilteredRepository
@@ -283,7 +287,7 @@ func ApplyFilterAndGetFilteredList(ctx context.Context, acrClient api.AcrCLIClie
 	return filteredRepos, artifactsNotFound, nil
 }
 
-// Prints the filtered result to the console
+// PrintFilteredResult prints the filtered result to the console.
 func PrintFilteredResult(filteredResult []FilteredRepository, showPatchTags bool) {
 	if len(filteredResult) == 0 {
 		fmt.Println("No matching repository and tag found!")
@@ -303,7 +307,7 @@ func PrintFilteredResult(filteredResult []FilteredRepository, showPatchTags bool
 	fmt.Println("Matches found:", len(filteredResult))
 }
 
-// Prints the artifacts not found to the console
+// PrintNotFoundArtifacts prints the artifacts not found to the console.
 func PrintNotFoundArtifacts(artifactsNotFound []FilteredRepository) {
 	if len(artifactsNotFound) > 0 {
 		fmt.Printf("%s\n", "Artifacts specified in the filter that do not exist:")
