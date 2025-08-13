@@ -132,7 +132,7 @@ func readLine(prompt string, silent bool) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		term.DisableEcho(fd, state)
+		_ = term.DisableEcho(fd, state)
 		defer term.RestoreTerminal(fd, state)
 	}
 

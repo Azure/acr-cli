@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
+// Package api provides client implementations for Azure Container Registry and ORAS operations.
 package api
 
 import (

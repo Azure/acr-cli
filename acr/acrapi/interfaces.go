@@ -1,3 +1,4 @@
+// Package acrapi provides interfaces for Azure Container Registry API operations.
 package acrapi
 
 // Copyright (c) Microsoft Corporation. All rights reserved.

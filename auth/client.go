@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
+// Package auth provides authentication functionality for Azure Container Registry operations.
 package auth
 
 import (

@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
+// Package tag provides functionality for managing container image tags in Azure Container Registry.
 package tag
 
 import (
@@ -12,6 +13,7 @@ import (
 	"github.com/pkg/errors"
 )
 
+// ListTagsError represents an error that occurred while listing tags.
 type ListTagsError struct {
 	msg string
 }

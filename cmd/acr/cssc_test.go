@@ -6,7 +6,7 @@ package main
 import (
 	"testing"
 
-	"github.com/Azure/acr-cli/internal/common"
+	"github.com/Azure/acr-cli/internal/testutil"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -35,7 +35,7 @@ func TestGetRegistryCredsFromStore(t *testing.T) {
 	t.Run("CredsProvidedTest", func(t *testing.T) {
 		rootParams.username = "username"
 		rootParams.password = "password"
-		resolveRegistryCredentials(&csscParams, common.TestLoginURL)
+		resolveRegistryCredentials(&csscParams, testutil.TestLoginURL)
 		assert.Equal(t, "username", csscParams.username)
 		assert.Equal(t, "password", csscParams.password)
 	})
@@ -43,7 +43,7 @@ func TestGetRegistryCredsFromStore(t *testing.T) {
 	t.Run("CredsNotProvidedTest", func(t *testing.T) {
 		rootParams.username = ""
 		rootParams.password = ""
-		resolveRegistryCredentials(&csscParams, common.TestLoginURL)
+		resolveRegistryCredentials(&csscParams, testutil.TestLoginURL)
 		assert.Equal(t, "", csscParams.username)
 		assert.Equal(t, "", csscParams.password)
 	})

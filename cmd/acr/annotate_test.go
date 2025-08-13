@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/Azure/acr-cli/acr"
-	"github.com/Azure/acr-cli/cmd/common"
 	"github.com/Azure/acr-cli/cmd/mocks"
+	"github.com/Azure/acr-cli/cmd/repository"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -221,7 +221,7 @@ func TestAnnotateTags(t *testing.T) {
 
 // Contains all the tests for the getTagstoAnnotate method
 func TestGetManifeststoAnnotate(t *testing.T) {
-	tagRegex, _ := common.BuildRegexFilter("[\\s\\S]*", defaultRegexpMatchTimeoutSeconds)
+	tagRegex, _ := repository.BuildRegexFilter("[\\s\\S]*", defaultRegexpMatchTimeoutSeconds)
 
 	// If an error (other than a 404 error) occurs while calling GetAcrTags, an error should be returned.
 	t.Run("GetAcrTagsErrorTest", func(t *testing.T) {
@@ -532,7 +532,7 @@ func TestIncludeLockedFlagAnnotate(t *testing.T) {
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(lockedTagResult, nil).Once()
 		mockOrasClient.On("DiscoverLifecycleAnnotation", mock.Anything, fmt.Sprintf("%s/%s:%s", testLoginURL, testRepo, tagName), testArtifactType).Return(false, nil).Once()
 
-		regex, _ := common.BuildRegexFilter(".*", 60)
+		regex, _ := repository.BuildRegexFilter(".*", 60)
 		manifests, _, skipped, err := getManifestsToAnnotate(testCtx, mockClient, mockOrasClient, testLoginURL, testRepo,
 			regex, "", testArtifactType, false, true) // include-locked = true
 
@@ -568,7 +568,7 @@ func TestIncludeLockedFlagAnnotate(t *testing.T) {
 
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(lockedTagResult, nil).Once()
 
-		regex, _ := common.BuildRegexFilter(".*", 60)
+		regex, _ := repository.BuildRegexFilter(".*", 60)
 		manifests, _, skipped, err := getManifestsToAnnotate(testCtx, mockClient, mockOrasClient, testLoginURL, testRepo,
 			regex, "", testArtifactType, false, false) // include-locked = false
 
