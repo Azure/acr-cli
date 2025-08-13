@@ -21,37 +21,58 @@ var (
 	// TagName is the default tag name used for testing.
 	TagName = "latest"
 	// TagName1 is a test tag name variant.
-	TagName1             = "jammy"
-	TagName2             = "jammy-20240808"
-	TagName3             = "jammy-20240627.1"
-	TagName4             = "20.04"
-	TagName1FloatingTag  = "jammy-patched"
-	TagName2FloatingTag  = "jammy-20240808-patched"
-	TagName3FloatingTag  = "jammy-20240627.1-patched"
-	TagName4FloatingTag  = "20.04-patched"
+	TagName1 = "jammy"
+	// TagName2 is another test tag name variant with date suffix.
+	TagName2 = "jammy-20240808"
+	// TagName3 is a test tag name variant with version suffix.
+	TagName3 = "jammy-20240627.1"
+	// TagName4 is a test tag name variant with numeric version.
+	TagName4 = "20.04"
+	// TagName1FloatingTag is a test tag name variant with patched suffix.
+	TagName1FloatingTag = "jammy-patched"
+	// TagName2FloatingTag is a test tag name variant with patched suffix.
+	TagName2FloatingTag = "jammy-20240808-patched"
+	// TagName3FloatingTag is a test tag name variant with patched suffix.
+	TagName3FloatingTag = "jammy-20240627.1-patched"
+	// TagName4FloatingTag is a test tag name variant with patched suffix.
+	TagName4FloatingTag = "20.04-patched"
+	// TagName1Incremental1 is a test tag name variant with incremental number.
 	TagName1Incremental1 = "jammy-1"
+	// TagName2Incremental1 is a test tag name variant with incremental number.
 	TagName2Incremental1 = "jammy-20240808-1"
+	// TagName3Incremental1 is a test tag name variant with incremental number.
 	TagName3Incremental1 = "jammy-20240627.1-1"
+	// TagName4Incremental1 is a test tag name variant with incremental number.
 	TagName4Incremental1 = "20.04-1"
+	// TagName1Incremental2 is a test tag name variant with incremental number.
 	TagName1Incremental2 = "jammy-2"
+	// TagName2Incremental2 is a test tag name variant with incremental number.
 	TagName2Incremental2 = "jammy-20240808-2"
+	// TagName3Incremental2 is a test tag name variant with incremental number.
 	TagName3Incremental2 = "jammy-20240627.1-2"
+	// TagName4Incremental2 is a test tag name variant with incremental number.
 	TagName4Incremental2 = "20.04-2"
-	RepoName1            = "repo1"
-	RepoName2            = "repo2"
-	RepoName3            = "repo3"
-	RepoName4            = "repo4"
-	deleteEnabled        = true
-	lastUpdateTime       = time.Now().Add(-15 * time.Minute).UTC().Format(time.RFC3339Nano)
-	writeEnabled         = true
-	digest               = "sha256:2830cc0fcddc1bc2bd4aeab0ed5ee7087dab29a49e65151c77553e46a7ed5283" //#nosec G101
-	multiArchDigest      = "sha256:d88fb54ba4424dada7c928c6af332ed1c49065ad85eafefb6f26664695015119" //#nosec G101
+	// RepoName1 is a test repository name variant.
+	RepoName1 = "repo1"
+	// RepoName2 is a test repository name variant.
+	RepoName2 = "repo2"
+	// RepoName3 is a test repository name variant.
+	RepoName3 = "repo3"
+	// RepoName4 is a test repository name variant.
+	RepoName4       = "repo4"
+	deleteEnabled   = true
+	lastUpdateTime  = time.Now().Add(-15 * time.Minute).UTC().Format(time.RFC3339Nano)
+	writeEnabled    = true
+	digest          = "sha256:2830cc0fcddc1bc2bd4aeab0ed5ee7087dab29a49e65151c77553e46a7ed5283" //#nosec G101
+	multiArchDigest = "sha256:d88fb54ba4424dada7c928c6af332ed1c49065ad85eafefb6f26664695015119" //#nosec G101
 
+	// NotFoundResponse is a mock HTTP 404 response for testing.
 	NotFoundResponse = autorest.Response{
 		Response: &http.Response{
 			StatusCode: 404,
 		},
 	}
+	// DeletedResponse is a mock HTTP 200 response for testing deletion operations.
 	DeletedResponse = autorest.Response{
 		Response: &http.Response{
 			StatusCode: 200,
@@ -89,6 +110,7 @@ var (
 		},
 	}
 
+	// FourTagsResult is a mock response containing four test tags for testing.
 	FourTagsResult = &acr.RepositoryTagsType{
 		Response: autorest.Response{
 			Response: &http.Response{
@@ -120,6 +142,7 @@ var (
 		}},
 	}
 
+	// FourTagsResultWithPatchTags is a mock response containing tags with patch and incremental variants for testing.
 	FourTagsResultWithPatchTags = &acr.RepositoryTagsType{
 		Response: autorest.Response{
 			Response: &http.Response{

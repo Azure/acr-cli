@@ -153,8 +153,8 @@ func newPurgeCmd(rootParams *rootParameters) *cobra.Command {
 	cmd.Flags().IntVar(&purgeParams.concurrency, "concurrency", defaultPoolSize, concurrencyDescription)
 	cmd.Flags().Int32Var(&purgeParams.repoPageSize, "repository-page-size", defaultRepoPageSize, repoPageSizeDescription)
 	cmd.Flags().BoolP("help", "h", false, "Print usage")
-	cmd.MarkFlagRequired("filter")
-	cmd.MarkFlagRequired("ago")
+	_ = cmd.MarkFlagRequired("filter")
+	_ = cmd.MarkFlagRequired("ago")
 	return cmd
 }
 
@@ -265,7 +265,7 @@ func parseDuration(ago string) (time.Duration, error) {
 	// The supported format is %d%s where the string is a valid go duration string.
 	if strings.Contains(ago, "d") {
 		if _, err := fmt.Sscanf(ago, "%dd%s", &days, &durationString); err != nil {
-			fmt.Sscanf(ago, "%dd", &days)
+			_, _ = fmt.Sscanf(ago, "%dd", &days)
 			durationString = ""
 		}
 	} else {
