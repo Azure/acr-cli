@@ -10,7 +10,7 @@ linters:
     - revive
     - unconvert
     - unused
-  exclusions:
+exclusions:
     generated: lax
     presets:
       - comments

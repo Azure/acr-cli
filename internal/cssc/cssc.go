@@ -1,6 +1,8 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
+// Package cssc provides functionality for Container Software Supply Chain (CSSC) operations,
+// including filter management and patch tag processing.
 package cssc
 
 import (
@@ -34,7 +36,7 @@ const (
 	// Incremental represents the incremental tag convention using numeric suffixes (e.g., tag-1, tag-2).
 	Incremental TagConvention = "incremental"
 	// Floating represents the floating tag convention using -patched suffix.
-	Floating    TagConvention = "floating"
+	Floating TagConvention = "floating"
 )
 
 // IsValid validates that the TagConvention is either incremental or floating.

@@ -10,8 +10,8 @@ import (
 
 	"github.com/Azure/acr-cli/acr"
 	"github.com/Azure/acr-cli/cmd/mocks"
-	"github.com/Azure/acr-cli/internal/common"
 	"github.com/Azure/acr-cli/internal/tag"
+	"github.com/Azure/acr-cli/internal/testutil"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 )
@@ -25,7 +25,7 @@ func TestApplyFilterAndGetFilteredList(t *testing.T) {
 			Repositories: []Repository{
 				{
 					Repository: "",
-					Tags:       []string{common.TagName1, common.TagName2},
+					Tags:       []string{testutil.TagName1, testutil.TagName2},
 					Enabled:    boolPtr(true),
 				},
 			},
@@ -43,7 +43,7 @@ func TestApplyFilterAndGetFilteredList(t *testing.T) {
 			Version: "v1",
 			Repositories: []Repository{
 				{
-					Repository: common.RepoName1,
+					Repository: testutil.RepoName1,
 					Tags:       nil,
 					Enabled:    boolPtr(true),
 				},
@@ -62,20 +62,20 @@ func TestApplyFilterAndGetFilteredList(t *testing.T) {
 			Version: "v1",
 			Repositories: []Repository{
 				{
-					Repository: common.RepoName1,
-					Tags:       []string{common.TagName1, common.TagName2},
+					Repository: testutil.RepoName1,
+					Tags:       []string{testutil.TagName1, testutil.TagName2},
 					Enabled:    boolPtr(true),
 				},
 			},
 		}
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName1, "", "").Return(nil, errors.Wrap(&tag.ListTagsError{}, "failed to list tags")).Once()
+		mockAcrClient.On("GetAcrTags", testutil.TestCtx, testutil.RepoName1, "", "").Return(nil, errors.Wrap(&tag.ListTagsError{}, "failed to list tags")).Once()
 		filteredRepositories, artifactsNotFound, err := ApplyFilterAndGetFilteredList(context.Background(), mockAcrClient, filter)
 		assert.NoError(t, err)
 		assert.Len(t, artifactsNotFound, 2)
-		assert.Equal(t, common.RepoName1, artifactsNotFound[0].Repository)
-		assert.Equal(t, common.TagName1, artifactsNotFound[0].Tag)
-		assert.Equal(t, common.RepoName1, artifactsNotFound[1].Repository)
-		assert.Equal(t, common.TagName2, artifactsNotFound[1].Tag)
+		assert.Equal(t, testutil.RepoName1, artifactsNotFound[0].Repository)
+		assert.Equal(t, testutil.TagName1, artifactsNotFound[0].Tag)
+		assert.Equal(t, testutil.RepoName1, artifactsNotFound[1].Repository)
+		assert.Equal(t, testutil.TagName2, artifactsNotFound[1].Tag)
 		assert.Nil(t, filteredRepositories)
 	})
 	// 4. If filter has a tag that is not present in the repository, that tag should be returned in the artifactsNotFound list and the rest of the tags should be returned in the filtered list
@@ -84,23 +84,23 @@ func TestApplyFilterAndGetFilteredList(t *testing.T) {
 			Version: "v1",
 			Repositories: []Repository{
 				{
-					Repository: common.RepoName1,
-					Tags:       []string{common.TagName, common.TagName1},
+					Repository: testutil.RepoName1,
+					Tags:       []string{testutil.TagName, testutil.TagName1},
 					Enabled:    boolPtr(true),
 				},
 			},
 		}
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName1, "", "").Return(common.OneTagResult, nil).Once()
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName1, "", common.TagName).Return(common.EmptyListTagsResult, nil).Once()
+		mockAcrClient.On("GetAcrTags", testutil.TestCtx, testutil.RepoName1, "", "").Return(testutil.OneTagResult, nil).Once()
+		mockAcrClient.On("GetAcrTags", testutil.TestCtx, testutil.RepoName1, "", testutil.TagName).Return(testutil.EmptyListTagsResult, nil).Once()
 		filteredRepositories, artifactsNotFound, err := ApplyFilterAndGetFilteredList(context.Background(), mockAcrClient, filter)
 		assert.NoError(t, err)
 		assert.Len(t, filteredRepositories, 1)
-		assert.Equal(t, common.RepoName1, filteredRepositories[0].Repository)
-		assert.Equal(t, common.TagName, filteredRepositories[0].Tag)
+		assert.Equal(t, testutil.RepoName1, filteredRepositories[0].Repository)
+		assert.Equal(t, testutil.TagName, filteredRepositories[0].Tag)
 		assert.Equal(t, "N/A", filteredRepositories[0].PatchTag)
 		assert.Len(t, artifactsNotFound, 1)
-		assert.Equal(t, common.RepoName1, artifactsNotFound[0].Repository)
-		assert.Equal(t, common.TagName1, artifactsNotFound[0].Tag)
+		assert.Equal(t, testutil.RepoName1, artifactsNotFound[0].Repository)
+		assert.Equal(t, testutil.TagName1, artifactsNotFound[0].Tag)
 	})
 	// 5. If same repository is specified multiple times with the same tags, it should be returned only once in the filtered list
 	t.Run("SameRepositorySpecifiedMultipleTimesWithSameTagsTest", func(t *testing.T) {
@@ -108,24 +108,24 @@ func TestApplyFilterAndGetFilteredList(t *testing.T) {
 			Version: "v1",
 			Repositories: []Repository{
 				{
-					Repository: common.RepoName1,
-					Tags:       []string{common.TagName},
+					Repository: testutil.RepoName1,
+					Tags:       []string{testutil.TagName},
 					Enabled:    boolPtr(true),
 				},
 				{
-					Repository: common.RepoName1,
-					Tags:       []string{common.TagName},
+					Repository: testutil.RepoName1,
+					Tags:       []string{testutil.TagName},
 					Enabled:    boolPtr(true),
 				},
 			},
 		}
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName1, "", "").Return(common.OneTagResult, nil).Twice()
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName1, "", common.TagName).Return(common.EmptyListTagsResult, nil).Twice()
+		mockAcrClient.On("GetAcrTags", testutil.TestCtx, testutil.RepoName1, "", "").Return(testutil.OneTagResult, nil).Twice()
+		mockAcrClient.On("GetAcrTags", testutil.TestCtx, testutil.RepoName1, "", testutil.TagName).Return(testutil.EmptyListTagsResult, nil).Twice()
 		filteredRepositories, artifactsNotFound, err := ApplyFilterAndGetFilteredList(context.Background(), mockAcrClient, filter)
 		assert.NoError(t, err)
 		assert.Len(t, filteredRepositories, 1)
-		assert.Equal(t, common.RepoName1, filteredRepositories[0].Repository)
-		assert.Equal(t, common.TagName, filteredRepositories[0].Tag)
+		assert.Equal(t, testutil.RepoName1, filteredRepositories[0].Repository)
+		assert.Equal(t, testutil.TagName, filteredRepositories[0].Tag)
 		assert.Equal(t, "N/A", filteredRepositories[0].PatchTag)
 		assert.Nil(t, artifactsNotFound)
 		assert.Len(t, artifactsNotFound, 0)
@@ -136,26 +136,26 @@ func TestApplyFilterAndGetFilteredList(t *testing.T) {
 			Version: "v1",
 			Repositories: []Repository{
 				{
-					Repository: common.RepoName1,
-					Tags:       []string{common.TagName1},
+					Repository: testutil.RepoName1,
+					Tags:       []string{testutil.TagName1},
 					Enabled:    boolPtr(true),
 				},
 				{
-					Repository: common.RepoName1,
-					Tags:       []string{common.TagName1, common.TagName2},
+					Repository: testutil.RepoName1,
+					Tags:       []string{testutil.TagName1, testutil.TagName2},
 					Enabled:    boolPtr(true),
 				},
 			},
 		}
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName1, "", "").Return(common.FourTagsResultWithPatchTags, nil).Twice()
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName1, "", common.TagName4FloatingTag).Return(common.EmptyListTagsResult, nil).Twice()
+		mockAcrClient.On("GetAcrTags", testutil.TestCtx, testutil.RepoName1, "", "").Return(testutil.FourTagsResultWithPatchTags, nil).Twice()
+		mockAcrClient.On("GetAcrTags", testutil.TestCtx, testutil.RepoName1, "", testutil.TagName4FloatingTag).Return(testutil.EmptyListTagsResult, nil).Twice()
 		filteredRepositories, artifactsNotFound, err := ApplyFilterAndGetFilteredList(context.Background(), mockAcrClient, filter)
 		assert.NoError(t, err)
 		assert.Nil(t, artifactsNotFound)
 		assert.Len(t, artifactsNotFound, 0)
 		assert.Len(t, filteredRepositories, 2)
-		assert.True(t, isInFilteredList(filteredRepositories, common.RepoName1, common.TagName1, common.TagName1Incremental2))
-		assert.True(t, isInFilteredList(filteredRepositories, common.RepoName1, common.TagName2, common.TagName2Incremental2))
+		assert.True(t, isInFilteredList(filteredRepositories, testutil.RepoName1, testutil.TagName1, testutil.TagName1Incremental2))
+		assert.True(t, isInFilteredList(filteredRepositories, testutil.RepoName1, testutil.TagName2, testutil.TagName2Incremental2))
 	})
 	// 7. Success scenario with all the combination of filters when tag-convention is floating
 	t.Run("AllFilterCombinationTestWithFloatingTagConvention", func(t *testing.T) {
@@ -164,48 +164,48 @@ func TestApplyFilterAndGetFilteredList(t *testing.T) {
 			TagConvention: "floating",
 			Repositories: []Repository{
 				{
-					Repository: common.RepoName1,
-					Tags:       []string{common.TagName1, common.TagName2}, // tags specified
+					Repository: testutil.RepoName1,
+					Tags:       []string{testutil.TagName1, testutil.TagName2}, // tags specified
 					Enabled:    boolPtr(true),
 				},
 				{
-					Repository: common.RepoName2,
+					Repository: testutil.RepoName2,
 					Tags:       []string{"*"}, // * all tags
 					Enabled:    boolPtr(true),
 				},
 				{
-					Repository: common.RepoName3,
-					Tags:       []string{common.TagName1, common.TagName2},
+					Repository: testutil.RepoName3,
+					Tags:       []string{testutil.TagName1, testutil.TagName2},
 					Enabled:    nil, // nil means enabled
 				},
 				{
-					Repository: common.RepoName4,
-					Tags:       []string{common.TagName1, common.TagName2},
+					Repository: testutil.RepoName4,
+					Tags:       []string{testutil.TagName1, testutil.TagName2},
 					Enabled:    boolPtr(false), // disabled repository for all tags
 				},
 			},
 		}
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName1, "", "").Return(common.FourTagsResultWithPatchTags, nil).Once()
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName1, "", common.TagName4FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName2, "", "").Return(common.FourTagsResultWithPatchTags, nil).Once()
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName2, "", common.TagName4FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName3, "", "").Return(common.FourTagsResultWithPatchTags, nil).Once()
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName3, "", common.TagName4FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName4, "", "").Return(common.FourTagsResultWithPatchTags, nil).Once()
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName4, "", common.TagName4FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
+		mockAcrClient.On("GetAcrTags", testutil.TestCtx, testutil.RepoName1, "", "").Return(testutil.FourTagsResultWithPatchTags, nil).Once()
+		mockAcrClient.On("GetAcrTags", testutil.TestCtx, testutil.RepoName1, "", testutil.TagName4FloatingTag).Return(testutil.EmptyListTagsResult, nil).Once()
+		mockAcrClient.On("GetAcrTags", testutil.TestCtx, testutil.RepoName2, "", "").Return(testutil.FourTagsResultWithPatchTags, nil).Once()
+		mockAcrClient.On("GetAcrTags", testutil.TestCtx, testutil.RepoName2, "", testutil.TagName4FloatingTag).Return(testutil.EmptyListTagsResult, nil).Once()
+		mockAcrClient.On("GetAcrTags", testutil.TestCtx, testutil.RepoName3, "", "").Return(testutil.FourTagsResultWithPatchTags, nil).Once()
+		mockAcrClient.On("GetAcrTags", testutil.TestCtx, testutil.RepoName3, "", testutil.TagName4FloatingTag).Return(testutil.EmptyListTagsResult, nil).Once()
+		mockAcrClient.On("GetAcrTags", testutil.TestCtx, testutil.RepoName4, "", "").Return(testutil.FourTagsResultWithPatchTags, nil).Once()
+		mockAcrClient.On("GetAcrTags", testutil.TestCtx, testutil.RepoName4, "", testutil.TagName4FloatingTag).Return(testutil.EmptyListTagsResult, nil).Once()
 		filteredRepositories, artifactsNotFound, err := ApplyFilterAndGetFilteredList(context.Background(), mockAcrClient, filter)
 		assert.NoError(t, err)
 		assert.Nil(t, artifactsNotFound)
 		assert.Len(t, artifactsNotFound, 0)
 		assert.Len(t, filteredRepositories, 8)
-		assert.True(t, isInFilteredList(filteredRepositories, common.RepoName1, common.TagName1, common.TagName1FloatingTag))
-		assert.True(t, isInFilteredList(filteredRepositories, common.RepoName1, common.TagName2, common.TagName2FloatingTag))
-		assert.True(t, isInFilteredList(filteredRepositories, common.RepoName2, common.TagName1, common.TagName1FloatingTag))
-		assert.True(t, isInFilteredList(filteredRepositories, common.RepoName2, common.TagName2, common.TagName2FloatingTag))
-		assert.True(t, isInFilteredList(filteredRepositories, common.RepoName2, common.TagName3, common.TagName3FloatingTag))
-		assert.True(t, isInFilteredList(filteredRepositories, common.RepoName2, common.TagName4, common.TagName4FloatingTag))
-		assert.True(t, isInFilteredList(filteredRepositories, common.RepoName3, common.TagName1, common.TagName1FloatingTag))
-		assert.True(t, isInFilteredList(filteredRepositories, common.RepoName3, common.TagName2, common.TagName2FloatingTag))
+		assert.True(t, isInFilteredList(filteredRepositories, testutil.RepoName1, testutil.TagName1, testutil.TagName1FloatingTag))
+		assert.True(t, isInFilteredList(filteredRepositories, testutil.RepoName1, testutil.TagName2, testutil.TagName2FloatingTag))
+		assert.True(t, isInFilteredList(filteredRepositories, testutil.RepoName2, testutil.TagName1, testutil.TagName1FloatingTag))
+		assert.True(t, isInFilteredList(filteredRepositories, testutil.RepoName2, testutil.TagName2, testutil.TagName2FloatingTag))
+		assert.True(t, isInFilteredList(filteredRepositories, testutil.RepoName2, testutil.TagName3, testutil.TagName3FloatingTag))
+		assert.True(t, isInFilteredList(filteredRepositories, testutil.RepoName2, testutil.TagName4, testutil.TagName4FloatingTag))
+		assert.True(t, isInFilteredList(filteredRepositories, testutil.RepoName3, testutil.TagName1, testutil.TagName1FloatingTag))
+		assert.True(t, isInFilteredList(filteredRepositories, testutil.RepoName3, testutil.TagName2, testutil.TagName2FloatingTag))
 	})
 	// 7. Success scenario with all the combination of filters when tag-convention is empty (defaults to incremental)
 	t.Run("AllFilterCombinationTestWithIncrementalTagConvention", func(t *testing.T) {
@@ -213,48 +213,48 @@ func TestApplyFilterAndGetFilteredList(t *testing.T) {
 			Version: "v1",
 			Repositories: []Repository{
 				{
-					Repository: common.RepoName1,
-					Tags:       []string{common.TagName1, common.TagName2}, // tags specified
+					Repository: testutil.RepoName1,
+					Tags:       []string{testutil.TagName1, testutil.TagName2}, // tags specified
 					Enabled:    boolPtr(true),
 				},
 				{
-					Repository: common.RepoName2,
+					Repository: testutil.RepoName2,
 					Tags:       []string{"*"}, // * all tags
 					Enabled:    boolPtr(true),
 				},
 				{
-					Repository: common.RepoName3,
-					Tags:       []string{common.TagName1, common.TagName2},
+					Repository: testutil.RepoName3,
+					Tags:       []string{testutil.TagName1, testutil.TagName2},
 					Enabled:    nil, // nil means enabled
 				},
 				{
-					Repository: common.RepoName4,
-					Tags:       []string{common.TagName1, common.TagName2},
+					Repository: testutil.RepoName4,
+					Tags:       []string{testutil.TagName1, testutil.TagName2},
 					Enabled:    boolPtr(false), // disabled repository for all tags
 				},
 			},
 		}
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName1, "", "").Return(common.FourTagsResultWithPatchTags, nil).Once()
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName1, "", common.TagName4FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName2, "", "").Return(common.FourTagsResultWithPatchTags, nil).Once()
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName2, "", common.TagName4FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName3, "", "").Return(common.FourTagsResultWithPatchTags, nil).Once()
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName3, "", common.TagName4FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName4, "", "").Return(common.FourTagsResultWithPatchTags, nil).Once()
-		mockAcrClient.On("GetAcrTags", common.TestCtx, common.RepoName4, "", common.TagName4FloatingTag).Return(common.EmptyListTagsResult, nil).Once()
+		mockAcrClient.On("GetAcrTags", testutil.TestCtx, testutil.RepoName1, "", "").Return(testutil.FourTagsResultWithPatchTags, nil).Once()
+		mockAcrClient.On("GetAcrTags", testutil.TestCtx, testutil.RepoName1, "", testutil.TagName4FloatingTag).Return(testutil.EmptyListTagsResult, nil).Once()
+		mockAcrClient.On("GetAcrTags", testutil.TestCtx, testutil.RepoName2, "", "").Return(testutil.FourTagsResultWithPatchTags, nil).Once()
+		mockAcrClient.On("GetAcrTags", testutil.TestCtx, testutil.RepoName2, "", testutil.TagName4FloatingTag).Return(testutil.EmptyListTagsResult, nil).Once()
+		mockAcrClient.On("GetAcrTags", testutil.TestCtx, testutil.RepoName3, "", "").Return(testutil.FourTagsResultWithPatchTags, nil).Once()
+		mockAcrClient.On("GetAcrTags", testutil.TestCtx, testutil.RepoName3, "", testutil.TagName4FloatingTag).Return(testutil.EmptyListTagsResult, nil).Once()
+		mockAcrClient.On("GetAcrTags", testutil.TestCtx, testutil.RepoName4, "", "").Return(testutil.FourTagsResultWithPatchTags, nil).Once()
+		mockAcrClient.On("GetAcrTags", testutil.TestCtx, testutil.RepoName4, "", testutil.TagName4FloatingTag).Return(testutil.EmptyListTagsResult, nil).Once()
 		filteredRepositories, artifactsNotFound, err := ApplyFilterAndGetFilteredList(context.Background(), mockAcrClient, filter)
 		assert.NoError(t, err)
 		assert.Nil(t, artifactsNotFound)
 		assert.Len(t, artifactsNotFound, 0)
 		assert.Len(t, filteredRepositories, 8)
-		assert.True(t, isInFilteredList(filteredRepositories, common.RepoName1, common.TagName1, common.TagName1Incremental2))
-		assert.True(t, isInFilteredList(filteredRepositories, common.RepoName1, common.TagName2, common.TagName2Incremental2))
-		assert.True(t, isInFilteredList(filteredRepositories, common.RepoName2, common.TagName1, common.TagName1Incremental2))
-		assert.True(t, isInFilteredList(filteredRepositories, common.RepoName2, common.TagName2, common.TagName2Incremental2))
-		assert.True(t, isInFilteredList(filteredRepositories, common.RepoName2, common.TagName3, common.TagName3Incremental2))
-		assert.True(t, isInFilteredList(filteredRepositories, common.RepoName2, common.TagName4, common.TagName4Incremental2))
-		assert.True(t, isInFilteredList(filteredRepositories, common.RepoName3, common.TagName1, common.TagName1Incremental2))
-		assert.True(t, isInFilteredList(filteredRepositories, common.RepoName3, common.TagName2, common.TagName2Incremental2))
+		assert.True(t, isInFilteredList(filteredRepositories, testutil.RepoName1, testutil.TagName1, testutil.TagName1Incremental2))
+		assert.True(t, isInFilteredList(filteredRepositories, testutil.RepoName1, testutil.TagName2, testutil.TagName2Incremental2))
+		assert.True(t, isInFilteredList(filteredRepositories, testutil.RepoName2, testutil.TagName1, testutil.TagName1Incremental2))
+		assert.True(t, isInFilteredList(filteredRepositories, testutil.RepoName2, testutil.TagName2, testutil.TagName2Incremental2))
+		assert.True(t, isInFilteredList(filteredRepositories, testutil.RepoName2, testutil.TagName3, testutil.TagName3Incremental2))
+		assert.True(t, isInFilteredList(filteredRepositories, testutil.RepoName2, testutil.TagName4, testutil.TagName4Incremental2))
+		assert.True(t, isInFilteredList(filteredRepositories, testutil.RepoName3, testutil.TagName1, testutil.TagName1Incremental2))
+		assert.True(t, isInFilteredList(filteredRepositories, testutil.RepoName3, testutil.TagName2, testutil.TagName2Incremental2))
 	})
 }
 
@@ -264,7 +264,7 @@ func TestGetFilterFromFilterPolicy(t *testing.T) {
 	// 1. Error should be returned when filter policy is not in the correct format
 	t.Run("FilterPolicyNotCorrectFormatTest", func(t *testing.T) {
 		filterPolicy := "notcorrectformat"
-		filter, err := GetFilterFromFilterPolicy(context.Background(), filterPolicy, common.TestLoginURL, username, password)
+		filter, err := GetFilterFromFilterPolicy(context.Background(), filterPolicy, testutil.TestLoginURL, username, password)
 		assert.NotEqual(nil, err, "Error should not be nil")
 		assert.Equal(t, "filter-policy should be in the format repository:tag e.g. continuouspatchpolicy:latest", err.Error())
 		assert.Equal(t, Filter{}, filter)
@@ -272,7 +272,7 @@ func TestGetFilterFromFilterPolicy(t *testing.T) {
 	// 2. Error should be returned when filter policy has more than one colon
 	t.Run("FilterPolicyMoreThanOneColonTest", func(t *testing.T) {
 		filterPolicy := "repo1:something:anotherthing"
-		filter, err := GetFilterFromFilterPolicy(context.Background(), filterPolicy, common.TestLoginURL, username, password)
+		filter, err := GetFilterFromFilterPolicy(context.Background(), filterPolicy, testutil.TestLoginURL, username, password)
 		assert.NotEqual(nil, err, "Error should not be nil")
 		assert.Equal(t, "filter-policy should be in the format repository:tag e.g. continuouspatchpolicy:latest", err.Error())
 		assert.Equal(t, Filter{}, filter)
@@ -280,7 +280,7 @@ func TestGetFilterFromFilterPolicy(t *testing.T) {
 	// 3. Error should be returned when fetching repository manifest fails
 	t.Run("FetchBytesFailsTest", func(t *testing.T) {
 		filterPolicy := "repo1:tag1"
-		filter, err := GetFilterFromFilterPolicy(context.Background(), filterPolicy, common.TestLoginURL, username, password)
+		filter, err := GetFilterFromFilterPolicy(context.Background(), filterPolicy, testutil.TestLoginURL, username, password)
 		assert.NotEqual(nil, err, "Error should not be nil")
 		assert.ErrorContains(t, err, "error fetching filter manifest content when reading the filter policy")
 		assert.Equal(t, Filter{}, filter)
@@ -330,12 +330,12 @@ func TestGetFilterFromFilePath(t *testing.T) {
 		assert.Nil(t, err, "Error should be nil")
 		assert.Equal(t, "v1", filter.Version)
 		assert.Len(t, filter.Repositories, 2)
-		assert.Equal(t, common.RepoName1, filter.Repositories[0].Repository)
-		assert.Equal(t, common.TagName1, filter.Repositories[0].Tags[0])
-		assert.Equal(t, common.TagName2, filter.Repositories[0].Tags[1])
+		assert.Equal(t, testutil.RepoName1, filter.Repositories[0].Repository)
+		assert.Equal(t, testutil.TagName1, filter.Repositories[0].Tags[0])
+		assert.Equal(t, testutil.TagName2, filter.Repositories[0].Tags[1])
 		assert.Equal(t, true, *filter.Repositories[0].Enabled)
-		assert.Equal(t, common.RepoName2, filter.Repositories[1].Repository)
-		assert.Equal(t, common.TagName1, filter.Repositories[1].Tags[0])
+		assert.Equal(t, testutil.RepoName2, filter.Repositories[1].Repository)
+		assert.Equal(t, testutil.TagName1, filter.Repositories[1].Tags[0])
 		assert.Equal(t, true, *filter.Repositories[1].Enabled)
 		err = os.Remove("filter.json")
 		assert.Nil(t, err, "Error should be nil")
@@ -384,8 +384,8 @@ func TestValidateFilter(t *testing.T) {
 			Version: "",
 			Repositories: []Repository{
 				{
-					Repository: common.RepoName1,
-					Tags:       []string{common.TagName1, common.TagName2},
+					Repository: testutil.RepoName1,
+					Tags:       []string{testutil.TagName1, testutil.TagName2},
 					Enabled:    boolPtr(true),
 				},
 			},
@@ -408,8 +408,8 @@ func TestValidateFilter(t *testing.T) {
 			Version: "v1",
 			Repositories: []Repository{
 				{
-					Repository: common.RepoName1,
-					Tags:       []string{common.TagName1, common.TagName2},
+					Repository: testutil.RepoName1,
+					Tags:       []string{testutil.TagName1, testutil.TagName2},
 					Enabled:    boolPtr(true),
 				},
 			},
@@ -424,8 +424,8 @@ func TestValidateFilter(t *testing.T) {
 			TagConvention: "incremental",
 			Repositories: []Repository{
 				{
-					Repository: common.RepoName1,
-					Tags:       []string{common.TagName1, common.TagName2},
+					Repository: testutil.RepoName1,
+					Tags:       []string{testutil.TagName1, testutil.TagName2},
 					Enabled:    boolPtr(true),
 				},
 			},
@@ -440,8 +440,8 @@ func TestValidateFilter(t *testing.T) {
 			TagConvention: "floating",
 			Repositories: []Repository{
 				{
-					Repository: common.RepoName1,
-					Tags:       []string{common.TagName1, common.TagName2},
+					Repository: testutil.RepoName1,
+					Tags:       []string{testutil.TagName1, testutil.TagName2},
 					Enabled:    boolPtr(true),
 				},
 			},
@@ -456,8 +456,8 @@ func TestValidateFilter(t *testing.T) {
 			TagConvention: "invalid",
 			Repositories: []Repository{
 				{
-					Repository: common.RepoName1,
-					Tags:       []string{common.TagName1, common.TagName2},
+					Repository: testutil.RepoName1,
+					Tags:       []string{testutil.TagName1, testutil.TagName2},
 					Enabled:    boolPtr(true),
 				},
 			},
@@ -473,7 +473,7 @@ func TestValidateFilter(t *testing.T) {
 			Repositories: []Repository{
 				{
 					Repository: "",
-					Tags:       []string{common.TagName1, common.TagName2},
+					Tags:       []string{testutil.TagName1, testutil.TagName2},
 					Enabled:    boolPtr(true),
 				},
 			},
@@ -488,7 +488,7 @@ func TestValidateFilter(t *testing.T) {
 			TagConvention: "incremental",
 			Repositories: []Repository{
 				{
-					Repository: common.RepoName1,
+					Repository: testutil.RepoName1,
 					Tags:       []string{},
 					Enabled:    boolPtr(true),
 				},
@@ -504,7 +504,7 @@ func TestValidateFilter(t *testing.T) {
 			TagConvention: "incremental",
 			Repositories: []Repository{
 				{
-					Repository: common.RepoName1,
+					Repository: testutil.RepoName1,
 					Tags:       nil,
 					Enabled:    boolPtr(true),
 				},
@@ -520,7 +520,7 @@ func TestValidateFilter(t *testing.T) {
 			TagConvention: "incremental",
 			Repositories: []Repository{
 				{
-					Repository: common.RepoName1,
+					Repository: testutil.RepoName1,
 					Tags:       []string{""},
 					Enabled:    boolPtr(true),
 				},
@@ -536,7 +536,7 @@ func TestValidateFilter(t *testing.T) {
 			TagConvention: "incremental",
 			Repositories: []Repository{
 				{
-					Repository: common.RepoName1,
+					Repository: testutil.RepoName1,
 					Tags:       []string{"jammy-1", "jammy-patched"},
 					Enabled:    boolPtr(true),
 				},
@@ -553,7 +553,7 @@ func TestValidateFilter(t *testing.T) {
 			TagConvention: "incremental",
 			Repositories: []Repository{
 				{
-					Repository: common.RepoName1,
+					Repository: testutil.RepoName1,
 					Tags:       []string{"jammy-1000"},
 					Enabled:    boolPtr(true),
 				},
@@ -596,12 +596,12 @@ func TestIsNumeric(t *testing.T) {
 
 func TestContainsTag(t *testing.T) {
 	tagList := []acr.TagAttributesBase{
-		{Name: &common.TagName1},
-		{Name: &common.TagName2},
+		{Name: &testutil.TagName1},
+		{Name: &testutil.TagName2},
 	}
 	// 1. Should return true when the list contains the tag
 	t.Run("ContainsTagTest", func(t *testing.T) {
-		assert.True(t, containsTag(tagList, common.TagName1))
+		assert.True(t, containsTag(tagList, testutil.TagName1))
 	})
 	// 2. Should return false when the list does not contain the tag
 	t.Run("DoesNotContainTagTest", func(t *testing.T) {
@@ -609,7 +609,7 @@ func TestContainsTag(t *testing.T) {
 	})
 	// 3. Should return false when the list is empty
 	t.Run("EmptyListTest", func(t *testing.T) {
-		assert.False(t, containsTag([]acr.TagAttributesBase{}, common.TagName1))
+		assert.False(t, containsTag([]acr.TagAttributesBase{}, testutil.TagName1))
 	})
 	//4. Should return false when the tag is nil
 	t.Run("TagIsNilTest", func(t *testing.T) {

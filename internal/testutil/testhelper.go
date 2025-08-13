@@ -13,10 +13,14 @@ import (
 
 var (
 	// TestCtx is the default context used for testing.
-	TestCtx              = context.Background()
-	TestLoginURL         = "foo.azurecr.io"
-	TestRepo             = "bar"
-	TagName              = "latest"
+	TestCtx = context.Background()
+	// TestLoginURL is the mock ACR login URL used for testing.
+	TestLoginURL = "foo.azurecr.io"
+	// TestRepo is the mock repository name used for testing.
+	TestRepo = "bar"
+	// TagName is the default tag name used for testing.
+	TagName = "latest"
+	// TagName1 is a test tag name variant.
 	TagName1             = "jammy"
 	TagName2             = "jammy-20240808"
 	TagName3             = "jammy-20240627.1"

@@ -1,3 +1,5 @@
+// Package oras provides ORAS (OCI Registry As Storage) client functionality
+// for interacting with container registries using the ORAS protocol.
 package oras
 
 import (

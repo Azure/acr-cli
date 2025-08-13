@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
+// Package tag provides functionality for managing container image tags in Azure Container Registry.
 package tag
 
 import (

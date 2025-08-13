@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/Azure/acr-cli/cmd/common"
+	"github.com/Azure/acr-cli/cmd/repository"
 	"github.com/Azure/acr-cli/internal/api"
 	"github.com/Azure/acr-cli/internal/worker"
 	"github.com/dlclark/regexp2"
@@ -83,7 +83,7 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 			}
 
 			// A map is used to collect the regex tags for every repository.
-			tagFilters, err := common.CollectTagFilters(ctx, annotateParams.filters, acrClient.AutorestClient, annotateParams.filterTimeout, defaultRepoPageSize)
+			tagFilters, err := repository.CollectTagFilters(ctx, annotateParams.filters, acrClient.AutorestClient, annotateParams.filterTimeout, defaultRepoPageSize)
 			if err != nil {
 				return err
 			}
@@ -180,7 +180,7 @@ func annotateTags(ctx context.Context,
 		fmt.Printf("\nTags for this repository would be annotated: %s\n", repoName)
 	}
 
-	tagRegex, err := common.BuildRegexFilter(tagFilter, regexpMatchTimeoutSeconds)
+	tagRegex, err := repository.BuildRegexFilter(tagFilter, regexpMatchTimeoutSeconds)
 	if err != nil {
 		return -1, 0, err
 	}
@@ -283,7 +283,7 @@ func getManifestsToAnnotate(ctx context.Context,
 			}
 		}
 
-		newLastTag = common.GetLastTagFromResponse(resultTags)
+		newLastTag = repository.GetLastTagFromResponse(resultTags)
 		return manifestsToAnnotate, newLastTag, skippedCount, nil
 	}
 	return nil, "", 0, nil
@@ -307,7 +307,7 @@ func annotateUntaggedManifests(ctx context.Context,
 	// Contrary to getTagsToAnnotate, getManifests gets all the manifests at once.
 	// This was done because if there is a manifest that has no tag but is referenced by a multiarch manifest that has tags then it
 	// should not be annotated.
-	manifestsToAnnotate, err := common.GetUntaggedManifests(ctx, poolSize, acrClient, repoName, true, nil, dryRun, includeLocked)
+	manifestsToAnnotate, err := repository.GetUntaggedManifests(ctx, poolSize, acrClient, repoName, true, nil, dryRun, includeLocked)
 	if err != nil {
 		return -1, err
 	}
