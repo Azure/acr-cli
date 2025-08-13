@@ -54,7 +54,7 @@ func newCsscCmd(rootParams *rootParameters) *cobra.Command {
 		Short: "[Preview] Run cssc operations for a registry",
 		Long:  newCsscCmdLongMessage,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cmd.Help()
+			_ = cmd.Help()
 			return nil
 		},
 	}
@@ -144,11 +144,13 @@ func resolveRegistryCredentials(csscParams *csscParameters, loginURL string) {
 	if csscParams.username == "" || csscParams.password == "" {
 		store, err := orasauth.NewStore(csscParams.configs...)
 		if err != nil {
-			errors.Wrap(err, "error resolving authentication")
+			// Error occurred, but we'll continue without authentication
+			return
 		}
 		cred, err := store.Credential(context.Background(), loginURL)
 		if err != nil {
-			errors.Wrap(err, "error resolving authentication")
+			// Error occurred, but we'll continue without authentication
+			return
 		}
 		csscParams.username = cred.Username
 		csscParams.password = cred.Password

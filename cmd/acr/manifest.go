@@ -33,7 +33,7 @@ func newManifestCmd(rootParams *rootParameters) *cobra.Command {
 		Short: "Manage manifests inside a repository",
 		Long:  newManifestCmdLongMessage,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cmd.Help()
+			_ = cmd.Help()
 			return nil
 		},
 	}
@@ -47,7 +47,7 @@ func newManifestCmd(rootParams *rootParameters) *cobra.Command {
 	)
 	cmd.PersistentFlags().StringVar(&manifestParams.repoName, "repository", "", "The repository name")
 	// Since the repository will be needed in either subcommand it is marked as a required flag
-	cmd.MarkPersistentFlagRequired("repository")
+	_ = cmd.MarkPersistentFlagRequired("repository")
 
 	return cmd
 }

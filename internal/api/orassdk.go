@@ -119,7 +119,7 @@ func (o *ORASClient) getTarget(reference string) (repo *remote.Repository, err e
 
 	repo.SkipReferrersGC = true
 	repo.Client = o.client
-	repo.SetReferrersCapability(true)
+	_ = repo.SetReferrersCapability(true)
 	return repo, nil
 }
 

@@ -154,9 +154,9 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 	cmd.Flags().BoolVar(&annotateParams.includeLocked, "include-locked", false, "If the include-locked flag is set, locked manifests and tags (where writeEnabled is false) will be annotated")
 	cmd.Flags().IntVar(&annotateParams.concurrency, "concurrency", defaultPoolSize, annotatedConcurrencyDescription)
 	cmd.Flags().BoolP("help", "h", false, "Print usage")
-	cmd.MarkFlagRequired("filter")
-	cmd.MarkFlagRequired("artifact-type")
-	cmd.MarkFlagRequired("annotations")
+	_ = cmd.MarkFlagRequired("filter")
+	_ = cmd.MarkFlagRequired("artifact-type")
+	_ = cmd.MarkFlagRequired("annotations")
 	return cmd
 }
 

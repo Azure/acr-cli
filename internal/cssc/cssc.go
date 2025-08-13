@@ -127,7 +127,7 @@ func GetFilterFromFilterPolicy(ctx context.Context, filterPolicy string, loginUR
 
 // GetFilterFromFilePath reads the filter json from the specified file path and returns the Filter struct.
 func GetFilterFromFilePath(filePath string) (Filter, error) {
-	file, err := os.ReadFile(filePath)
+	file, err := os.ReadFile(filePath) // #nosec G304 -- filePath is user-provided filter file, this is expected CLI behavior
 	if err != nil {
 		return Filter{}, errors.Wrap(err, "error reading the filter json file from file path")
 	}
