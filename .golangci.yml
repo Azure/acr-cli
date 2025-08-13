@@ -1,22 +1,39 @@
+version: "2"
 run:
   concurrency: 2
-  deadline: 10m
-linters-settings:
-  golint:
-    min-confidence: 0
 linters:
-  disable-all: true
+  default: none
   enable:
-    - gofmt
-    - goimports
-    - revive
     - gosec
     - govet
     - ineffassign
+    - revive
     - unconvert
     - unused
-issues:
-  exclude-dirs:
-    - vendor
-    - docs
-    - baseimages
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - vendor
+      - docs
+      - baseimages
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - vendor
+      - docs
+      - baseimages
+      - third_party$
+      - builtin$
+      - examples$
