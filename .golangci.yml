@@ -1,6 +1,6 @@
 run:
   concurrency: 2
-  deadline: 10m
+  deadline: 15m
 linters-settings:
   golint:
     min-confidence: 0
