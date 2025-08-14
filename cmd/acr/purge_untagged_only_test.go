@@ -465,7 +465,7 @@ func TestPurgeCommandUntaggedOnlyValidation(t *testing.T) {
 		// Test that --ago and --untagged-only can be used together
 		untaggedOnly := true
 		ago := "1d"
-		
+
 		// This should not return an error anymore
 		assert.True(untaggedOnly, "untagged-only should be true")
 		assert.Equal("1d", ago, "ago should be accepted with untagged-only")
@@ -478,7 +478,7 @@ func TestPurgeCommandUntaggedOnlyValidation(t *testing.T) {
 		// Test that --keep and --untagged-only can be used together
 		untaggedOnly := true
 		keep := 5
-		
+
 		// This should not return an error anymore
 		assert.True(untaggedOnly, "untagged-only should be true")
 		assert.Equal(5, keep, "keep should be accepted with untagged-only")
