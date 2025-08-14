@@ -290,19 +290,31 @@ run_basic_tests() {
     assert_equals "1" "$repo2_final_manifests" "Only untagged manifests in filtered repo should be deleted"
     assert_equals "$repo3_initial_manifests" "$repo3_final_manifests" "Other repo should be unchanged"
     
-    # Test 3: --untagged-only should reject --ago flag
-    echo -e "\n${YELLOW}Test 3: Flag Validation${NC}"
-    echo -n "Testing --untagged-only with --ago (should fail)... "
-    local error_output=$("$ACR_CLI" purge --registry "$REGISTRY" --untagged-only --ago 1d 2>&1 || true)
-    assert_contains "$error_output" "ago flag is not applicable" "--ago should not be allowed with --untagged-only"
+    # Test 3: --untagged-only with --ago and --keep should work (new functionality)
+    echo -e "\n${YELLOW}Test 3: Age Filtering and Keep Functionality${NC}"
     
-    echo -n "Testing --untagged-only with --keep (should fail)... "
-    error_output=$("$ACR_CLI" purge --registry "$REGISTRY" --untagged-only --keep 2 2>&1 || true)
-    assert_contains "$error_output" "keep flag is not applicable" "--keep should not be allowed with --untagged-only"
+    # Test --ago filtering with dry run
+    echo -n "Testing --untagged-only with --ago (dry run)... "
+    local dry_run_output=$("$ACR_CLI" purge --registry "$REGISTRY" --untagged-only --ago 365d --dry-run 2>&1)
+    assert_success $? "--untagged-only with --ago should work"
+    assert_contains "$dry_run_output" "Number of manifests to be deleted:" "--ago should filter manifests by age"
     
-    # Test 4: --untagged and --untagged-only are mutually exclusive
+    # Test --keep functionality with dry run
+    echo -n "Testing --untagged-only with --keep (dry run)... "
+    dry_run_output=$("$ACR_CLI" purge --registry "$REGISTRY" --untagged-only --keep 2 --dry-run 2>&1)
+    assert_success $? "--untagged-only with --keep should work"
+    assert_contains "$dry_run_output" "Number of manifests to be deleted:" "--keep should preserve recent manifests"
+    
+    # Test combined --ago and --keep functionality
+    echo -n "Testing --untagged-only with --ago and --keep (dry run)... "
+    dry_run_output=$("$ACR_CLI" purge --registry "$REGISTRY" --untagged-only --ago 180d --keep 1 --dry-run 2>&1)
+    assert_success $? "--untagged-only with --ago and --keep should work together"
+    assert_contains "$dry_run_output" "Number of manifests to be deleted:" "--ago and --keep should work together"
+    
+    # Test 4: --untagged and --untagged-only are mutually exclusive  
+    echo -e "\n${YELLOW}Test 4: Flag Validation${NC}"
     echo -n "Testing --untagged with --untagged-only (should fail)... "
-    error_output=$("$ACR_CLI" purge --registry "$REGISTRY" --untagged --untagged-only --filter "test:.*" --ago 1d 2>&1 || true)
+    local error_output=$("$ACR_CLI" purge --registry "$REGISTRY" --untagged --untagged-only --filter "test:.*" --ago 1d 2>&1 || true)
     # Cobra uses different error message, check for either
     if echo "$error_output" | grep -qE "(mutually exclusive|are set none of the others can be)"; then
         echo -e "${GREEN}✓ --untagged and --untagged-only should be mutually exclusive${NC}"
@@ -419,6 +431,85 @@ run_comprehensive_tests() {
         local end_time=$(date +%s)
         echo "Duration: $((end_time - start_time))s"
     done
+}
+
+run_age_and_keep_tests() {
+    echo -e "\n${BLUE}=== Age Filtering and Keep Functionality Tests ===${NC}"
+    
+    # Create a repository with manifests we can test age filtering on
+    local repo="test-age-keep-$(date +%s)"
+    
+    # Create some tagged images first (these will generate untagged manifests when we untag them)
+    echo "Setting up test data for age and keep tests..."
+    for i in $(seq 1 5); do
+        create_test_image "$repo" "v$i"
+        sleep 1  # Ensure different timestamps
+    done
+    
+    # Wait a moment to ensure timestamps are different
+    sleep 2
+    
+    # Create more recent manifests
+    for i in $(seq 6 8); do
+        create_test_image "$repo" "v$i"
+        sleep 1
+    done
+    
+    # Remove tags to create untagged manifests with different ages
+    echo "Creating untagged manifests by removing tags..."
+    for i in $(seq 1 8); do
+        docker image rm "$REGISTRY/$repo:v$i" 2>/dev/null || true
+        az acr repository untag --name "$REGISTRY" --image "$repo:v$i" >/dev/null 2>&1 || true
+    done
+    
+    sleep 2
+    
+    # Test 1: Age filtering - delete only old manifests
+    echo -e "\n${YELLOW}Test 1: Age Filtering${NC}"
+    echo -n "Testing --ago filtering (dry run)... "
+    local initial_count=$(count_manifests_in_repo "$repo")
+    local output=$("$ACR_CLI" purge --registry "$REGISTRY" --filter "$repo:.*" --untagged-only --ago 3s --dry-run 2>&1)
+    assert_success $? "Age filtering should work"
+    
+    # Should report some manifests to be deleted (the older ones)
+    local to_delete=$(echo "$output" | grep "Number of manifests to be deleted:" | sed 's/.*: //')
+    if [[ "$to_delete" -gt 0 && "$to_delete" -lt "$initial_count" ]]; then
+        echo -e "${GREEN}✓ Age filtering works correctly${NC}"
+        ((TESTS_PASSED++))
+    else
+        echo -e "${RED}✗ Age filtering not working as expected${NC}"
+        ((TESTS_FAILED++))
+        FAILED_TESTS+=("Age filtering")
+    fi
+    
+    # Test 2: Keep functionality - preserve recent manifests
+    echo -e "\n${YELLOW}Test 2: Keep Functionality${NC}"
+    echo -n "Testing --keep functionality (dry run)... "
+    output=$("$ACR_CLI" purge --registry "$REGISTRY" --filter "$repo:.*" --untagged-only --keep 3 --dry-run 2>&1)
+    assert_success $? "Keep functionality should work"
+    
+    to_delete=$(echo "$output" | grep "Number of manifests to be deleted:" | sed 's/.*: //')
+    if [[ "$to_delete" -ge 0 && "$to_delete" -le $((initial_count - 3)) ]]; then
+        echo -e "${GREEN}✓ Keep functionality works correctly${NC}"
+        ((TESTS_PASSED++))
+    else
+        echo -e "${RED}✗ Keep functionality not working as expected${NC}"
+        ((TESTS_FAILED++))
+        FAILED_TESTS+=("Keep functionality")
+    fi
+    
+    # Test 3: Combined age and keep filtering
+    echo -e "\n${YELLOW}Test 3: Combined Age and Keep Filtering${NC}"
+    echo -n "Testing --ago with --keep (dry run)... "
+    output=$("$ACR_CLI" purge --registry "$REGISTRY" --filter "$repo:.*" --untagged-only --ago 5s --keep 2 --dry-run 2>&1)
+    assert_success $? "Combined age and keep filtering should work"
+    
+    to_delete=$(echo "$output" | grep "Number of manifests to be deleted:" | sed 's/.*: //')
+    echo -e "${GREEN}✓ Combined filtering reported $to_delete manifests to delete${NC}"
+    ((TESTS_PASSED++))
+    
+    # Clean up test repository
+    az acr repository delete --name "$REGISTRY" --image "$repo" --yes >/dev/null 2>&1 || true
 }
 
 run_edge_case_tests() {
@@ -539,18 +630,22 @@ case "$TEST_MODE" in
     edge-cases)
         run_edge_case_tests
         ;;
+    age-keep)
+        run_age_and_keep_tests
+        ;;
     performance)
         run_performance_tests
         ;;
     all)
         run_basic_tests
         run_comprehensive_tests
+        run_age_and_keep_tests
         run_edge_case_tests
         run_performance_tests
         ;;
     *)
         echo "Invalid test mode: $TEST_MODE"
-        echo "Options: all, basic, comprehensive, edge-cases, performance"
+        echo "Options: all, basic, comprehensive, age-keep, edge-cases, performance"
         exit 1
         ;;
 esac
