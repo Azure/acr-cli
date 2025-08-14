@@ -23,42 +23,40 @@ import (
 // The constants for this file are defined here.
 const (
 	newPurgeCmdLongMessage = `acr purge: untag old images and delete dangling manifests.`
-	purgeExampleMessage    = `  - Delete all tags that are older than 1 day in the example.azurecr.io registry inside the hello-world repository
+	purgeExampleMessage    = `  TAG DELETION EXAMPLES:
+  - Delete all tags that are older than 1 day in the hello-world repository
     	acr purge -r example --filter "hello-world:.*" --ago 1d
 
-  - Delete all tags that are older than 7 days in the example.azurecr.io registry inside all repositories
+  - Delete all tags that are older than 7 days in all repositories
 	    acr purge -r example --filter ".*:.*" --ago 7d 
 
-  - Delete all tags that are older than 7 days and begin with hello in the example.azurecr.io registry inside the hello-world repository
-    	acr purge -r example --filter "hello-world:^hello.*" --ago 7d 
-
-  - Delete all tags that are older than 7 days, begin with hello, keeping the latest 2 in example.azurecr.io registry inside the hello-world repository
+  - Delete tags older than 7 days that begin with "hello", keeping the latest 2
     	acr purge -r example --filter "hello-world:^hello.*" --ago 7d --keep 2
 
-  - Delete all tags that contain the word test in the tag name and are older than 5 days in the example.azurecr.io registry inside the hello-world 
-    repository, after that, remove the dangling manifests in the same repository
+  - Delete tags containing "test" that are older than 5 days, then clean up any dangling manifests left behind
 	acr purge -r example --filter "hello-world:\w*test\w*" --ago 5d --untagged 
 
-  - Delete only untagged manifests in all repositories in the example.azurecr.io registry
+  DANGLING MANIFEST CLEANUP EXAMPLES (--untagged-only is the primary way to clean up dangling manifests):
+  - Clean up ALL dangling manifests in all repositories
 	acr purge -r example --untagged-only
 
-  - Delete only untagged manifests in the hello-world repository in the example.azurecr.io registry
+  - Clean up dangling manifests only in the hello-world repository
 	acr purge -r example --filter "hello-world:.*" --untagged-only
 
-  - Delete untagged manifests older than 3 days in all repositories, keeping the 5 most recent
+  - Clean up dangling manifests older than 3 days, keeping the 5 most recent
 	acr purge -r example --untagged-only --ago 3d --keep 5
 
-  - Delete all tags older than 1 day in the example.azurecr.io registry inside the hello-world repository using the credentials found in 
-    the C://Users/docker/config.json path
+  ADVANCED OPTIONS:
+  - Use custom authentication config
 	acr purge -r example --filter "hello-world:.*" --ago 1d --config C://Users/docker/config.json
 
-  - Delete all tags older than 1 day in the example.azurecr.io registry inside the hello-world repository, with 4 purge tasks running concurrently
+  - Run with custom concurrency (4 parallel tasks)
 	acr purge -r example --filter "hello-world:.*" --ago 1d --concurrency 4
 
-  - Delete all tags that are older than 7 days in the example.azurecr.io registry inside all repositories, with a page size of 50 repositories
+  - Use custom page size for repository queries
 	acr purge -r example --filter ".*:.*" --ago 7d --repository-page-size 50
 
-  - Delete all tags that are older than 7 days in the example.azurecr.io registry inside all repositories, including locked manifests/tags
+  - Include locked manifests/tags in deletion
 	acr purge -r example --filter ".*:.*" --ago 7d --include-locked
 	`
 	maxPoolSize = 32 // The max number of parallel delete requests recommended by ACR server
@@ -185,12 +183,12 @@ func newPurgeCmd(rootParams *rootParameters) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().BoolVar(&purgeParams.untagged, "untagged", false, "If the untagged flag is set all the manifests that do not have any tags associated to them will be also purged, except if they belong to a manifest list that contains at least one tag")
-	cmd.Flags().BoolVar(&purgeParams.untaggedOnly, "untagged-only", false, "If the untagged-only flag is set, only untagged manifests will be purged without deleting any tags. When this flag is used, --filter becomes optional. --ago and --keep can be used to filter untagged manifests by age and keep the most recent ones")
+	cmd.Flags().BoolVar(&purgeParams.untagged, "untagged", false, "In addition to deleting tags (based on --filter and --ago), also delete untagged manifests that were left behind after tag deletion. This is typically used as a cleanup step after deleting tags. Note: This requires --filter and --ago to be specified")
+	cmd.Flags().BoolVar(&purgeParams.untaggedOnly, "untagged-only", false, "Clean up dangling manifests: Delete ONLY untagged manifests (manifests without any tags), without deleting any tags first. This is the primary way to clean up dangling manifests in your registry. Optional: Use --ago to delete only old untagged manifests, --keep to preserve recent ones, and --filter to target specific repositories")
 	cmd.Flags().BoolVar(&purgeParams.dryRun, "dry-run", false, "If the dry-run flag is set no manifest or tag will be deleted, the output would be the same as if they were deleted")
 	cmd.Flags().BoolVar(&purgeParams.includeLocked, "include-locked", false, "If the include-locked flag is set, locked manifests and tags (where deleteEnabled or writeEnabled is false) will be unlocked before deletion")
-	cmd.Flags().StringVar(&purgeParams.ago, "ago", "", "The tags and untagged manifests that were last updated before this duration will be deleted, the format is [number]d[string] where the first number represents an amount of days and the string is in a Go duration format (e.g. 2d3h6m selects images older than 2 days, 3 hours and 6 minutes). Maximum duration is capped at 150 years to prevent overflow")
-	cmd.Flags().IntVar(&purgeParams.keep, "keep", 0, "Number of latest to-be-deleted tags to keep, use this when you want to keep at least x number of latest tags that could be deleted meeting all other filter criteria")
+	cmd.Flags().StringVar(&purgeParams.ago, "ago", "", "Delete tags or untagged manifests that were last updated before this duration. Format: [number]d[string] where the first number represents days and the string is in Go duration format (e.g. 2d3h6m selects images older than 2 days, 3 hours and 6 minutes). Required when deleting tags, optional with --untagged-only. Maximum duration is capped at 150 years to prevent overflow")
+	cmd.Flags().IntVar(&purgeParams.keep, "keep", 0, "Number of latest to-be-deleted items to keep. For tag deletion: keep the x most recent tags that would otherwise be deleted. For --untagged-only: keep the x most recent untagged manifests")
 	cmd.Flags().StringArrayVarP(&purgeParams.filters, "filter", "f", nil, "Specify the repository and a regular expression filter for the tag name, if a tag matches the filter and is older than the duration specified in ago it will be deleted. Note: If backtracking is used in the regexp it's possible for the expression to run into an infinite loop. The default timeout is set to 1 minute for evaluation of any filter expression. Use the '--filter-timeout-seconds' option to set a different value.")
 	cmd.Flags().StringArrayVarP(&purgeParams.configs, "config", "c", nil, "Authentication config paths (e.g. C://Users/docker/config.json)")
 	cmd.Flags().Int64Var(&purgeParams.filterTimeout, "filter-timeout-seconds", defaultRegexpMatchTimeoutSeconds, "This limits the evaluation of the regex filter, and will return a timeout error if this duration is exceeded during a single evaluation. If written incorrectly a regexp filter with backtracking can result in an infinite loop.")
