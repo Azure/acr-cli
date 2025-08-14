@@ -101,10 +101,7 @@ func newPurgeCmd(rootParams *rootParameters) *cobra.Command {
 		Example: purgeExampleMessage,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			// Validate flag combinations before authentication
-			if purgeParams.untaggedOnly {
-				// When untagged-only is set, ago and keep flags are optional
-				// No validation needed for these flags when untagged-only is set
-			} else if !purgeParams.untagged {
+			if !purgeParams.untaggedOnly && !purgeParams.untagged {
 				// When neither untagged nor untagged-only is set, require filter and ago
 				if len(purgeParams.filters) == 0 {
 					return fmt.Errorf("--filter is required when not using --untagged-only")
