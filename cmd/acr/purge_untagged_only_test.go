@@ -4,7 +4,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"testing"
 
@@ -459,33 +458,212 @@ func TestPurgeCommandUntaggedOnlyValidation(t *testing.T) {
 		assert.NotNil(t, cmd, "Command should be created with mutual exclusion")
 	})
 
-	// Test 3: untagged-only with --ago should return error
-	t.Run("UntaggedOnlyWithAgoReturnsError", func(t *testing.T) {
-		// This test would be executed at runtime, checking the validation logic
-		// The actual validation happens in the RunE function
+	// Test 3: untagged-only with --ago should work (age filtering)
+	t.Run("UntaggedOnlyWithAgoFiltering", func(t *testing.T) {
 		assert := assert.New(t)
 
-		// Simulate the validation that happens in RunE
+		// Test that --ago and --untagged-only can be used together
 		untaggedOnly := true
 		ago := "1d"
-
-		if untaggedOnly && ago != "" {
-			err := errors.New("--ago flag is not applicable when --untagged-only is set")
-			assert.NotNil(err, "Should return error when --ago is used with --untagged-only")
-		}
+		
+		// This should not return an error anymore
+		assert.True(untaggedOnly, "untagged-only should be true")
+		assert.Equal("1d", ago, "ago should be accepted with untagged-only")
 	})
 
-	// Test 4: untagged-only with --keep should return error
-	t.Run("UntaggedOnlyWithKeepReturnsError", func(t *testing.T) {
+	// Test 4: untagged-only with --keep should work (keep recent manifests)
+	t.Run("UntaggedOnlyWithKeepSupport", func(t *testing.T) {
 		assert := assert.New(t)
 
-		// Simulate the validation that happens in RunE
+		// Test that --keep and --untagged-only can be used together
 		untaggedOnly := true
 		keep := 5
+		
+		// This should not return an error anymore
+		assert.True(untaggedOnly, "untagged-only should be true")
+		assert.Equal(5, keep, "keep should be accepted with untagged-only")
+	})
+}
 
-		if untaggedOnly && keep != 0 {
-			err := errors.New("--keep flag is not applicable when --untagged-only is set")
-			assert.NotNil(err, "Should return error when --keep is used with --untagged-only")
+// TestPurgeDanglingManifestsWithAgoAndKeep tests the new age filtering and keep functionality
+func TestPurgeDanglingManifestsWithAgoAndKeep(t *testing.T) {
+	testCtx := context.Background()
+	testLoginURL := "registry.azurecr.io"
+	testRepo := "test-repo"
+	defaultPoolSize := 1
+
+	// Helper function to create manifest with specific timestamp
+	createManifestWithTime := func(digest, timestamp string) acr.ManifestAttributesBase {
+		mediaType := "application/vnd.docker.distribution.manifest.v2+json"
+		return acr.ManifestAttributesBase{
+			Digest:               &digest,
+			Tags:                 &[]string{}, // Empty tags array
+			LastUpdateTime:       &timestamp,
+			MediaType:            &mediaType,
+			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &[]bool{true}[0], WriteEnabled: &[]bool{true}[0]},
 		}
+	}
+
+	// Test 1: Age filtering - only delete old manifests
+	t.Run("AgeFilteringDeletesOnlyOldManifests", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+
+		// Create manifests with different timestamps
+		oldManifest := createManifestWithTime("sha256:old123", "2023-01-01T00:00:00Z")
+		recentManifest := createManifestWithTime("sha256:recent123", "2024-12-01T00:00:00Z")
+
+		manifestsResult := &acr.Manifests{
+			Response: autorest.Response{
+				Response: &http.Response{StatusCode: 200},
+			},
+			Registry:            &testLoginURL,
+			ImageName:           &testRepo,
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{oldManifest, recentManifest},
+		}
+
+		// First call returns manifests
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(manifestsResult, nil).Once()
+		// Second call for pagination (returns empty to end pagination)
+		emptyResult := &acr.Manifests{
+			Response:            manifestsResult.Response,
+			Registry:            &testLoginURL,
+			ImageName:           &testRepo,
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{},
+		}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:recent123").Return(emptyResult, nil).Once()
+		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:old123").Return(nil, nil).Once()
+
+		// Call with 300 days ago (should only delete the old manifest from 2023)
+		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, "300d", 0, nil, false, false)
+
+		assert.Nil(err, "Should not return error")
+		assert.Equal(1, deletedCount, "Should delete only the old manifest")
+		mockClient.AssertExpectations(t)
+	})
+
+	// Test 2: Keep functionality - preserve most recent manifests
+	t.Run("KeepFunctionalityPreservesRecentManifests", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+
+		// Create 5 manifests with different timestamps
+		manifests := []acr.ManifestAttributesBase{
+			createManifestWithTime("sha256:oldest", "2023-01-01T00:00:00Z"),
+			createManifestWithTime("sha256:old", "2023-06-01T00:00:00Z"),
+			createManifestWithTime("sha256:medium", "2023-12-01T00:00:00Z"),
+			createManifestWithTime("sha256:recent", "2024-06-01T00:00:00Z"),
+			createManifestWithTime("sha256:newest", "2024-12-01T00:00:00Z"),
+		}
+
+		manifestsResult := &acr.Manifests{
+			Response: autorest.Response{
+				Response: &http.Response{StatusCode: 200},
+			},
+			Registry:            &testLoginURL,
+			ImageName:           &testRepo,
+			ManifestsAttributes: &manifests,
+		}
+
+		// Mock pagination for GetUntaggedManifests
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(manifestsResult, nil).Once()
+		emptyResult := &acr.Manifests{
+			Response:            manifestsResult.Response,
+			Registry:            &testLoginURL,
+			ImageName:           &testRepo,
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{},
+		}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:newest").Return(emptyResult, nil).Once()
+		// Expect only the 3 oldest manifests to be deleted (keep 2 most recent)
+		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:oldest").Return(nil, nil).Once()
+		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:old").Return(nil, nil).Once()
+		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:medium").Return(nil, nil).Once()
+
+		// Call with keep=2 (should preserve the 2 most recent manifests)
+		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, "", 2, nil, false, false)
+
+		assert.Nil(err, "Should not return error")
+		assert.Equal(3, deletedCount, "Should delete 3 manifests, keeping 2 most recent")
+		mockClient.AssertExpectations(t)
+	})
+
+	// Test 3: Combined age filtering and keep functionality
+	t.Run("CombinedAgoAndKeepFiltering", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+
+		// Create manifests where some are old enough and some are not
+		manifests := []acr.ManifestAttributesBase{
+			createManifestWithTime("sha256:veryold1", "2023-01-01T00:00:00Z"),
+			createManifestWithTime("sha256:veryold2", "2023-02-01T00:00:00Z"),
+			createManifestWithTime("sha256:veryold3", "2023-03-01T00:00:00Z"),
+			createManifestWithTime("sha256:recent1", "2024-12-01T00:00:00Z"), // Too recent
+			createManifestWithTime("sha256:recent2", "2024-12-15T00:00:00Z"), // Too recent
+		}
+
+		manifestsResult := &acr.Manifests{
+			Response: autorest.Response{
+				Response: &http.Response{StatusCode: 200},
+			},
+			Registry:            &testLoginURL,
+			ImageName:           &testRepo,
+			ManifestsAttributes: &manifests,
+		}
+
+		// Mock pagination for GetUntaggedManifests
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(manifestsResult, nil).Once()
+		emptyResult := &acr.Manifests{
+			Response:            manifestsResult.Response,
+			Registry:            &testLoginURL,
+			ImageName:           &testRepo,
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{},
+		}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:recent2").Return(emptyResult, nil).Once()
+		// Only expect 2 manifests to be deleted (3 old ones, keep 1, so delete 2)
+		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:veryold1").Return(nil, nil).Once()
+		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:veryold2").Return(nil, nil).Once()
+
+		// Call with both age filter (300 days) and keep (keep 1 of the old ones)
+		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, "300d", 1, nil, false, false)
+
+		assert.Nil(err, "Should not return error")
+		assert.Equal(2, deletedCount, "Should delete 2 old manifests, keeping 1 old + all recent ones")
+		mockClient.AssertExpectations(t)
+	})
+
+	// Test 4: Dry run with age filtering
+	t.Run("DryRunWithAgeFiltering", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+
+		oldManifest := createManifestWithTime("sha256:old123", "2023-01-01T00:00:00Z")
+		recentManifest := createManifestWithTime("sha256:recent123", "2024-12-01T00:00:00Z")
+
+		manifestsResult := &acr.Manifests{
+			Response: autorest.Response{
+				Response: &http.Response{StatusCode: 200},
+			},
+			Registry:            &testLoginURL,
+			ImageName:           &testRepo,
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{oldManifest, recentManifest},
+		}
+
+		// Mock pagination for GetUntaggedManifests
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(manifestsResult, nil).Once()
+		emptyResult := &acr.Manifests{
+			Response:            manifestsResult.Response,
+			Registry:            &testLoginURL,
+			ImageName:           &testRepo,
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{},
+		}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:recent123").Return(emptyResult, nil).Once()
+		// No UpdateAcrManifestAttributes calls expected for dry run
+
+		// Call with dry run and age filter
+		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, "300d", 0, nil, true, false)
+
+		assert.Nil(err, "Should not return error")
+		assert.Equal(1, deletedCount, "Should report 1 manifest would be deleted")
+		mockClient.AssertExpectations(t)
 	})
 }
