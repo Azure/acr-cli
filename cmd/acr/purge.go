@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
@@ -43,6 +44,9 @@ const (
 
   - Delete only untagged manifests in the hello-world repository in the example.azurecr.io registry
 	acr purge -r example --filter "hello-world:.*" --untagged-only
+
+  - Delete untagged manifests older than 3 days in all repositories, keeping the 5 most recent
+	acr purge -r example --untagged-only --ago 3d --keep 5
 
   - Delete all tags older than 1 day in the example.azurecr.io registry inside the hello-world repository using the credentials found in 
     the C://Users/docker/config.json path
@@ -99,13 +103,8 @@ func newPurgeCmd(rootParams *rootParameters) *cobra.Command {
 		RunE: func(_ *cobra.Command, _ []string) error {
 			// Validate flag combinations before authentication
 			if purgeParams.untaggedOnly {
-				// When untagged-only is set, ago and keep flags are not applicable
-				if purgeParams.ago != "" {
-					return fmt.Errorf("--ago flag is not applicable when --untagged-only is set")
-				}
-				if purgeParams.keep != 0 {
-					return fmt.Errorf("--keep flag is not applicable when --untagged-only is set")
-				}
+				// When untagged-only is set, ago and keep flags are optional
+				// No validation needed for these flags when untagged-only is set
 			} else if !purgeParams.untagged {
 				// When neither untagged nor untagged-only is set, require filter and ago
 				if len(purgeParams.filters) == 0 {
@@ -186,7 +185,7 @@ func newPurgeCmd(rootParams *rootParameters) *cobra.Command {
 	}
 
 	cmd.Flags().BoolVar(&purgeParams.untagged, "untagged", false, "If the untagged flag is set all the manifests that do not have any tags associated to them will be also purged, except if they belong to a manifest list that contains at least one tag")
-	cmd.Flags().BoolVar(&purgeParams.untaggedOnly, "untagged-only", false, "If the untagged-only flag is set, only untagged manifests will be purged without deleting any tags. When this flag is used, --ago and --filter become optional")
+	cmd.Flags().BoolVar(&purgeParams.untaggedOnly, "untagged-only", false, "If the untagged-only flag is set, only untagged manifests will be purged without deleting any tags. When this flag is used, --filter becomes optional. --ago and --keep can be used to filter untagged manifests by age and keep the most recent ones")
 	cmd.Flags().BoolVar(&purgeParams.dryRun, "dry-run", false, "If the dry-run flag is set no manifest or tag will be deleted, the output would be the same as if they were deleted")
 	cmd.Flags().BoolVar(&purgeParams.includeLocked, "include-locked", false, "If the include-locked flag is set, locked manifests and tags (where deleteEnabled or writeEnabled is false) will be unlocked before deletion")
 	cmd.Flags().StringVar(&purgeParams.ago, "ago", "", "The tags that were last updated before this duration will be deleted, the format is [number]d[string] where the first number represents an amount of days and the string is in a Go duration format (e.g. 2d3h6m selects images older than 2 days, 3 hours and 6 minutes)")
@@ -235,7 +234,7 @@ func purge(ctx context.Context,
 		singleDeletedManifestsCount := 0
 		// If the untagged flag is set or untagged-only mode is enabled, delete manifests
 		if removeUtaggedManifests {
-			singleDeletedManifestsCount, err = purgeDanglingManifests(ctx, acrClient, repoParallelism, loginURL, repoName, manifestToTagsCountMap, dryRun, includeLocked)
+			singleDeletedManifestsCount, err = purgeDanglingManifests(ctx, acrClient, repoParallelism, loginURL, repoName, tagDeletionSince, tagsToKeep, manifestToTagsCountMap, dryRun, includeLocked)
 			if err != nil {
 				return deletedTagsCount, deletedManifestsCount, fmt.Errorf("failed to purge manifests: %w", err)
 			}
@@ -416,7 +415,9 @@ func getTagsToDelete(ctx context.Context,
 
 // purgeDanglingManifests deletes all manifests that do not have any tags associated with them.
 // except the ones that are referenced by a multiarch manifest or that have subject.
-func purgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, repoParallelism int, loginURL string, repoName string, manifestToTagsCountMap map[string]int, dryRun bool, includeLocked bool) (int, error) {
+// If ago is provided, only manifests older than the specified duration will be deleted.
+// If keep is provided, the specified number of most recent manifests will be kept.
+func purgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, repoParallelism int, loginURL string, repoName string, ago string, keep int, manifestToTagsCountMap map[string]int, dryRun bool, includeLocked bool) (int, error) {
 	if dryRun {
 		fmt.Printf("Would delete manifests for repository: %s\n", repoName)
 	} else {
@@ -428,6 +429,47 @@ func purgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInter
 	manifestsToDelete, err := common.GetUntaggedManifests(ctx, repoParallelism, acrClient, repoName, false, manifestToTagsCountMap, dryRun, includeLocked)
 	if err != nil {
 		return -1, err
+	}
+
+	// Filter by age if ago parameter is provided
+	if ago != "" {
+		agoDuration, err := parseDuration(ago)
+		if err != nil {
+			return -1, err
+		}
+		timeToCompare := time.Now().UTC().Add(agoDuration)
+
+		filteredManifests := []acr.ManifestAttributesBase{}
+		for _, manifest := range manifestsToDelete {
+			if manifest.LastUpdateTime != nil {
+				lastUpdateTime, err := time.Parse(time.RFC3339Nano, *manifest.LastUpdateTime)
+				if err != nil {
+					return -1, err
+				}
+				if lastUpdateTime.Before(timeToCompare) {
+					filteredManifests = append(filteredManifests, manifest)
+				}
+			}
+		}
+		manifestsToDelete = filteredManifests
+	}
+
+	// Apply keep logic if keep parameter is provided
+	if keep > 0 && len(manifestsToDelete) > keep {
+		// Sort manifests by LastUpdateTime (newest first)
+		sort.Slice(manifestsToDelete, func(i, j int) bool {
+			if manifestsToDelete[i].LastUpdateTime == nil || manifestsToDelete[j].LastUpdateTime == nil {
+				return false
+			}
+			tiI, errI := time.Parse(time.RFC3339Nano, *manifestsToDelete[i].LastUpdateTime)
+			tiJ, errJ := time.Parse(time.RFC3339Nano, *manifestsToDelete[j].LastUpdateTime)
+			if errI != nil || errJ != nil {
+				return false
+			}
+			return tiI.After(tiJ)
+		})
+		// Keep only manifests after the 'keep' count
+		manifestsToDelete = manifestsToDelete[keep:]
 	}
 
 	// If dryRun is set to true then no manifests will be deleted, but the number of manifests that would be deleted is returned. Additionally,
