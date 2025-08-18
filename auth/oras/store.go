@@ -58,7 +58,7 @@ func loadConfigFile(path string) (*configfile.ConfigFile, error) {
 			return nil, err
 		}
 	} else {
-		file, err := os.Open(path)
+		file, err := os.Open(path) // #nosec G304 -- path is user-provided config file path, this is expected
 		if err != nil {
 			return nil, err
 		}

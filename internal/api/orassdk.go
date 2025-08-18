@@ -31,6 +31,7 @@ type GraphTarget interface {
 	Inner() oras.GraphTarget
 }
 
+// DiscoverLifecycleAnnotation checks if the given reference has lifecycle annotation support.
 func (o *ORASClient) DiscoverLifecycleAnnotation(ctx context.Context, reference string, artifactType string) (bool, error) {
 	ref, err := o.getTarget(reference)
 	if err != nil {
@@ -57,6 +58,7 @@ func (o *ORASClient) DiscoverLifecycleAnnotation(ctx context.Context, reference 
 // type packFunc func() (ocispec.Descriptor, error)
 // type copyFunc func(desc ocispec.Descriptor) error
 
+// Annotate adds annotations to a manifest at the given reference.
 func (o *ORASClient) Annotate(ctx context.Context, reference string, artifactType string, annotationsArg map[string]string) error {
 
 	dst, err := o.getTarget(reference)
@@ -117,10 +119,11 @@ func (o *ORASClient) getTarget(reference string) (repo *remote.Repository, err e
 
 	repo.SkipReferrersGC = true
 	repo.Client = o.client
-	repo.SetReferrersCapability(true)
+	_ = repo.SetReferrersCapability(true)
 	return repo, nil
 }
 
+// GetORASClientWithAuth creates an ORAS client with authentication credentials.
 func GetORASClientWithAuth(username string, password string, configs []string) (*ORASClient, error) {
 	clientOpts := orasauth.ClientOptions{}
 	if username != "" && password != "" {

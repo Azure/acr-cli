@@ -1,7 +1,9 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
-package common
+// Package repository provides functions for managing container registry repositories,
+// including manifest operations, tag filtering, and dependency resolution.
+package repository
 
 import (
 	"context"
@@ -32,6 +34,7 @@ const (
 	mediaTypeArtifactManifest                             = "application/vnd.oci.artifact.manifest.v1+json"
 )
 
+// GetAllRepositoryNames retrieves all repository names from the registry using pagination.
 func GetAllRepositoryNames(ctx context.Context, client acrapi.BaseClientAPI, pageSize int32) ([]string, error) {
 	allRepoNames := make([]string, 0)
 	lastName := ""
@@ -128,6 +131,7 @@ func CollectTagFilters(ctx context.Context, rawFilters []string, client acrapi.B
 	return tagFilters, nil
 }
 
+// GetLastTagFromResponse extracts the last tag from pagination headers in the response.
 func GetLastTagFromResponse(resultTags *acr.RepositoryTagsType) string {
 	// The lastTag is updated to keep the for loop going.
 	if resultTags.Header == nil {
