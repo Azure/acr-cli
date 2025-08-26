@@ -53,6 +53,10 @@ type AcrCLIClient struct {
 	// accessTokenExp refers to the expiration time for the access token, it is in a unix time format represented by a
 	// 64 bit integer.
 	accessTokenExp int64
+	// currentScopes tracks the scopes that the current token was issued for
+	currentScopes []string
+	// isABAC indicates if this is an ABAC-enabled registry that requires repository-specific scopes
+	isABAC bool
 }
 
 // LoginURL returns the FQDN for a registry.
@@ -99,6 +103,7 @@ func newAcrCLIClientWithBearerAuth(loginURL string, refreshToken string) (AcrCLI
 	// This maintains backward compatibility while supporting ABAC registries
 	scope := "registry:catalog:* repository:*:pull"
 	accessTokenResponse, err := newAcrCLIClient.AutorestClient.GetAcrAccessToken(ctx, loginURL, scope, refreshToken)
+	isABAC := false
 	if err != nil {
 		// If the above fails (likely ABAC registry), fallback to catalog-only scope
 		// Repository-specific scopes will be requested when needed
@@ -106,13 +111,20 @@ func newAcrCLIClientWithBearerAuth(loginURL string, refreshToken string) (AcrCLI
 		if err != nil {
 			return newAcrCLIClient, err
 		}
+		isABAC = true
 	}
 	token := &adal.Token{
 		AccessToken:  *accessTokenResponse.AccessToken,
 		RefreshToken: refreshToken,
 	}
 	newAcrCLIClient.token = token
+	newAcrCLIClient.isABAC = isABAC
 	newAcrCLIClient.AutorestClient.Authorizer = autorest.NewBearerAuthorizer(token)
+	
+	// Parse and store the scopes from the token
+	scopes, _ := getScopesFromToken(token.AccessToken)
+	newAcrCLIClient.currentScopes = scopes
+	
 	// The expiration time is stored in the struct to make it easy to determine if a token is expired.
 	exp, err := getExpiration(token.AccessToken)
 	if err != nil {
@@ -174,6 +186,11 @@ func refreshAcrCLIClientToken(ctx context.Context, c *AcrCLIClient, scope string
 	}
 	c.token = token
 	c.AutorestClient.Authorizer = autorest.NewBearerAuthorizer(token)
+	
+	// Parse and store the new scopes from the refreshed token
+	scopes, _ := getScopesFromToken(token.AccessToken)
+	c.currentScopes = scopes
+	
 	exp, err := getExpiration(token.AccessToken)
 	if err != nil {
 		return err
@@ -191,19 +208,104 @@ func refreshTokenForRepository(ctx context.Context, c *AcrCLIClient, repoName st
 	return refreshAcrCLIClientToken(ctx, c, scope)
 }
 
-// getExpiration is used to obtain the expiration out of a jwt token.
-func getExpiration(token string) (int64, error) {
-	parser := jwt.Parser{SkipClaimsValidation: true}
-	mapC := jwt.MapClaims{}
-	// Since we only need the expiration time there is no need for verifying the signature of the token.
-	_, _, err := parser.ParseUnverified(token, mapC)
+// getExpiration is used to obtain the expiration out of a jwt token using proper JWT methods.
+func getExpiration(tokenStr string) (int64, error) {
+	// Parse the token without verification to extract claims
+	token, _, err := jwt.NewParser().ParseUnverified(tokenStr, jwt.MapClaims{})
 	if err != nil {
 		return 0, err
 	}
-	if fExp, ok := mapC["exp"].(float64); ok {
+	
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return 0, errors.New("unable to parse token claims")
+	}
+	
+	if fExp, ok := claims["exp"].(float64); ok {
 		return int64(fExp), nil
 	}
 	return 0, errors.New("unable to obtain expiration date for token")
+}
+
+// getScopesFromToken extracts the access scopes from a JWT token using proper JWT methods
+func getScopesFromToken(tokenStr string) ([]string, error) {
+	// Parse the token without verification to extract claims
+	token, _, err := jwt.NewParser().ParseUnverified(tokenStr, jwt.MapClaims{})
+	if err != nil {
+		return nil, err
+	}
+	
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return nil, errors.New("unable to parse token claims")
+	}
+	
+	// ACR tokens typically have "access" claim with scopes
+	if access, ok := claims["access"]; ok {
+		if accessList, ok := access.([]interface{}); ok {
+			var scopes []string
+			for _, item := range accessList {
+				if accessMap, ok := item.(map[string]interface{}); ok {
+					if scope, ok := accessMap["type"].(string); ok {
+						scopeStr := scope
+						if name, ok := accessMap["name"].(string); ok {
+							scopeStr += ":" + name
+						}
+						if actions, ok := accessMap["actions"].([]interface{}); ok {
+							var actionStrs []string
+							for _, action := range actions {
+								if actionStr, ok := action.(string); ok {
+									actionStrs = append(actionStrs, actionStr)
+								}
+							}
+							if len(actionStrs) > 0 {
+								scopeStr += ":" + strings.Join(actionStrs, ",")
+							}
+						}
+						scopes = append(scopes, scopeStr)
+					}
+				}
+			}
+			return scopes, nil
+		}
+	}
+	
+	// Fallback: check for "scope" claim (some implementations use this)
+	if scope, ok := claims["scope"].(string); ok {
+		return strings.Split(scope, " "), nil
+	}
+	
+	return []string{}, nil
+}
+
+// hasRequiredScope checks if the current token has the required scope for a repository operation
+func (c *AcrCLIClient) hasRequiredScope(repoName string) bool {
+	if c.token == nil || len(c.currentScopes) == 0 {
+		// No token or no scopes tracked
+		return false
+	}
+	
+	// Check if we have a wildcard repository scope (for non-ABAC registries)
+	for _, scope := range c.currentScopes {
+		if scope == "repository:*:pull" || scope == "repository:*:*" {
+			return true
+		}
+		// Check for specific repository scope
+		if strings.HasPrefix(scope, fmt.Sprintf("repository:%s:", repoName)) {
+			// Check if we have at least pull permission
+			parts := strings.Split(scope, ":")
+			if len(parts) >= 3 {
+				permissions := strings.Split(parts[2], ",")
+				for _, perm := range permissions {
+					if perm == "pull" || perm == "push" || perm == "delete" || perm == "*" {
+						return true
+					}
+				}
+			}
+		}
+	}
+	
+	return false
 }
 
 // isExpired return true when the token inside an acrClient is expired and a new should be requested.
@@ -218,7 +320,8 @@ func (c *AcrCLIClient) isExpired() bool {
 
 // GetAcrTags list the tags of a repository with their attributes.
 func (c *AcrCLIClient) GetAcrTags(ctx context.Context, repoName string, orderBy string, last string) (*acrapi.RepositoryTagsType, error) {
-	if c.isExpired() {
+	// Check if token is expired OR if we don't have the required scope for this repository
+	if c.isExpired() || (c.isABAC && !c.hasRequiredScope(repoName)) {
 		if err := refreshTokenForRepository(ctx, c, repoName); err != nil {
 			return nil, err
 		}
@@ -233,7 +336,8 @@ func (c *AcrCLIClient) GetAcrTags(ctx context.Context, repoName string, orderBy 
 
 // DeleteAcrTag deletes the tag by reference.
 func (c *AcrCLIClient) DeleteAcrTag(ctx context.Context, repoName string, reference string) (*autorest.Response, error) {
-	if c.isExpired() {
+	// Check if token is expired OR if we don't have the required scope for this repository
+	if c.isExpired() || (c.isABAC && !c.hasRequiredScope(repoName)) {
 		if err := refreshTokenForRepository(ctx, c, repoName); err != nil {
 			return nil, err
 		}
@@ -247,7 +351,8 @@ func (c *AcrCLIClient) DeleteAcrTag(ctx context.Context, repoName string, refere
 
 // GetAcrManifests list all the manifest in a repository with their attributes.
 func (c *AcrCLIClient) GetAcrManifests(ctx context.Context, repoName string, orderBy string, last string) (*acrapi.Manifests, error) {
-	if c.isExpired() {
+	// Check if token is expired OR if we don't have the required scope for this repository
+	if c.isExpired() || (c.isABAC && !c.hasRequiredScope(repoName)) {
 		if err := refreshTokenForRepository(ctx, c, repoName); err != nil {
 			return nil, err
 		}
@@ -261,7 +366,8 @@ func (c *AcrCLIClient) GetAcrManifests(ctx context.Context, repoName string, ord
 
 // DeleteManifest deletes a manifest using the digest as a reference.
 func (c *AcrCLIClient) DeleteManifest(ctx context.Context, repoName string, reference string) (*autorest.Response, error) {
-	if c.isExpired() {
+	// Check if token is expired OR if we don't have the required scope for this repository
+	if c.isExpired() || (c.isABAC && !c.hasRequiredScope(repoName)) {
 		if err := refreshTokenForRepository(ctx, c, repoName); err != nil {
 			return nil, err
 		}
@@ -276,7 +382,8 @@ func (c *AcrCLIClient) DeleteManifest(ctx context.Context, repoName string, refe
 // GetManifest fetches a manifest (could be a Manifest List or a v2 manifest) and returns it as a byte array.
 // This is used when a manifest list is wanted, first the bytes are obtained and then unmarshalled into a new struct.
 func (c *AcrCLIClient) GetManifest(ctx context.Context, repoName string, reference string) ([]byte, error) {
-	if c.isExpired() {
+	// Check if token is expired OR if we don't have the required scope for this repository
+	if c.isExpired() || (c.isABAC && !c.hasRequiredScope(repoName)) {
 		if err := refreshTokenForRepository(ctx, c, repoName); err != nil {
 			return nil, err
 		}
@@ -316,7 +423,8 @@ func (c *AcrCLIClient) GetManifest(ctx context.Context, repoName string, referen
 
 // GetAcrManifestAttributes gets the attributes of a manifest.
 func (c *AcrCLIClient) GetAcrManifestAttributes(ctx context.Context, repoName string, reference string) (*acrapi.ManifestAttributes, error) {
-	if c.isExpired() {
+	// Check if token is expired OR if we don't have the required scope for this repository
+	if c.isExpired() || (c.isABAC && !c.hasRequiredScope(repoName)) {
 		if err := refreshTokenForRepository(ctx, c, repoName); err != nil {
 			return nil, err
 		}
@@ -330,7 +438,8 @@ func (c *AcrCLIClient) GetAcrManifestAttributes(ctx context.Context, repoName st
 
 // UpdateAcrTagAttributes updates tag attributes to enable/disable deletion and writing.
 func (c *AcrCLIClient) UpdateAcrTagAttributes(ctx context.Context, repoName string, reference string, value *acrapi.ChangeableAttributes) (*autorest.Response, error) {
-	if c.isExpired() {
+	// Check if token is expired OR if we don't have the required scope for this repository
+	if c.isExpired() || (c.isABAC && !c.hasRequiredScope(repoName)) {
 		if err := refreshTokenForRepository(ctx, c, repoName); err != nil {
 			return nil, err
 		}
@@ -344,7 +453,8 @@ func (c *AcrCLIClient) UpdateAcrTagAttributes(ctx context.Context, repoName stri
 
 // UpdateAcrManifestAttributes updates manifest attributes to enable/disable deletion and writing.
 func (c *AcrCLIClient) UpdateAcrManifestAttributes(ctx context.Context, repoName string, reference string, value *acrapi.ChangeableAttributes) (*autorest.Response, error) {
-	if c.isExpired() {
+	// Check if token is expired OR if we don't have the required scope for this repository
+	if c.isExpired() || (c.isABAC && !c.hasRequiredScope(repoName)) {
 		if err := refreshTokenForRepository(ctx, c, repoName); err != nil {
 			return nil, err
 		}
