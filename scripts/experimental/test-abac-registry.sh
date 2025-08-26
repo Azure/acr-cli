@@ -360,10 +360,10 @@ test_abac_permission_scoping() {
     echo -e "\n${CYAN}Testing repository-specific operations...${NC}"
     
     # Delete tags from repo1 only
-    "$ACR_CLI" purge --registry "$REGISTRY" --filter "$repo1:tag1" --ago 0d >/dev/null 2>&1
+    run_acr_cli purge --registry "$REGISTRY" --filter "$repo1:tag1" --ago 0d >/dev/null 2>&1
     
-    local tags1=$("$ACR_CLI" tag list --registry "$REGISTRY" --repository "$repo1" 2>&1)
-    local tags2=$("$ACR_CLI" tag list --registry "$REGISTRY" --repository "$repo2" 2>&1)
+    local tags1=$(run_acr_cli tag list --registry "$REGISTRY" --repository "$repo1" 2>&1)
+    local tags2=$(run_acr_cli tag list --registry "$REGISTRY" --repository "$repo2" 2>&1)
     
     assert_not_contains "$tags1" "tag1" "tag1 should be deleted from repo1"
     assert_contains "$tags1" "tag2" "tag2 should still exist in repo1"
@@ -374,7 +374,7 @@ test_abac_permission_scoping() {
     echo -e "\n${CYAN}Testing cross-repository operations...${NC}"
     
     # Try to delete from both repositories using wildcard
-    "$ACR_CLI" purge --registry "$REGISTRY" --filter "abac-test-scope.*:tag2" --ago 0d >/dev/null 2>&1
+    run_acr_cli purge --registry "$REGISTRY" --filter "abac-test-scope.*:tag2" --ago 0d >/dev/null 2>&1
     
     tags1=$("$ACR_CLI" tag list --registry "$REGISTRY" --repository "$repo1" 2>&1 || echo "")
     tags2=$("$ACR_CLI" tag list --registry "$REGISTRY" --repository "$repo2" 2>&1 || echo "")
@@ -412,11 +412,11 @@ test_abac_authentication() {
     
     # Perform multiple operations that might trigger token refresh
     for i in 1 3 5 7 9; do
-        "$ACR_CLI" purge --registry "$REGISTRY" --filter "$repo:v$i" --ago 0d >/dev/null 2>&1
+        run_acr_cli purge --registry "$REGISTRY" --filter "$repo:v$i" --ago 0d >/dev/null 2>&1
     done
     
     # Verify remaining tags
-    local tags=$("$ACR_CLI" tag list --registry "$REGISTRY" --repository "$repo" 2>&1)
+    local tags=$(run_acr_cli tag list --registry "$REGISTRY" --repository "$repo" 2>&1)
     
     for i in 2 4 6 8 10; do
         assert_contains "$tags" "v$i" "v$i should still exist"
@@ -438,9 +438,9 @@ test_abac_authentication() {
     done
     
     # Delete all in one operation
-    "$ACR_CLI" purge --registry "$REGISTRY" --filter "$repo:batch.*" --ago 0d >/dev/null 2>&1
+    run_acr_cli purge --registry "$REGISTRY" --filter "$repo:batch.*" --ago 0d >/dev/null 2>&1
     
-    tags=$("$ACR_CLI" tag list --registry "$REGISTRY" --repository "$repo" 2>&1 || echo "")
+    tags=$(run_acr_cli tag list --registry "$REGISTRY" --repository "$repo" 2>&1 || echo "")
     
     # Should be empty or contain only system tags
     local tag_count=$(echo "$tags" | grep -c "$REGISTRY/$repo:" || echo 0)
@@ -489,9 +489,9 @@ test_abac_locked_images() {
     # Test 1: Purge without --include-locked
     echo -e "\n${CYAN}Testing purge without --include-locked...${NC}"
     
-    "$ACR_CLI" purge --registry "$REGISTRY" --filter "$repo:lock.*" --ago 0d >/dev/null 2>&1
+    run_acr_cli purge --registry "$REGISTRY" --filter "$repo:lock.*" --ago 0d >/dev/null 2>&1
     
-    local tags=$("$ACR_CLI" tag list --registry "$REGISTRY" --repository "$repo" 2>&1)
+    local tags=$(run_acr_cli tag list --registry "$REGISTRY" --repository "$repo" 2>&1)
     
     assert_not_contains "$tags" "lock1" "lock1 (unlocked) should be deleted"
     assert_contains "$tags" "lock2" "lock2 (locked) should remain"
@@ -501,9 +501,9 @@ test_abac_locked_images() {
     # Test 2: Purge with --include-locked
     echo -e "\n${CYAN}Testing purge with --include-locked...${NC}"
     
-    "$ACR_CLI" purge --registry "$REGISTRY" --filter "$repo:lock.*" --ago 0d --include-locked >/dev/null 2>&1
+    run_acr_cli purge --registry "$REGISTRY" --filter "$repo:lock.*" --ago 0d --include-locked >/dev/null 2>&1
     
-    tags=$("$ACR_CLI" tag list --registry "$REGISTRY" --repository "$repo" 2>&1 || echo "")
+    tags=$(run_acr_cli tag list --registry "$REGISTRY" --repository "$repo" 2>&1 || echo "")
     
     assert_not_contains "$tags" "lock2" "lock2 should be deleted with --include-locked"
     assert_not_contains "$tags" "lock4" "lock4 should be deleted with --include-locked"
@@ -556,7 +556,7 @@ test_abac_concurrent_operations() {
         echo "  Duration: ${duration}s with concurrency ${concurrency}"
         
         # Verify deletion
-        local tags=$("$ACR_CLI" tag list --registry "$REGISTRY" --repository "$repo" 2>&1)
+        local tags=$(run_acr_cli tag list --registry "$REGISTRY" --repository "$repo" 2>&1)
         assert_not_contains "$tags" "test${concurrency}_" "All test${concurrency}_ tags should be deleted"
     done
     
@@ -594,7 +594,7 @@ test_abac_keep_parameter() {
         --ago 0d \
         --keep 3 >/dev/null 2>&1
     
-    local tags=$("$ACR_CLI" tag list --registry "$REGISTRY" --repository "$repo" 2>&1)
+    local tags=$(run_acr_cli tag list --registry "$REGISTRY" --repository "$repo" 2>&1)
     local tag_count=$(echo "$tags" | grep -c "$REGISTRY/$repo:keep" || echo 0)
     
     assert_equals "3" "$tag_count" "Should keep exactly 3 latest tags"
@@ -671,7 +671,7 @@ test_abac_pattern_matching() {
     # Test 3: Complex pattern
     echo -e "\n${CYAN}Testing complex pattern...${NC}"
     
-    output=$("$ACR_CLI" purge \
+    output=$(run_acr_cli purge \
         --registry "$REGISTRY" \
         --filter "$repo:(build-00[12]|dev-.*)" \
         --ago 0d \
@@ -693,7 +693,7 @@ test_abac_error_handling() {
     # Test 1: Non-existent repository
     echo -e "\n${CYAN}Testing non-existent repository...${NC}"
     
-    local output=$("$ACR_CLI" purge \
+    local output=$(run_acr_cli purge \
         --registry "$REGISTRY" \
         --filter "nonexistent-repo:.*" \
         --ago 0d 2>&1 || true)
@@ -703,7 +703,7 @@ test_abac_error_handling() {
     # Test 2: Invalid pattern
     echo -e "\n${CYAN}Testing invalid regex pattern...${NC}"
     
-    output=$("$ACR_CLI" purge \
+    output=$(run_acr_cli purge \
         --registry "$REGISTRY" \
         --filter "test:[" \
         --ago 0d \
@@ -720,7 +720,7 @@ test_abac_error_handling() {
     # Test 3: Invalid registry
     echo -e "\n${CYAN}Testing invalid registry...${NC}"
     
-    output=$("$ACR_CLI" purge \
+    output=$(run_acr_cli purge \
         --registry "invalid-registry.azurecr.io" \
         --filter "test:.*" \
         --ago 0d \
@@ -761,7 +761,7 @@ test_abac_manifest_operations() {
     # Test 1: List manifests
     echo -e "\n${CYAN}Testing manifest listing...${NC}"
     
-    local manifests=$("$ACR_CLI" manifest list \
+    local manifests=$(run_acr_cli manifest list \
         --registry "$REGISTRY" \
         --repository "$repo" 2>&1)
     
@@ -772,18 +772,18 @@ test_abac_manifest_operations() {
     # Test 2: Delete tag but keep manifest
     echo -e "\n${CYAN}Testing tag deletion (keeping manifest)...${NC}"
     
-    "$ACR_CLI" purge \
+    run_acr_cli purge \
         --registry "$REGISTRY" \
         --filter "$repo:alias1" \
         --ago 0d >/dev/null 2>&1
     
-    local tags=$("$ACR_CLI" tag list --registry "$REGISTRY" --repository "$repo" 2>&1)
+    local tags=$(run_acr_cli tag list --registry "$REGISTRY" --repository "$repo" 2>&1)
     assert_not_contains "$tags" "alias1" "alias1 should be deleted"
     assert_contains "$tags" "alias2" "alias2 should remain"
     assert_contains "$tags" "base" "base should remain"
     
     # Manifest should still exist
-    manifests=$("$ACR_CLI" manifest list \
+    manifests=$(run_acr_cli manifest list \
         --registry "$REGISTRY" \
         --repository "$repo" 2>&1)
     manifest_count=$(echo "$manifests" | grep -c "$REGISTRY/$repo@sha256:" || echo 0)
@@ -792,17 +792,17 @@ test_abac_manifest_operations() {
     # Test 3: Delete all tags and dangling manifests
     echo -e "\n${CYAN}Testing dangling manifest deletion...${NC}"
     
-    "$ACR_CLI" purge \
+    run_acr_cli purge \
         --registry "$REGISTRY" \
         --filter "$repo:.*" \
         --ago 0d \
         --untagged >/dev/null 2>&1
     
-    tags=$("$ACR_CLI" tag list --registry "$REGISTRY" --repository "$repo" 2>&1 || echo "")
+    tags=$(run_acr_cli tag list --registry "$REGISTRY" --repository "$repo" 2>&1 || echo "")
     tag_count=$(echo "$tags" | grep -c "$REGISTRY/$repo:" || echo 0)
     assert_equals "0" "$tag_count" "All tags should be deleted"
     
-    manifests=$("$ACR_CLI" manifest list \
+    manifests=$(run_acr_cli manifest list \
         --registry "$REGISTRY" \
         --repository "$repo" 2>&1 || echo "")
     manifest_count=$(echo "$manifests" | grep -c "$REGISTRY/$repo@sha256:" || echo 0)
