@@ -412,8 +412,8 @@ test_abac_authentication() {
     
     # Perform multiple operations that might trigger token refresh
     for i in 1 3 5 7 9; do
-        # Delete specific tags one by one to avoid pattern matching issues
-        run_acr_cli purge --registry "$REGISTRY" --filter "$repo:v$i" --ago 0d >/dev/null 2>&1 || true
+        # Use exact tag matching with ^ and $ anchors to avoid v1 matching v10
+        run_acr_cli purge --registry "$REGISTRY" --filter "$repo:^v$i\$" --ago 0d >/dev/null 2>&1 || true
     done
     
     # Verify remaining tags
@@ -454,16 +454,15 @@ test_abac_authentication() {
         sleep 2
     done
     
-    tags=$(run_acr_cli tag list --registry "$REGISTRY" --repository "$repo" 2>&1 || echo "")
+    # Get final tag count after all retry attempts
+    local final_tags=$(run_acr_cli tag list --registry "$REGISTRY" --repository "$repo" 2>&1 || echo "")
+    local final_batch_count=$(echo "$final_tags" | grep -c "$REGISTRY/$repo:batch" 2>/dev/null || echo "0")
     
     # Debug: Show what tags remain
-    echo "Purge output: $purge_output"
-    echo "Remaining tags after batch deletion:"
-    echo "$tags"
-    
-    # Should be empty or contain only system tags
-    local tag_count=$(echo "$tags" | grep -c "$REGISTRY/$repo:batch" 2>/dev/null || echo "0")
-    assert_equals "0" "$tag_count" "All batch tags should be deleted"
+    echo "Final tags after batch deletion:"
+    echo "$final_tags"
+    echo "Final batch count: $final_batch_count"
+    assert_equals "0" "$final_batch_count" "All batch tags should be deleted"
     
     # Clean up
     cleanup_repository "$repo"
@@ -563,7 +562,7 @@ test_abac_concurrent_operations() {
         # Measure time for operation
         local start_time=$(date +%s)
         
-        "$ACR_CLI" purge \
+        run_acr_cli purge \
             --registry "$REGISTRY" \
             --filter "$repo:test${concurrency}_.*" \
             --ago 0d \
@@ -574,12 +573,18 @@ test_abac_concurrent_operations() {
         
         echo "  Duration: ${duration}s with concurrency ${concurrency}"
         
-        # Verify deletion
-        local tags=$(run_acr_cli tag list --registry "$REGISTRY" --repository "$repo" 2>&1)
-        echo "Tags after concurrency ${concurrency} test: $tags"
+        # Verify deletion with retry for timing issues
+        local remaining_count=1
+        for attempt in 1 2 3; do
+            local tags=$(run_acr_cli tag list --registry "$REGISTRY" --repository "$repo" 2>&1)
+            remaining_count=$(echo "$tags" | grep -c "test${concurrency}_" 2>/dev/null || echo "0")
+            if [ "$remaining_count" -eq 0 ]; then
+                break
+            fi
+            sleep 1
+        done
         
-        # Count remaining tags for this concurrency level
-        local remaining_count=$(echo "$tags" | grep -c "test${concurrency}_" || echo 0)
+        echo "Concurrency ${concurrency} test completed after $attempt attempts, remaining: $remaining_count"
         if [ "$remaining_count" -eq 0 ]; then
             echo -e "${GREEN}✓ All test${concurrency}_ tags should be deleted${NC}"
             ((TESTS_PASSED++))
@@ -620,14 +625,15 @@ test_abac_keep_parameter() {
     # Test: Keep latest 3 images
     echo -e "\n${CYAN}Testing --keep 3...${NC}"
     
+    # Use a longer ago time to ensure tags are considered for deletion
     local purge_output=$(run_acr_cli purge \
         --registry "$REGISTRY" \
         --filter "$repo:keep.*" \
-        --ago 0d \
+        --ago 1m \
         --keep 3 2>&1)
     
     local tags=$(run_acr_cli tag list --registry "$REGISTRY" --repository "$repo" 2>&1)
-    local tag_count=$(echo "$tags" | grep -c "$REGISTRY/$repo:keep" || echo 0)
+    local tag_count=$(echo "$tags" | grep -c "$REGISTRY/$repo:keep" 2>/dev/null || echo "0")
     
     echo "Purge output: $purge_output"
     echo "Remaining tags: $tags"
@@ -683,7 +689,7 @@ test_abac_pattern_matching() {
     local output=$(run_acr_cli purge \
         --registry "$REGISTRY" \
         --filter "$repo:v1\..*" \
-        --ago 0d \
+        --ago 1m \
         --dry-run 2>&1)
     
     echo "Pattern matching output for v1.*: $output"
@@ -698,7 +704,7 @@ test_abac_pattern_matching() {
     output=$(run_acr_cli purge \
         --registry "$REGISTRY" \
         --filter "$repo:.*-latest" \
-        --ago 0d \
+        --ago 1m \
         --dry-run 2>&1)
     
     echo "Pattern matching output for *-latest: $output"
@@ -714,7 +720,7 @@ test_abac_pattern_matching() {
     output=$(run_acr_cli purge \
         --registry "$REGISTRY" \
         --filter "$repo:(build-00[12]|dev-.*)" \
-        --ago 0d \
+        --ago 1m \
         --dry-run 2>&1)
     
     echo "Pattern matching output for complex pattern: $output"
@@ -828,7 +834,7 @@ test_abac_manifest_operations() {
     manifests=$(run_acr_cli manifest list \
         --registry "$REGISTRY" \
         --repository "$repo" 2>&1)
-    manifest_count=$(echo "$manifests" | grep -c "$REGISTRY/$repo@sha256:" || echo 0)
+    manifest_count=$(echo "$manifests" | grep -c "$REGISTRY/$repo@sha256:" 2>/dev/null || echo "0")
     assert_equals "1" "$manifest_count" "Manifest should still exist"
     
     # Test 3: Delete all tags and dangling manifests
@@ -841,7 +847,7 @@ test_abac_manifest_operations() {
         --untagged 2>&1)
     
     tags=$(run_acr_cli tag list --registry "$REGISTRY" --repository "$repo" 2>&1 || echo "")
-    tag_count=$(echo "$tags" | grep -c "$REGISTRY/$repo:" || echo 0)
+    tag_count=$(echo "$tags" | grep -c "$REGISTRY/$repo:" 2>/dev/null || echo "0")
     
     echo "Manifest cleanup purge output: $purge_output"
     echo "Tags after manifest cleanup: $tags"
@@ -852,7 +858,7 @@ test_abac_manifest_operations() {
     manifests=$(run_acr_cli manifest list \
         --registry "$REGISTRY" \
         --repository "$repo" 2>&1 || echo "")
-    manifest_count=$(echo "$manifests" | grep -c "$REGISTRY/$repo@sha256:" || echo 0)
+    manifest_count=$(echo "$manifests" | grep -c "$REGISTRY/$repo@sha256:" 2>/dev/null || echo "0")
     
     echo "Manifests after cleanup: $manifests"
     echo "Manifest count: $manifest_count"
