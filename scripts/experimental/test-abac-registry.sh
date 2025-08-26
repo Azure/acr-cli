@@ -412,7 +412,8 @@ test_abac_authentication() {
     
     # Perform multiple operations that might trigger token refresh
     for i in 1 3 5 7 9; do
-        run_acr_cli purge --registry "$REGISTRY" --filter "$repo:v$i" --ago 0d >/dev/null 2>&1
+        # Use exact tag match to avoid v10 matching v1
+        run_acr_cli purge --registry "$REGISTRY" --filter "$repo:v$i\$" --ago 0d >/dev/null 2>&1
     done
     
     # Verify remaining tags
@@ -438,15 +439,14 @@ test_abac_authentication() {
     done
     
     # Delete all in one operation
-    run_acr_cli purge --registry "$REGISTRY" --filter "$repo:batch.*" --ago 0d >/dev/null 2>&1
+    local purge_output=$(run_acr_cli purge --registry "$REGISTRY" --filter "$repo:batch.*" --ago 0d 2>&1)
     
     tags=$(run_acr_cli tag list --registry "$REGISTRY" --repository "$repo" 2>&1 || echo "")
     
     # Debug: Show what tags remain
-    if [ "$DEBUG" = "1" ]; then
-        echo "Remaining tags after batch deletion:"
-        echo "$tags"
-    fi
+    echo "Purge output: $purge_output"
+    echo "Remaining tags after batch deletion:"
+    echo "$tags"
     
     # Should be empty or contain only system tags
     local tag_count=$(echo "$tags" | grep -c "$REGISTRY/$repo:batch" || echo 0)
@@ -563,7 +563,20 @@ test_abac_concurrent_operations() {
         
         # Verify deletion
         local tags=$(run_acr_cli tag list --registry "$REGISTRY" --repository "$repo" 2>&1)
-        assert_not_contains "$tags" "test${concurrency}_" "All test${concurrency}_ tags should be deleted"
+        echo "Tags after concurrency ${concurrency} test: $tags"
+        
+        # Count remaining tags for this concurrency level
+        local remaining_count=$(echo "$tags" | grep -c "test${concurrency}_" || echo 0)
+        if [ "$remaining_count" -eq 0 ]; then
+            echo -e "${GREEN}✓ All test${concurrency}_ tags should be deleted${NC}"
+            ((TESTS_PASSED++))
+        else
+            echo -e "${RED}✗ All test${concurrency}_ tags should be deleted${NC}"
+            echo "  Should NOT contain: test${concurrency}_"
+            echo "  Found $remaining_count remaining tags"
+            ((TESTS_FAILED++))
+            FAILED_TESTS+=("All test${concurrency}_ tags should be deleted")
+        fi
     done
     
     # Clean up
@@ -594,14 +607,18 @@ test_abac_keep_parameter() {
     # Test: Keep latest 3 images
     echo -e "\n${CYAN}Testing --keep 3...${NC}"
     
-    "$ACR_CLI" purge \
+    local purge_output=$(run_acr_cli purge \
         --registry "$REGISTRY" \
         --filter "$repo:keep.*" \
         --ago 0d \
-        --keep 3 >/dev/null 2>&1
+        --keep 3 2>&1)
     
     local tags=$(run_acr_cli tag list --registry "$REGISTRY" --repository "$repo" 2>&1)
     local tag_count=$(echo "$tags" | grep -c "$REGISTRY/$repo:keep" || echo 0)
+    
+    echo "Purge output: $purge_output"
+    echo "Remaining tags: $tags"
+    echo "Tag count: $tag_count"
     
     assert_equals "3" "$tag_count" "Should keep exactly 3 latest tags"
     
@@ -650,11 +667,13 @@ test_abac_pattern_matching() {
     # Test 1: Match version 1.x.x tags
     echo -e "\n${CYAN}Testing version 1.x.x pattern...${NC}"
     
-    local output=$("$ACR_CLI" purge \
+    local output=$(run_acr_cli purge \
         --registry "$REGISTRY" \
         --filter "$repo:v1\..*" \
         --ago 0d \
         --dry-run 2>&1)
+    
+    echo "Pattern matching output for v1.*: $output"
     
     assert_contains "$output" "v1.0.0" "Should match v1.0.0"
     assert_contains "$output" "v1.1.0" "Should match v1.1.0"
@@ -663,11 +682,13 @@ test_abac_pattern_matching() {
     # Test 2: Match environment tags
     echo -e "\n${CYAN}Testing environment pattern...${NC}"
     
-    output=$("$ACR_CLI" purge \
+    output=$(run_acr_cli purge \
         --registry "$REGISTRY" \
         --filter "$repo:.*-latest" \
         --ago 0d \
         --dry-run 2>&1)
+    
+    echo "Pattern matching output for *-latest: $output"
     
     assert_contains "$output" "dev-latest" "Should match dev-latest"
     assert_contains "$output" "staging-latest" "Should match staging-latest"
@@ -682,6 +703,8 @@ test_abac_pattern_matching() {
         --filter "$repo:(build-00[12]|dev-.*)" \
         --ago 0d \
         --dry-run 2>&1)
+    
+    echo "Pattern matching output for complex pattern: $output"
     
     assert_contains "$output" "build-001" "Should match build-001"
     assert_contains "$output" "build-002" "Should match build-002"
@@ -798,20 +821,29 @@ test_abac_manifest_operations() {
     # Test 3: Delete all tags and dangling manifests
     echo -e "\n${CYAN}Testing dangling manifest deletion...${NC}"
     
-    run_acr_cli purge \
+    local purge_output=$(run_acr_cli purge \
         --registry "$REGISTRY" \
         --filter "$repo:.*" \
         --ago 0d \
-        --untagged >/dev/null 2>&1
+        --untagged 2>&1)
     
     tags=$(run_acr_cli tag list --registry "$REGISTRY" --repository "$repo" 2>&1 || echo "")
     tag_count=$(echo "$tags" | grep -c "$REGISTRY/$repo:" || echo 0)
+    
+    echo "Manifest cleanup purge output: $purge_output"
+    echo "Tags after manifest cleanup: $tags"
+    echo "Tag count: $tag_count"
+    
     assert_equals "0" "$tag_count" "All tags should be deleted"
     
     manifests=$(run_acr_cli manifest list \
         --registry "$REGISTRY" \
         --repository "$repo" 2>&1 || echo "")
     manifest_count=$(echo "$manifests" | grep -c "$REGISTRY/$repo@sha256:" || echo 0)
+    
+    echo "Manifests after cleanup: $manifests"
+    echo "Manifest count: $manifest_count"
+    
     assert_equals "0" "$manifest_count" "Dangling manifests should be deleted"
     
     # Clean up
