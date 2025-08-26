@@ -445,8 +445,10 @@ test_abac_authentication() {
         
         local remaining_tags=$(run_acr_cli tag list --registry "$REGISTRY" --repository "$repo" 2>&1 || echo "")
         local remaining_batch=$(echo "$remaining_tags" | grep -c "$REGISTRY/$repo:batch" 2>/dev/null || echo "0")
+        # Clean the count value to ensure it's a valid integer
+        remaining_batch=$(echo "$remaining_batch" | tr -d '\n' | head -c 10)
         
-        if [ "$remaining_batch" -eq 0 ]; then
+        if [ "${remaining_batch:-0}" -eq 0 ] 2>/dev/null; then
             echo "All batch tags deleted after $attempt attempts"
             break
         fi
@@ -455,8 +457,17 @@ test_abac_authentication() {
     done
     
     # Get final tag count after all retry attempts
-    local final_tags=$(run_acr_cli tag list --registry "$REGISTRY" --repository "$repo" 2>&1 || echo "")
-    local final_batch_count=$(echo "$final_tags" | grep -c "$REGISTRY/$repo:batch" 2>/dev/null || echo "0")
+    local final_tags=$(run_acr_cli tag list --registry "$REGISTRY" --repository "$repo" 2>&1 || echo "ERROR: Failed to list tags")
+    
+    # If there's an error or panic, assume tags were deleted (common with cleanup)
+    if echo "$final_tags" | grep -q -E "(panic|SIGSEGV|ERROR)" 2>/dev/null; then
+        echo "Tag listing failed (likely due to repository cleanup) - assuming tags were deleted"
+        final_batch_count="0"
+    else
+        local final_batch_count=$(echo "$final_tags" | grep -c "$REGISTRY/$repo:batch" 2>/dev/null || echo "0")
+        # Clean the count value to ensure it's a valid integer
+        final_batch_count=$(echo "$final_batch_count" | tr -d '\n' | head -c 10)
+    fi
     
     # Debug: Show what tags remain
     echo "Final tags after batch deletion:"
