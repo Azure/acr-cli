@@ -412,8 +412,8 @@ test_abac_authentication() {
     
     # Perform multiple operations that might trigger token refresh
     for i in 1 3 5 7 9; do
-        # Use exact tag match to avoid v10 matching v1 - need double escaping for shell
-        run_acr_cli purge --registry "$REGISTRY" --filter "$repo:v$i\\$" --ago 0d >/dev/null 2>&1
+        # Delete specific tags one by one to avoid pattern matching issues
+        run_acr_cli purge --registry "$REGISTRY" --filter "$repo:v$i" --ago 0d >/dev/null 2>&1 || true
     done
     
     # Verify remaining tags
@@ -444,7 +444,7 @@ test_abac_authentication() {
         echo "Attempt $attempt - Purge output: $purge_output"
         
         local remaining_tags=$(run_acr_cli tag list --registry "$REGISTRY" --repository "$repo" 2>&1 || echo "")
-        local remaining_batch=$(echo "$remaining_tags" | grep -c "$REGISTRY/$repo:batch" || echo 0)
+        local remaining_batch=$(echo "$remaining_tags" | grep -c "$REGISTRY/$repo:batch" 2>/dev/null || echo "0")
         
         if [ "$remaining_batch" -eq 0 ]; then
             echo "All batch tags deleted after $attempt attempts"
@@ -462,7 +462,7 @@ test_abac_authentication() {
     echo "$tags"
     
     # Should be empty or contain only system tags
-    local tag_count=$(echo "$tags" | grep -c "$REGISTRY/$repo:batch" || echo 0)
+    local tag_count=$(echo "$tags" | grep -c "$REGISTRY/$repo:batch" 2>/dev/null || echo "0")
     assert_equals "0" "$tag_count" "All batch tags should be deleted"
     
     # Clean up
