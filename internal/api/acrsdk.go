@@ -95,11 +95,17 @@ func newAcrCLIClientWithBasicAuth(loginURL string, username string, password str
 func newAcrCLIClientWithBearerAuth(loginURL string, refreshToken string) (AcrCLIClient, error) {
 	newAcrCLIClient := newAcrCLIClient(loginURL)
 	ctx := context.Background()
-	// For ABAC-enabled registries, only request catalog scope initially
-	// Repository-specific scopes will be requested when needed
-	accessTokenResponse, err := newAcrCLIClient.AutorestClient.GetAcrAccessToken(ctx, loginURL, "registry:catalog:*", refreshToken)
+	// Try to get a token with both catalog and repository wildcard scope for non-ABAC registries
+	// This maintains backward compatibility while supporting ABAC registries
+	scope := "registry:catalog:* repository:*:pull"
+	accessTokenResponse, err := newAcrCLIClient.AutorestClient.GetAcrAccessToken(ctx, loginURL, scope, refreshToken)
 	if err != nil {
-		return newAcrCLIClient, err
+		// If the above fails (likely ABAC registry), fallback to catalog-only scope
+		// Repository-specific scopes will be requested when needed
+		accessTokenResponse, err = newAcrCLIClient.AutorestClient.GetAcrAccessToken(ctx, loginURL, "registry:catalog:*", refreshToken)
+		if err != nil {
+			return newAcrCLIClient, err
+		}
 	}
 	token := &adal.Token{
 		AccessToken:  *accessTokenResponse.AccessToken,
@@ -179,8 +185,9 @@ func refreshAcrCLIClientToken(ctx context.Context, c *AcrCLIClient, scope string
 // refreshTokenForRepository obtains a new token scoped to a specific repository with all permissions.
 // This supports both ABAC and non-ABAC registries.
 func refreshTokenForRepository(ctx context.Context, c *AcrCLIClient, repoName string) error {
-	// For specific repository operations, request full permissions on that repository
-	scope := fmt.Sprintf("repository:%s:*", repoName)
+	// For ABAC-enabled registries, we need to specify exact permissions
+	// Using pull,push,delete covers all necessary operations
+	scope := fmt.Sprintf("repository:%s:pull,push,delete", repoName)
 	return refreshAcrCLIClientToken(ctx, c, scope)
 }
 
