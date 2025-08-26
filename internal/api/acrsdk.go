@@ -184,11 +184,6 @@ func refreshTokenForRepository(ctx context.Context, c *AcrCLIClient, repoName st
 	return refreshAcrCLIClientToken(ctx, c, scope)
 }
 
-// refreshTokenForCatalog obtains a new token with catalog access only.
-func refreshTokenForCatalog(ctx context.Context, c *AcrCLIClient) error {
-	return refreshAcrCLIClientToken(ctx, c, "registry:catalog:*")
-}
-
 // getExpiration is used to obtain the expiration out of a jwt token.
 func getExpiration(token string) (int64, error) {
 	parser := jwt.Parser{SkipClaimsValidation: true}
