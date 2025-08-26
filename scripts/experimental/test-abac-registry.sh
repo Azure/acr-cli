@@ -411,9 +411,9 @@ test_abac_authentication() {
     echo -e "\n${CYAN}Testing multiple operations with token refresh...${NC}"
     
     # Perform multiple operations that might trigger token refresh
-    for i in 1 3 5 7 9; do
-        # Use exact tag matching with ^ and $ anchors to avoid v1 matching v10
-        run_acr_cli purge --registry "$REGISTRY" --filter "$repo:^v$i\$" --ago 0d >/dev/null 2>&1 || true
+    # Delete specific tags individually to avoid pattern matching issues
+    for tag in v1 v3 v5 v7 v9; do
+        run_acr_cli purge --registry "$REGISTRY" --filter "$repo:^$tag\$" --ago 0d >/dev/null 2>&1 || true
     done
     
     # Verify remaining tags
@@ -589,14 +589,16 @@ test_abac_concurrent_operations() {
         for attempt in 1 2 3; do
             local tags=$(run_acr_cli tag list --registry "$REGISTRY" --repository "$repo" 2>&1)
             remaining_count=$(echo "$tags" | grep -c "test${concurrency}_" 2>/dev/null || echo "0")
-            if [ "$remaining_count" -eq 0 ]; then
+            # Clean the count value to ensure it's a valid integer
+            remaining_count=$(echo "$remaining_count" | tr -d '\n' | head -c 10)
+            if [ "${remaining_count:-0}" -eq 0 ] 2>/dev/null; then
                 break
             fi
             sleep 1
         done
         
         echo "Concurrency ${concurrency} test completed after $attempt attempts, remaining: $remaining_count"
-        if [ "$remaining_count" -eq 0 ]; then
+        if [ "${remaining_count:-0}" -eq 0 ] 2>/dev/null; then
             echo -e "${GREEN}✓ All test${concurrency}_ tags should be deleted${NC}"
             ((TESTS_PASSED++))
         else
