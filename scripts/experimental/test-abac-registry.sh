@@ -442,8 +442,14 @@ test_abac_authentication() {
     
     tags=$(run_acr_cli tag list --registry "$REGISTRY" --repository "$repo" 2>&1 || echo "")
     
+    # Debug: Show what tags remain
+    if [ "$DEBUG" = "1" ]; then
+        echo "Remaining tags after batch deletion:"
+        echo "$tags"
+    fi
+    
     # Should be empty or contain only system tags
-    local tag_count=$(echo "$tags" | grep -c "$REGISTRY/$repo:" || echo 0)
+    local tag_count=$(echo "$tags" | grep -c "$REGISTRY/$repo:batch" || echo 0)
     assert_equals "0" "$tag_count" "All batch tags should be deleted"
     
     # Clean up
