@@ -78,7 +78,7 @@ func TestGetExpiration(t *testing.T) {
 
 func TestGetAcrCLIClientWithAuth(t *testing.T) {
 	var testLoginURL string
-	testTokenScope := "registry:catalog:* repository:*:*"
+	testTokenScope := "registry:catalog:*"
 	testAccessToken := strings.Join([]string{
 		base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"RS256"}`)),
 		base64.RawURLEncoding.EncodeToString([]byte(`{"exp":1563910981}`)),
