@@ -120,11 +120,11 @@ func newAcrCLIClientWithBearerAuth(loginURL string, refreshToken string) (AcrCLI
 	newAcrCLIClient.token = token
 	newAcrCLIClient.isABAC = isABAC
 	newAcrCLIClient.AutorestClient.Authorizer = autorest.NewBearerAuthorizer(token)
-	
+
 	// Parse and store the scopes from the token
 	scopes, _ := getScopesFromToken(token.AccessToken)
 	newAcrCLIClient.currentScopes = scopes
-	
+
 	// The expiration time is stored in the struct to make it easy to determine if a token is expired.
 	exp, err := getExpiration(token.AccessToken)
 	if err != nil {
@@ -186,11 +186,11 @@ func refreshAcrCLIClientToken(ctx context.Context, c *AcrCLIClient, scope string
 	}
 	c.token = token
 	c.AutorestClient.Authorizer = autorest.NewBearerAuthorizer(token)
-	
+
 	// Parse and store the new scopes from the refreshed token
 	scopes, _ := getScopesFromToken(token.AccessToken)
 	c.currentScopes = scopes
-	
+
 	exp, err := getExpiration(token.AccessToken)
 	if err != nil {
 		return err
@@ -215,12 +215,12 @@ func getExpiration(tokenStr string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	
+
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
 		return 0, errors.New("unable to parse token claims")
 	}
-	
+
 	if fExp, ok := claims["exp"].(float64); ok {
 		return int64(fExp), nil
 	}
@@ -234,12 +234,12 @@ func getScopesFromToken(tokenStr string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
 		return nil, errors.New("unable to parse token claims")
 	}
-	
+
 	// ACR tokens typically have "access" claim with scopes
 	if access, ok := claims["access"]; ok {
 		if accessList, ok := access.([]interface{}); ok {
@@ -269,12 +269,12 @@ func getScopesFromToken(tokenStr string) ([]string, error) {
 			return scopes, nil
 		}
 	}
-	
+
 	// Fallback: check for "scope" claim (some implementations use this)
 	if scope, ok := claims["scope"].(string); ok {
 		return strings.Split(scope, " "), nil
 	}
-	
+
 	return []string{}, nil
 }
 
@@ -284,7 +284,7 @@ func (c *AcrCLIClient) hasRequiredScope(repoName string) bool {
 		// No token or no scopes tracked
 		return false
 	}
-	
+
 	// Check if we have a wildcard repository scope (for non-ABAC registries)
 	for _, scope := range c.currentScopes {
 		if scope == "repository:*:pull" || scope == "repository:*:*" {
@@ -304,7 +304,7 @@ func (c *AcrCLIClient) hasRequiredScope(repoName string) bool {
 			}
 		}
 	}
-	
+
 	return false
 }
 
