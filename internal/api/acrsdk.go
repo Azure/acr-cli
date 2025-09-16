@@ -39,6 +39,7 @@ const (
 		", " + manifestOCIImageIndexContentType +
 		", " + manifestImageContentType +
 		", " + manifestListContentType
+	registryCatalogScope = "registry:catalog:*"
 )
 
 // The AcrCLIClient is the struct that will be in charge of doing the http requests to the registry.
@@ -101,13 +102,13 @@ func newAcrCLIClientWithBearerAuth(loginURL string, refreshToken string) (AcrCLI
 	ctx := context.Background()
 	// Try to get a token with both catalog and repository wildcard scope for non-ABAC registries
 	// This maintains backward compatibility while supporting ABAC registries
-	scope := "registry:catalog:* repository:*:pull"
+	scope := registryCatalogScope + " repository:*:pull"
 	accessTokenResponse, err := newAcrCLIClient.AutorestClient.GetAcrAccessToken(ctx, loginURL, scope, refreshToken)
 	isABAC := false
 	if err != nil {
 		// If the above fails (likely ABAC registry), fallback to catalog-only scope
 		// Repository-specific scopes will be requested when needed
-		accessTokenResponse, err = newAcrCLIClient.AutorestClient.GetAcrAccessToken(ctx, loginURL, "registry:catalog:*", refreshToken)
+		accessTokenResponse, err = newAcrCLIClient.AutorestClient.GetAcrAccessToken(ctx, loginURL, registryCatalogScope, refreshToken)
 		if err != nil {
 			return newAcrCLIClient, err
 		}
@@ -204,7 +205,7 @@ func refreshAcrCLIClientToken(ctx context.Context, c *AcrCLIClient, scope string
 func refreshTokenForRepository(ctx context.Context, c *AcrCLIClient, repoName string) error {
 	// For ABAC-enabled registries, we need to specify exact permissions
 	// Using pull,push,delete covers all necessary operations
-	scope := fmt.Sprintf("repository:%s:pull,push,delete", repoName)
+	scope := fmt.Sprintf("%s repository:%s:pull,push,delete", registryCatalogScope, repoName)
 	return refreshAcrCLIClientToken(ctx, c, scope)
 }
 

@@ -12,7 +12,7 @@ NUM_REPOS="${3:-5}"
 
 # Path configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ACR_CLI="${SCRIPT_DIR}/../bin/acr"
+ACR_CLI="${SCRIPT_DIR}/../../bin/acr"
 
 # Source registry utilities
 source "${SCRIPT_DIR}/registry-utils.sh"
@@ -29,8 +29,36 @@ CYAN='\033[0;36m'
 MAGENTA='\033[0;35m'
 NC='\033[0m'
 
-# Performance metrics
-declare -A METRICS
+# Performance metrics - check if associative arrays are supported
+ASSOCIATIVE_ARRAYS_SUPPORTED=true
+declare -A METRICS 2>/dev/null || {
+    ASSOCIATIVE_ARRAYS_SUPPORTED=false
+    # Fallback for shells that don't support associative arrays
+    METRICS_token_refresh_sequential=""
+    METRICS_token_refresh_parallel=""
+    METRICS_token_refresh_rapid=""
+    METRICS_concurrent_operations=""
+}
+
+# Helper functions for metrics
+set_metric() {
+    local key="$1"
+    local value="$2"
+    if [ "$ASSOCIATIVE_ARRAYS_SUPPORTED" = true ]; then
+        METRICS["$key"]="$value"
+    else
+        eval "METRICS_$key=\"$value\""
+    fi
+}
+
+get_metric() {
+    local key="$1"
+    if [ "$ASSOCIATIVE_ARRAYS_SUPPORTED" = true ]; then
+        echo "${METRICS[$key]:-}"
+    else
+        eval "echo \${METRICS_$key:-}"
+    fi
+}
 
 # Helper to measure execution time
 measure_time() {
@@ -77,7 +105,7 @@ validate_setup() {
     
     if [ ! -f "$ACR_CLI" ]; then
         echo "Building ACR CLI..."
-        (cd "$SCRIPT_DIR/.." && make binaries)
+        (cd "$SCRIPT_DIR/../.." && make binaries)
     fi
 }
 
@@ -133,7 +161,7 @@ test_token_refresh_performance() {
         total_time=$(awk -v t="$total_time" -v d="$duration" 'BEGIN {printf "%.3f", t+d}')
     done
     
-    METRICS["token_refresh_sequential"]="$total_time"
+    set_metric "token_refresh_sequential" "$total_time"
     echo -e "${GREEN}Total sequential time: ${total_time}s${NC}"
     
     # Test rapid switching between repositories
@@ -147,7 +175,7 @@ test_token_refresh_performance() {
         done
     ")
     
-    METRICS["token_refresh_rapid"]="$switch_time"
+    set_metric "token_refresh_rapid" "$switch_time"
     echo -e "${GREEN}Rapid switching time (30 operations): ${switch_time}s${NC}"
     
     # Clean up
@@ -185,7 +213,7 @@ test_repository_permission_performance() {
         }')
         
         echo "  $repo ($tag_count tags): ${duration}s (${throughput} tags/sec)"
-        METRICS["list_${repo}"]="$duration"
+        set_metric "list_${repo}" "$duration"
     done
     
     # Test deletion performance
@@ -205,7 +233,7 @@ test_repository_permission_performance() {
         }')
         
         echo "  $repo ($tag_count tags): ${duration}s (${throughput} tags/sec)"
-        METRICS["purge_dryrun_${repo}"]="$duration"
+        set_metric "purge_dryrun_${repo}" "$duration"
     done
     
     # Clean up
@@ -249,7 +277,7 @@ test_concurrent_cross_repository() {
         echo "  Throughput: ${throughput} deletions/sec"
         echo "  Repositories affected: $NUM_REPOS"
         
-        METRICS["concurrent_${concurrency}"]="$duration"
+        set_metric "concurrent_${concurrency}" "$duration"
         
         # Recreate deleted images for next test
         if [ "$concurrency" -lt 20 ]; then
@@ -311,7 +339,7 @@ test_pattern_matching_performance() {
         --ago 0d \
         --dry-run >/dev/null 2>&1)
     echo "  Time: ${duration}s"
-    METRICS["pattern_simple"]="$duration"
+    set_metric "pattern_simple" "$duration"
     
     # Medium complexity pattern
     echo -e "\n${BLUE}Medium pattern (v1\.[0-9]+\.0):${NC}"
@@ -321,7 +349,7 @@ test_pattern_matching_performance() {
         --ago 0d \
         --dry-run >/dev/null 2>&1)
     echo "  Time: ${duration}s"
-    METRICS["pattern_medium"]="$duration"
+    set_metric "pattern_medium" "$duration"
     
     # Complex pattern
     echo -e "\n${BLUE}Complex pattern ((dev|staging)-[0-9]{3}):${NC}"
@@ -331,7 +359,7 @@ test_pattern_matching_performance() {
         --ago 0d \
         --dry-run >/dev/null 2>&1)
     echo "  Time: ${duration}s"
-    METRICS["pattern_complex"]="$duration"
+    set_metric "pattern_complex" "$duration"
     
     # Very complex pattern
     echo -e "\n${BLUE}Very complex pattern (build-2024[0-9]{4}-0[0-1][0-9]):${NC}"
@@ -341,7 +369,7 @@ test_pattern_matching_performance() {
         --ago 0d \
         --dry-run >/dev/null 2>&1)
     echo "  Time: ${duration}s"
-    METRICS["pattern_very_complex"]="$duration"
+    set_metric "pattern_very_complex" "$duration"
     
     # Clean up
     "$ACR_CLI" purge --registry "$REGISTRY" --filter "$repo:.*" --ago 0d >/dev/null 2>&1
@@ -369,7 +397,7 @@ test_scale_performance() {
         # Create images
         local create_time=$(measure_time create_test_images_batch "$repo" "$scale")
         echo "  Creation time: ${create_time}s"
-        METRICS["scale_${scale}_create"]="$create_time"
+        set_metric "scale_${scale}_create" "$create_time"
         
         # List performance
         local list_time=$(measure_time "$ACR_CLI" tag list \
