@@ -152,7 +152,7 @@ The duration should be of the form \[integer\]d\[string\] where the first intege
 
 #### Untagged flag
 
-To delete all the manifests that do not have any tags linked to them, the `--untagged` flag should be set.
+To delete all the manifests that do not have any tags linked to them, the `--untagged` flag should be set. The manifest cleanup respects the same `--ago` cutoff that is used for tag deletions, so recently-untagged images that are newer than the configured age threshold are preserved.
 
 ```sh
 acr purge \
