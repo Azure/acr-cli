@@ -138,6 +138,17 @@ acr purge \
     --ago 30d
 ```
 
+You can pair `--ago` with the `--untagged` flag to apply the same age threshold to manifest cleanup, ensuring that only manifests
+older than the specified cutoff are removed:
+
+```sh
+acr purge \
+    --registry <Registry Name> \
+    --filter <Repository Filter/Name>:<Regex Filter> \
+    --ago 7d \
+    --untagged
+```
+
 The following table further explains the functionality of this flag.
 
 | Intention                                                                     | Flag        |
