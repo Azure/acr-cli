@@ -266,7 +266,7 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 					return nil, err
 				}
 
-				if !lastUpdateTime.Before(*deleteCutoff) {
+				if lastUpdateTime.After(*deleteCutoff) {
 					continue
 				}
 			}
