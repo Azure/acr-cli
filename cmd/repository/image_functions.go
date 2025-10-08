@@ -257,6 +257,7 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 			// _____MANIFEST IS UNTAGGED BUT MAY BE PROTECTED_____
 			if deleteCutoff != nil {
 				if manifest.LastUpdateTime == nil {
+					fmt.Printf("Skipping manifest %s because the last update time is unavailable\n", *manifest.Digest)
 					continue
 				}
 
