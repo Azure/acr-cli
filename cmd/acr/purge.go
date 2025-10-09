@@ -179,7 +179,7 @@ func purge(ctx context.Context,
 		singleDeletedManifestsCount := 0
 		// If the untagged flag is set then also manifests are deleted.
 		if removeUtaggedManifests {
-			singleDeletedManifestsCount, err = purgeDanglingManifests(ctx, acrClient, repoParallelism, loginURL, repoName, manifestToTagsCountMap, dryRun, includeLocked)
+			singleDeletedManifestsCount, err = purgeDanglingManifests(ctx, acrClient, repoParallelism, loginURL, repoName, tagDeletionSince, manifestToTagsCountMap, dryRun, includeLocked)
 			if err != nil {
 				return deletedTagsCount, deletedManifestsCount, fmt.Errorf("failed to purge manifests: %w", err)
 			}
@@ -360,16 +360,21 @@ func getTagsToDelete(ctx context.Context,
 
 // purgeDanglingManifests deletes all manifests that do not have any tags associated with them.
 // except the ones that are referenced by a multiarch manifest or that have subject.
-func purgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, repoParallelism int, loginURL string, repoName string, manifestToTagsCountMap map[string]int, dryRun bool, includeLocked bool) (int, error) {
+func purgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, repoParallelism int, loginURL string, repoName string, tagDeletionSince string, manifestToTagsCountMap map[string]int, dryRun bool, includeLocked bool) (int, error) {
 	if dryRun {
 		fmt.Printf("Would delete manifests for repository: %s\n", repoName)
 	} else {
 		fmt.Printf("Deleting manifests for repository: %s\n", repoName)
 	}
+	agoDuration, err := parseDuration(tagDeletionSince)
+	if err != nil {
+		return -1, err
+	}
+	timeToCompare := time.Now().UTC().Add(agoDuration)
 	// Contrary to getTagsToDelete, getManifestsToDelete gets all the Manifests at once, this was done because if there is a manifest that has no
 	// tag but is referenced by a multiarch manifest that has tags then it should not be deleted. Or if a manifest has no tag, but it has subject,
 	// then it should not be deleted.
-	manifestsToDelete, err := repository.GetUntaggedManifests(ctx, repoParallelism, acrClient, repoName, false, manifestToTagsCountMap, dryRun, includeLocked)
+	manifestsToDelete, err := repository.GetUntaggedManifests(ctx, repoParallelism, acrClient, repoName, false, manifestToTagsCountMap, dryRun, includeLocked, &timeToCompare)
 	if err != nil {
 		return -1, err
 	}
