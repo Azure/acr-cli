@@ -138,6 +138,17 @@ acr purge \
     --ago 30d
 ```
 
+You can pair `--ago` with the `--untagged` flag to apply the same age threshold to manifest cleanup, ensuring that only manifests
+older than the specified cutoff are removed:
+
+```sh
+acr purge \
+    --registry <Registry Name> \
+    --filter <Repository Filter/Name>:<Regex Filter> \
+    --ago 7d \
+    --untagged
+```
+
 The following table further explains the functionality of this flag.
 
 | Intention                                                                     | Flag        |
@@ -152,7 +163,7 @@ The duration should be of the form \[integer\]d\[string\] where the first intege
 
 #### Untagged flag
 
-To delete all the manifests that do not have any tags linked to them, the `--untagged` flag should be set.
+To delete all the manifests that do not have any tags linked to them, the `--untagged` flag should be set. The manifest cleanup respects the same `--ago` cutoff that is used for tag deletions, so recently-untagged images that are newer than the configured age threshold are preserved.
 
 ```sh
 acr purge \

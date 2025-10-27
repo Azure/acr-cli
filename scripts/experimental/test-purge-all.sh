@@ -190,6 +190,34 @@ create_test_image() {
     return 0
 }
 
+create_unique_test_image() {
+    local repo="$1"
+    local tag="$2"
+    local content="${3:-$tag}"
+    local tmpdir
+    tmpdir=$(mktemp -d)
+
+    cat >"$tmpdir/Dockerfile" <<EOF
+FROM alpine:3.19
+RUN echo "$content" > /unique.txt
+EOF
+
+    if ! docker build -t "$REGISTRY/$repo:$tag" "$tmpdir" >/dev/null 2>&1; then
+        echo "Error: Failed to build unique image for $repo:$tag" >&2
+        rm -rf "$tmpdir"
+        return 1
+    fi
+
+    rm -rf "$tmpdir"
+
+    if ! docker push "$REGISTRY/$repo:$tag" >/dev/null 2>&1; then
+        echo "Error: Failed to push image $REGISTRY/$repo:$tag" >&2
+        return 1
+    fi
+
+    return 0
+}
+
 lock_image() {
     local repo="$1"
     local tag="$2"
@@ -1497,6 +1525,22 @@ run_test_comp_age() {
 
     local output=$("$ACR_CLI" purge --registry "$REGISTRY" --filter "$age_repo:.*" --ago 1d --dry-run 2>&1)
     assert_contains "$output" "Number of tags to be deleted: 0" "New images should not be deleted with --ago 1d"
+
+    local manifest_repo="${age_repo}-untagged"
+    create_unique_test_image "$manifest_repo" "keep"
+    create_unique_test_image "$manifest_repo" "temp"
+
+    "$ACR_CLI" purge --registry "$REGISTRY" --filter "$manifest_repo:temp" --ago 0d >/dev/null 2>&1
+
+    local manifests_before=$(count_manifests "$manifest_repo")
+
+    "$ACR_CLI" purge --registry "$REGISTRY" --filter "$manifest_repo:.*" --ago 1d --untagged >/dev/null 2>&1
+    local manifests_after=$(count_manifests "$manifest_repo")
+    assert_equals "$manifests_before" "$manifests_after" "Recent untagged manifests should be preserved by --ago"
+
+    "$ACR_CLI" purge --registry "$REGISTRY" --filter "$manifest_repo:.*" --ago 0d --untagged >/dev/null 2>&1
+    local manifests_final=$(count_manifests "$manifest_repo")
+    assert_equals "$((manifests_before - 1))" "$manifests_final" "Untagged manifests meeting --ago cutoff should be deleted"
 }
 
 # Test suite runners
