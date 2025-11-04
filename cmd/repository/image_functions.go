@@ -158,7 +158,7 @@ func GetLastTagFromResponse(resultTags *acr.RepositoryTagsType) string {
 // the manifest should also not have a tag and not have a subject manifest.
 // Param manifestToTagsCountMap is an optional map that can be used to pass the count of tags for each manifest that we know would be deleted if the command is exectued
 // under dryRun conditions. Its ignored if the dryRun flag is false.
-func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCLIClientInterface, repoName string, preserveAllOCIManifests bool, manifestToDeletedTagsCountMap map[string]int, dryRun bool, includeLocked bool) ([]acr.ManifestAttributesBase, error) {
+func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCLIClientInterface, repoName string, preserveAllOCIManifests bool, manifestToDeletedTagsCountMap map[string]int, dryRun bool, includeLocked bool, deleteCutoff *time.Time) ([]acr.ManifestAttributesBase, error) {
 	lastManifestDigest := ""
 	var manifestsToDelete []acr.ManifestAttributesBase
 	resultManifests, err := acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
@@ -255,6 +255,22 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 			}
 
 			// _____MANIFEST IS UNTAGGED BUT MAY BE PROTECTED_____
+			if deleteCutoff != nil {
+				if manifest.LastUpdateTime == nil {
+					fmt.Printf("Skipping manifest %s because the last update time is unavailable\n", *manifest.Digest)
+					continue
+				}
+
+				lastUpdateTime, err := time.Parse(time.RFC3339Nano, *manifest.LastUpdateTime)
+				if err != nil {
+					return nil, err
+				}
+
+				if lastUpdateTime.After(*deleteCutoff) {
+					continue
+				}
+			}
+
 			// TODO: #468 I am a little unclear as to why this was ever an option but respecting it for now. Its not used by the purge scenarios only for
 			// the annotate command.
 			if preserveAllOCIManifests {
