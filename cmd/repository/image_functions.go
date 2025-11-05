@@ -214,12 +214,48 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 				}
 			}
 
-			// _____MANIFEST IS TAGGED_____
-			// Check if manifest has tags that would prevent deletion
-			// Skip if: has tags AND (not in dry run OR in dry run but would still have tags after deletion)
-			if manifest.Tags != nil && len(*manifest.Tags) > 0 &&
-				(!dryRun || (manifestToDeletedTagsCountMap == nil || len(*manifest.Tags) > manifestToDeletedTagsCountMap[*manifest.Digest])) {
+			// _____MANIFEST HAS TAGS_____
+			// Check tags first since it's cheaper and can short-circuit age criteria evaluation
+			manifestHasTags := manifest.Tags != nil && len(*manifest.Tags) > 0
 
+			// _____MANIFEST IS PROTECTED BY TAGS______
+			isProtectedByTags := false
+			if manifestHasTags {
+				if !dryRun {
+					// In production mode, any tags protect the manifest
+					isProtectedByTags = true
+				} else {
+					// In dry run mode, check if manifest would still have tags after deletion
+					// If manifestToDeletedTagsCountMap is nil, we don't know what tags will be deleted,
+					// so we protect all tagged manifests
+					if manifestToDeletedTagsCountMap == nil {
+						isProtectedByTags = true
+					} else {
+						isProtectedByTags = len(*manifest.Tags) > manifestToDeletedTagsCountMap[*manifest.Digest]
+					}
+				}
+			}
+
+			// _____MANIFEST IS PROTECTED BY AGE CRITERIA____
+			// Only check age criteria if not already protected by tags (optimization)
+			isProtectedByAge := false
+			if !isProtectedByTags && deleteCutoff != nil {
+				// Take the more conservative approach and protect manifests with no last update time
+				if manifest.LastUpdateTime == nil {
+					isProtectedByAge = true
+					fmt.Printf("Protecting manifest %s because the last update time is unavailable\n", *manifest.Digest)
+				} else {
+					lastUpdateTime, err := time.Parse(time.RFC3339Nano, *manifest.LastUpdateTime)
+					if err != nil {
+						isProtectedByAge = true
+						fmt.Printf("Protecting manifest %s because the last update time cannot be read\n", *manifest.Digest)
+					} else if lastUpdateTime.After(*deleteCutoff) {
+						isProtectedByAge = true
+					}
+				}
+			}
+
+			if isProtectedByTags || isProtectedByAge {
 				// If the media type is not set, we will have to identify the manifest type from its fields, in this case the manifests field.
 				// This should not really happen for this API but we will handle it gracefully.
 				if manifest.MediaType != nil {
@@ -228,9 +264,10 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 						continue
 					}
 				}
+				// _____MANIFEST IS PROTECTED BY TAGS OR AGE CRITERIA BUT IS A LIST/INDEX_____
 				group.SubmitErr(func() error {
 					// For tagged indexes/lists, we need to get dependencies and add them to ignore list
-					// We don't need to check deletability since it's tagged (not deletable), just get dependencies
+					// We don't need to check deletability attributes since it's not deletable, just get dependencies
 					manifestBytes, err := acrClient.GetManifest(ctx, repoName, *manifest.Digest)
 					if err != nil {
 						errParsed := autorest.DetailedError{}
@@ -252,23 +289,6 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 					return nil
 				})
 				continue // We can skip the rest since the index is tagged and we are going to find its children
-			}
-
-			// _____MANIFEST IS UNTAGGED BUT MAY BE PROTECTED_____
-			if deleteCutoff != nil {
-				if manifest.LastUpdateTime == nil {
-					fmt.Printf("Skipping manifest %s because the last update time is unavailable\n", *manifest.Digest)
-					continue
-				}
-
-				lastUpdateTime, err := time.Parse(time.RFC3339Nano, *manifest.LastUpdateTime)
-				if err != nil {
-					return nil, err
-				}
-
-				if lastUpdateTime.After(*deleteCutoff) {
-					continue
-				}
 			}
 
 			// TODO: #468 I am a little unclear as to why this was ever an option but respecting it for now. Its not used by the purge scenarios only for
