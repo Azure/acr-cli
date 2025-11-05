@@ -8,7 +8,9 @@ import (
 	"math/big"
 	"sync"
 	"testing"
+	"time"
 
+	"github.com/Azure/acr-cli/acr"
 	"github.com/Azure/acr-cli/cmd/mocks"
 	"github.com/Azure/go-autorest/autorest/azure"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
@@ -385,4 +387,212 @@ func secureRandomNum(minDepth, maxDepth int) int {
 		return 0
 	}
 	return int(n.Int64()) + minDepth
+}
+
+// TestGetUntaggedManifestsWithAgeCriteria tests the age-based filtering logic for untagged manifests
+func TestGetUntaggedManifestsWithAgeCriteria(t *testing.T) {
+	ctx := context.Background()
+	repoName := "test-repo"
+	poolSize := 1
+
+	// Create test timestamps
+	oldTimestamp := "2024-10-01T12:00:00Z"    // More than 30 days old
+	recentTimestamp := "2024-11-03T12:00:00Z" // Less than 30 days old
+
+	t.Run("Untagged manifest older than cutoff is deleted", func(t *testing.T) {
+		mockClient := &mocks.AcrCLIClientInterface{}
+
+		manifests := createManifestsResult([]manifestTestData{
+			{digest: "sha256:old1", tags: nil, lastUpdate: oldTimestamp, mediaType: "application/vnd.docker.distribution.manifest.v2+json"},
+		})
+
+		mockClient.On("GetAcrManifests", ctx, repoName, "", "").Return(manifests, nil).Once()
+		mockClient.On("GetAcrManifests", ctx, repoName, "", "sha256:old1").Return(createEmptyManifestsResult(), nil).Once()
+
+		cutoff := parseTime(t, "2024-11-01T12:00:00Z") // 30 days ago from "now"
+
+		result, err := GetUntaggedManifests(ctx, poolSize, mockClient, repoName, false, nil, false, false, &cutoff)
+
+		assert.NoError(t, err)
+		assert.Equal(t, 1, len(result))
+		assert.Equal(t, "sha256:old1", *result[0].Digest)
+		mockClient.AssertExpectations(t)
+	})
+
+	t.Run("Untagged manifest newer than cutoff is protected", func(t *testing.T) {
+		mockClient := &mocks.AcrCLIClientInterface{}
+
+		manifests := createManifestsResult([]manifestTestData{
+			{digest: "sha256:recent1", tags: nil, lastUpdate: recentTimestamp, mediaType: "application/vnd.docker.distribution.manifest.v2+json"},
+		})
+
+		mockClient.On("GetAcrManifests", ctx, repoName, "", "").Return(manifests, nil).Once()
+		mockClient.On("GetAcrManifests", ctx, repoName, "", "sha256:recent1").Return(createEmptyManifestsResult(), nil).Once()
+
+		cutoff := parseTime(t, "2024-11-01T12:00:00Z")
+
+		result, err := GetUntaggedManifests(ctx, poolSize, mockClient, repoName, false, nil, false, false, &cutoff)
+
+		assert.NoError(t, err)
+		assert.Equal(t, 0, len(result), "Recent manifest should be protected")
+		mockClient.AssertExpectations(t)
+	})
+
+	t.Run("Untagged manifest with nil timestamp is protected", func(t *testing.T) {
+		mockClient := &mocks.AcrCLIClientInterface{}
+
+		manifests := createManifestsResult([]manifestTestData{
+			{digest: "sha256:notime1", tags: nil, lastUpdate: "", mediaType: "application/vnd.docker.distribution.manifest.v2+json"},
+		})
+
+		mockClient.On("GetAcrManifests", ctx, repoName, "", "").Return(manifests, nil).Once()
+		mockClient.On("GetAcrManifests", ctx, repoName, "", "sha256:notime1").Return(createEmptyManifestsResult(), nil).Once()
+
+		cutoff := parseTime(t, "2024-11-01T12:00:00Z")
+
+		result, err := GetUntaggedManifests(ctx, poolSize, mockClient, repoName, false, nil, false, false, &cutoff)
+
+		assert.NoError(t, err)
+		assert.Equal(t, 0, len(result), "Manifest with nil timestamp should be protected")
+		mockClient.AssertExpectations(t)
+	})
+
+	t.Run("Tagged manifest ignores age criteria", func(t *testing.T) {
+		mockClient := &mocks.AcrCLIClientInterface{}
+
+		manifests := createManifestsResult([]manifestTestData{
+			{digest: "sha256:oldtagged", tags: []string{"v1"}, lastUpdate: oldTimestamp, mediaType: "application/vnd.docker.distribution.manifest.v2+json"},
+		})
+
+		mockClient.On("GetAcrManifests", ctx, repoName, "", "").Return(manifests, nil).Once()
+		mockClient.On("GetAcrManifests", ctx, repoName, "", "sha256:oldtagged").Return(createEmptyManifestsResult(), nil).Once()
+
+		cutoff := parseTime(t, "2024-11-01T12:00:00Z")
+
+		result, err := GetUntaggedManifests(ctx, poolSize, mockClient, repoName, false, nil, false, false, &cutoff)
+
+		assert.NoError(t, err)
+		assert.Equal(t, 0, len(result), "Tagged manifest should be protected regardless of age")
+		mockClient.AssertExpectations(t)
+	})
+
+	t.Run("Mixed manifests - only old untagged are deleted", func(t *testing.T) {
+		mockClient := &mocks.AcrCLIClientInterface{}
+
+		manifests := createManifestsResult([]manifestTestData{
+			{digest: "sha256:old1", tags: nil, lastUpdate: oldTimestamp, mediaType: "application/vnd.docker.distribution.manifest.v2+json"},
+			{digest: "sha256:recent1", tags: nil, lastUpdate: recentTimestamp, mediaType: "application/vnd.docker.distribution.manifest.v2+json"},
+			{digest: "sha256:oldtagged", tags: []string{"v1"}, lastUpdate: oldTimestamp, mediaType: "application/vnd.docker.distribution.manifest.v2+json"},
+		})
+
+		mockClient.On("GetAcrManifests", ctx, repoName, "", "").Return(manifests, nil).Once()
+		mockClient.On("GetAcrManifests", ctx, repoName, "", "sha256:oldtagged").Return(createManifestsResult([]manifestTestData{
+			{digest: "sha256:old1", tags: nil, lastUpdate: oldTimestamp, mediaType: "application/vnd.docker.distribution.manifest.v2+json"},
+			{digest: "sha256:recent1", tags: nil, lastUpdate: recentTimestamp, mediaType: "application/vnd.docker.distribution.manifest.v2+json"},
+		}), nil).Once()
+		mockClient.On("GetAcrManifests", ctx, repoName, "", "sha256:recent1").Return(createEmptyManifestsResult(), nil).Once()
+
+		cutoff := parseTime(t, "2024-11-01T12:00:00Z")
+
+		result, err := GetUntaggedManifests(ctx, poolSize, mockClient, repoName, false, nil, false, false, &cutoff)
+
+		assert.NoError(t, err)
+		assert.Equal(t, 1, len(result))
+		assert.Equal(t, "sha256:old1", *result[0].Digest)
+		mockClient.AssertExpectations(t)
+	})
+
+	t.Run("No cutoff specified - age not checked", func(t *testing.T) {
+		mockClient := &mocks.AcrCLIClientInterface{}
+
+		manifests := createManifestsResult([]manifestTestData{
+			{digest: "sha256:old1", tags: nil, lastUpdate: oldTimestamp, mediaType: "application/vnd.docker.distribution.manifest.v2+json"},
+			{digest: "sha256:recent1", tags: nil, lastUpdate: recentTimestamp, mediaType: "application/vnd.docker.distribution.manifest.v2+json"},
+		})
+
+		mockClient.On("GetAcrManifests", ctx, repoName, "", "").Return(manifests, nil).Once()
+		mockClient.On("GetAcrManifests", ctx, repoName, "", "sha256:recent1").Return(createEmptyManifestsResult(), nil).Once()
+
+		result, err := GetUntaggedManifests(ctx, poolSize, mockClient, repoName, false, nil, false, false, nil)
+
+		assert.NoError(t, err)
+		assert.Equal(t, 2, len(result), "All untagged manifests should be candidates when no cutoff is specified")
+		mockClient.AssertExpectations(t)
+	})
+
+	t.Run("Dry run with age criteria", func(t *testing.T) {
+		mockClient := &mocks.AcrCLIClientInterface{}
+
+		manifests := createManifestsResult([]manifestTestData{
+			{digest: "sha256:old1", tags: nil, lastUpdate: oldTimestamp, mediaType: "application/vnd.docker.distribution.manifest.v2+json"},
+			{digest: "sha256:recent1", tags: nil, lastUpdate: recentTimestamp, mediaType: "application/vnd.docker.distribution.manifest.v2+json"},
+		})
+
+		mockClient.On("GetAcrManifests", ctx, repoName, "", "").Return(manifests, nil).Once()
+		mockClient.On("GetAcrManifests", ctx, repoName, "", "sha256:recent1").Return(createEmptyManifestsResult(), nil).Once()
+
+		cutoff := parseTime(t, "2024-11-01T12:00:00Z")
+
+		result, err := GetUntaggedManifests(ctx, poolSize, mockClient, repoName, false, nil, true, false, &cutoff)
+
+		assert.NoError(t, err)
+		assert.Equal(t, 1, len(result), "Dry run should still apply age criteria")
+		assert.Equal(t, "sha256:old1", *result[0].Digest)
+		mockClient.AssertExpectations(t)
+	})
+}
+
+// Helper types and functions for testing
+
+type manifestTestData struct {
+	digest     string
+	tags       []string
+	lastUpdate string
+	mediaType  string
+}
+
+func createManifestsResult(manifests []manifestTestData) *acr.Manifests {
+	attributes := make([]acr.ManifestAttributesBase, len(manifests))
+
+	for i, m := range manifests {
+		deleteEnabled := true
+		writeEnabled := true
+
+		attr := acr.ManifestAttributesBase{
+			Digest:    &m.digest,
+			MediaType: &m.mediaType,
+			ChangeableAttributes: &acr.ChangeableAttributes{
+				DeleteEnabled: &deleteEnabled,
+				WriteEnabled:  &writeEnabled,
+			},
+		}
+
+		if len(m.tags) > 0 {
+			attr.Tags = &m.tags
+		}
+
+		if m.lastUpdate != "" {
+			attr.LastUpdateTime = &m.lastUpdate
+		}
+
+		attributes[i] = attr
+	}
+
+	return &acr.Manifests{
+		ManifestsAttributes: &attributes,
+	}
+}
+
+func createEmptyManifestsResult() *acr.Manifests {
+	return &acr.Manifests{
+		ManifestsAttributes: nil,
+	}
+}
+
+func parseTime(t *testing.T, timeStr string) time.Time {
+	parsed, err := time.Parse(time.RFC3339, timeStr)
+	if err != nil {
+		t.Fatalf("Failed to parse time %s: %v", timeStr, err)
+	}
+	return parsed
 }
