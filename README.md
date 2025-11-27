@@ -5,6 +5,9 @@
 |----|----|----|
 |[![Build Status](https://dev.azure.com/azurecontainerregistry/acr-cli/_apis/build/status/acr-cli_linux?branchName=main)](https://dev.azure.com/azurecontainerregistry/acr-cli/_build/latest?definitionId=16&branchName=main)|[![Build Status](https://dev.azure.com/azurecontainerregistry/acr-cli/_apis/build/status/acr-cli_windows?branchName=main)](https://dev.azure.com/azurecontainerregistry/acr-cli/_build/latest?definitionId=17&branchName=main)|[![Go Report Card](https://goreportcard.com/badge/github.com/Azure/acr-cli)](https://goreportcard.com/report/github.com/Azure/acr-cli)|
 
+> [!IMPORTANT]
+> The `acr purge` feature in this repository is currently in maintenance mode. No new features will be added. A server-side purge solution is planned in Azure Container Registry as its replacement in 2026.
+
 This repository contains the source code for CLI components for Azure Container Registry.
 The CLI consists of a new way to interact with Container Registries, the currently supported commands include
 * Tag: to view all the tags of a repository and individually untag them.
