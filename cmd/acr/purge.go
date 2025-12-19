@@ -65,6 +65,7 @@ var (
 // Default settings for regexp2
 const (
 	defaultRegexpMatchTimeoutSeconds int64 = 60
+	maxAgoDurationYears              int   = 150 // Maximum duration in years for --ago flag to prevent overflow
 )
 
 // purgeParameters defines the parameters that the purge command uses (including the registry name, username and password).
@@ -145,7 +146,7 @@ func newPurgeCmd(rootParams *rootParameters) *cobra.Command {
 	cmd.Flags().BoolVar(&purgeParams.untagged, "untagged", false, "If the untagged flag is set all the manifests that do not have any tags associated to them will be also purged, except if they belong to a manifest list that contains at least one tag")
 	cmd.Flags().BoolVar(&purgeParams.dryRun, "dry-run", false, "If the dry-run flag is set no manifest or tag will be deleted, the output would be the same as if they were deleted")
 	cmd.Flags().BoolVar(&purgeParams.includeLocked, "include-locked", false, "If the include-locked flag is set, locked manifests and tags (where deleteEnabled or writeEnabled is false) will be unlocked before deletion")
-	cmd.Flags().StringVar(&purgeParams.ago, "ago", "", "The tags and untagged manifests that were last updated before this duration will be deleted, the format is [number]d[string] where the first number represents an amount of days and the string is in a Go duration format (e.g. 2d3h6m selects images older than 2 days, 3 hours and 6 minutes)")
+	cmd.Flags().StringVar(&purgeParams.ago, "ago", "", "The tags and untagged manifests that were last updated before this duration will be deleted, the format is [number]d[string] where the first number represents an amount of days and the string is in a Go duration format (e.g. 2d3h6m selects images older than 2 days, 3 hours and 6 minutes). Maximum duration is capped at 150 years to prevent overflow")
 	cmd.Flags().IntVar(&purgeParams.keep, "keep", 0, "Number of latest to-be-deleted tags to keep, use this when you want to keep at least x number of latest tags that could be deleted meeting all other filter criteria")
 	cmd.Flags().StringArrayVarP(&purgeParams.filters, "filter", "f", nil, "Specify the repository and a regular expression filter for the tag name, if a tag matches the filter and is older than the duration specified in ago it will be deleted. Note: If backtracking is used in the regexp it's possible for the expression to run into an infinite loop. The default timeout is set to 1 minute for evaluation of any filter expression. Use the '--filter-timeout-seconds' option to set a different value.")
 	cmd.Flags().StringArrayVarP(&purgeParams.configs, "config", "c", nil, "Authentication config paths (e.g. C://Users/docker/config.json)")
@@ -274,14 +275,47 @@ func parseDuration(ago string) (time.Duration, error) {
 			return time.Duration(0), err
 		}
 	}
+	// Cap at maxAgoDurationYears to prevent overflow
+	const maxDays = maxAgoDurationYears * 365
+	originalDays := days
+	capped := false
+	if days > maxDays {
+		days = maxDays
+		capped = true
+		fmt.Printf("Warning: ago value exceeds maximum duration of %d years, capping to %d years\n", maxAgoDurationYears, maxAgoDurationYears)
+	}
 	// The number of days gets converted to hours.
 	duration := time.Duration(days) * 24 * time.Hour
 	if len(durationString) > 0 {
 		agoDuration, err := time.ParseDuration(durationString)
 		if err != nil {
-			return time.Duration(0), err
+			// Check if it's an overflow error from time.ParseDuration
+			if strings.Contains(err.Error(), "invalid duration") || strings.Contains(err.Error(), "overflow") {
+				// If days were already capped, just use that and ignore the overflow portion
+				if capped {
+					return (-1 * duration), nil
+				}
+				// Cap at max duration and continue
+				agoDuration = time.Duration(maxDays) * 24 * time.Hour
+				fmt.Printf("Warning: ago value exceeds maximum duration of %d years, capping to %d years\n", maxAgoDurationYears, maxAgoDurationYears)
+			} else {
+				return time.Duration(0), err
+			}
 		}
+		// Cap the additional duration to prevent overflow when adding
+		maxDuration := time.Duration(maxDays) * 24 * time.Hour
+		if agoDuration > maxDuration {
+			agoDuration = maxDuration
+			if originalDays <= maxDays && !capped {
+				// Only print warning if we haven't already printed one for days
+				fmt.Printf("Warning: ago value exceeds maximum duration of %d years, capping to %d years\n", maxAgoDurationYears, maxAgoDurationYears)
+			}
+		}
+		// Make sure the combined duration doesn't exceed max
 		duration = duration + agoDuration
+		if duration > maxDuration {
+			duration = maxDuration
+		}
 	}
 	return (-1 * duration), nil
 }

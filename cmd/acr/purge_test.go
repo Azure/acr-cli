@@ -932,8 +932,15 @@ func TestParseDuration(t *testing.T) {
 		{"1d1h3m", -25*time.Hour - 3*time.Minute, nil},
 		{"3d", -3 * 24 * time.Hour, nil},
 		{"", 0, io.EOF},
+		{"999999d", -1 * time.Duration(150*365) * 24 * time.Hour, nil},            // Capped at 150 years
+		{"9999999d", -1 * time.Duration(150*365) * 24 * time.Hour, nil},           // Capped at 150 years
+		{"999999999h", -1 * time.Duration(150*365) * 24 * time.Hour, nil},         // Capped at 150 years
+		{"9999999d999999999h", -1 * time.Duration(150*365) * 24 * time.Hour, nil}, // Capped at 150 years
+		{"0m", 0 * time.Minute, nil},
+		{"-1d", 24 * time.Hour, nil}, // Negative durations pretty much just mean anything can be cleaned up
 		{"15p", 0, errors.New("time: unknown unit \"p\" in duration \"15p\"")},
 		{"15", 0 * time.Minute, errors.New("time: missing unit in duration \"15\"")},
+		{"1d1h3m", -25*time.Hour - 3*time.Minute, nil},
 	}
 	assert := assert.New(t)
 	for _, table := range tables {
