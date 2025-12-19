@@ -171,16 +171,22 @@ func purge(ctx context.Context,
 	dryRun bool,
 	includeLocked bool) (deletedTagsCount int, deletedManifestsCount int, err error) {
 
+	// Parse the duration once instead of for every repository
+	agoDuration, err := parseDuration(tagDeletionSince)
+	if err != nil {
+		return 0, 0, err
+	}
+
 	// In order to print a summary of the deleted tags/manifests the counters get updated everytime a repo is purged.
 	for repoName, tagRegex := range tagFilters {
-		singleDeletedTagsCount, manifestToTagsCountMap, err := purgeTags(ctx, acrClient, repoParallelism, loginURL, repoName, tagDeletionSince, tagRegex, tagsToKeep, filterTimeout, dryRun, includeLocked)
+		singleDeletedTagsCount, manifestToTagsCountMap, err := purgeTags(ctx, acrClient, repoParallelism, loginURL, repoName, agoDuration, tagRegex, tagsToKeep, filterTimeout, dryRun, includeLocked)
 		if err != nil {
 			return deletedTagsCount, deletedManifestsCount, fmt.Errorf("failed to purge tags: %w", err)
 		}
 		singleDeletedManifestsCount := 0
 		// If the untagged flag is set then also manifests are deleted.
 		if removeUtaggedManifests {
-			singleDeletedManifestsCount, err = purgeDanglingManifests(ctx, acrClient, repoParallelism, loginURL, repoName, tagDeletionSince, manifestToTagsCountMap, dryRun, includeLocked)
+			singleDeletedManifestsCount, err = purgeDanglingManifests(ctx, acrClient, repoParallelism, loginURL, repoName, agoDuration, manifestToTagsCountMap, dryRun, includeLocked)
 			if err != nil {
 				return deletedTagsCount, deletedManifestsCount, fmt.Errorf("failed to purge manifests: %w", err)
 			}
@@ -194,18 +200,14 @@ func purge(ctx context.Context,
 
 }
 
-// purgeTags deletes all tags that are older than the ago value and that match the tagFilter string.
-func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, repoParallelism int, loginURL string, repoName string, ago string, tagFilter string, keep int, regexpMatchTimeoutSeconds int64, dryRun bool, includeLocked bool) (int, map[string]int, error) {
+// purgeTags deletes all tags that are older than the agoDuration value and that match the tagFilter string.
+func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, repoParallelism int, loginURL string, repoName string, agoDuration time.Duration, tagFilter string, keep int, regexpMatchTimeoutSeconds int64, dryRun bool, includeLocked bool) (int, map[string]int, error) {
 	if dryRun {
 		fmt.Printf("Would delete tags for repository: %s\n", repoName)
 	} else {
 		fmt.Printf("Deleting tags for repository: %s\n", repoName)
 	}
 	manifestToTagsCountMap := make(map[string]int) // This map is used to keep track of how many tags would have been deleted per manifest.
-	agoDuration, err := parseDuration(ago)
-	if err != nil {
-		return -1, manifestToTagsCountMap, err
-	}
 	timeToCompare := time.Now().UTC()
 	// Since the parseDuration function returns a negative duration, it is added to the current duration in order to be able to easily compare
 	// with the LastUpdatedTime attribute a tag has.
@@ -394,15 +396,11 @@ func getTagsToDelete(ctx context.Context,
 
 // purgeDanglingManifests deletes all manifests that do not have any tags associated with them.
 // except the ones that are referenced by a multiarch manifest or that have subject.
-func purgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, repoParallelism int, loginURL string, repoName string, tagDeletionSince string, manifestToTagsCountMap map[string]int, dryRun bool, includeLocked bool) (int, error) {
+func purgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInterface, repoParallelism int, loginURL string, repoName string, agoDuration time.Duration, manifestToTagsCountMap map[string]int, dryRun bool, includeLocked bool) (int, error) {
 	if dryRun {
 		fmt.Printf("Would delete manifests for repository: %s\n", repoName)
 	} else {
 		fmt.Printf("Deleting manifests for repository: %s\n", repoName)
-	}
-	agoDuration, err := parseDuration(tagDeletionSince)
-	if err != nil {
-		return -1, err
 	}
 	timeToCompare := time.Now().UTC().Add(agoDuration)
 	// Contrary to getTagsToDelete, getManifestsToDelete gets all the Manifests at once, this was done because if there is a manifest that has no
