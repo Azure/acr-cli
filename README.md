@@ -121,14 +121,17 @@ The filter flag is used to specify the repository and a regex filter, if a tag i
 
 Examples of filters
 
-| Intention                                                                        | Flag                                  |
-|----------------------------------------------------------------------------------|---------------------------------------|
-| Untag all tags that begin with hello in app repository                           | --filter `"app:^hello.*"`             |
-| Untag tags that end with world in app repository                                 | --filter `"app:\w*world\b"`           |
-| Untag tags that include hello-world in their name in app repository              | --filter `"app:hello-world"`          |
-| Untag all tags that are older than the duration in repositories ending in /cache | --filter `".*/cache:.*"`              |
-| Untag all tags that are older than the duration in app repository                | --filter `"app:.*"`                   |
-| Untag all tags that are older than the duration in all repositories              | --filter `".*:.*"`                    |
+| Intention                                                                           | Flag                                  |
+|-------------------------------------------------------------------------------------|---------------------------------------|
+| Untag all tags that begin with hello in app repository                              | --filter `"app:^hello.*"`             |
+| Untag tags that end with world in app repository                                    | --filter `"app:\w*world\b"`           |
+| Untag tags that include hello-world in their name in app repository                 | --filter `"app:hello-world"`          |
+| Untag all tags in repositories ending in /cache                                     | --filter `".*/cache:.*"`              |
+| Untag all tags in app repository                                                    | --filter `"app:.*"`                   |
+| Untag all tags in all repositories                                                  | --filter `".*:.*"`                    |
+| Clean only untagged manifests in all repos (with --untagged)                        | --filter `".*:^$"`                    |
+| Clean only untagged manifests in app repo (with --untagged)                         | --filter `"app:^$"`                   |
+
 
 #### Ago flag
 
@@ -160,7 +163,7 @@ The following table further explains the functionality of this flag.
 | To delete all images that were last modified before 10 minutes ago            | --ago 10m   |
 | To delete all images that were last modified before 1 hour and 15 minutes ago | --ago 1h15m |
 
-The duration should be of the form \[integer\]d\[string\] where the first integer specifies the number of days and the string is in a go style duration (can be omitted)
+The duration should be of the form \[integer\]d\[string\] where the first integer specifies the number of days and the string is in a go style duration (can be omitted). The maximimum ago duration is set to 150 years but that will effectively clean nothing up as no images should be that old.
 
 ### Optional purge flags
 
