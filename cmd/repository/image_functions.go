@@ -108,7 +108,10 @@ func CollectTagFilters(ctx context.Context, rawFilters []string, client acrapi.B
 
 	// If catalog listing fails (common in ABAC registries), we'll handle filters differently
 	if err != nil {
-		// Check if this is likely an ABAC registry catalog listing permission issue
+		// Best-effort heuristic to detect ABAC registry permission issues.
+		// We check for common auth-related error strings since the underlying error type
+		// doesn't expose HTTP status codes directly. This may need adjustment if ACR
+		// changes its error message format.
 		if strings.Contains(err.Error(), "UNAUTHORIZED") || strings.Contains(err.Error(), "401") ||
 			strings.Contains(err.Error(), "403") || strings.Contains(err.Error(), "FORBIDDEN") {
 			isABACRegistry = true
