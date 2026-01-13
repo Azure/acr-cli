@@ -313,3 +313,87 @@ func TestRefreshTokenForRepositoryIncludesCatalogScope(t *testing.T) {
 		t.Fatalf("unexpected expiration %d", client.accessTokenExp)
 	}
 }
+
+func TestHasRequiredScope(t *testing.T) {
+	tests := []struct {
+		name          string
+		currentScopes []string
+		repoName      string
+		expected      bool
+	}{
+		{
+			name:          "wildcard pull scope",
+			currentScopes: []string{"repository:*:pull"},
+			repoName:      "library/alpine",
+			expected:      true,
+		},
+		{
+			name:          "wildcard all scope",
+			currentScopes: []string{"repository:*:*"},
+			repoName:      "any/repo",
+			expected:      true,
+		},
+		{
+			name:          "exact repo match with pull",
+			currentScopes: []string{"repository:library/alpine:pull"},
+			repoName:      "library/alpine",
+			expected:      true,
+		},
+		{
+			name:          "exact repo match with multiple permissions",
+			currentScopes: []string{"repository:library/alpine:pull,push,delete"},
+			repoName:      "library/alpine",
+			expected:      true,
+		},
+		{
+			name:          "exact repo match with wildcard permission",
+			currentScopes: []string{"repository:library/alpine:*"},
+			repoName:      "library/alpine",
+			expected:      true,
+		},
+		{
+			name:          "no matching scope",
+			currentScopes: []string{"repository:other/repo:pull"},
+			repoName:      "library/alpine",
+			expected:      false,
+		},
+		{
+			name:          "catalog only scope",
+			currentScopes: []string{"registry:catalog:*"},
+			repoName:      "library/alpine",
+			expected:      false,
+		},
+		{
+			name:          "empty scopes",
+			currentScopes: []string{},
+			repoName:      "library/alpine",
+			expected:      false,
+		},
+		{
+			name:          "repo name with nested path",
+			currentScopes: []string{"repository:org/team/service:pull,push"},
+			repoName:      "org/team/service",
+			expected:      true,
+		},
+		{
+			name:          "partial repo name match should not work",
+			currentScopes: []string{"repository:library:pull"},
+			repoName:      "library/alpine",
+			expected:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := &AcrCLIClient{
+				token:         &adal.Token{AccessToken: "dummy"},
+				currentScopes: tt.currentScopes,
+			}
+			result := client.hasRequiredScope(tt.repoName)
+			if result != tt.expected {
+				t.Errorf("hasRequiredScope(%q) = %v, want %v (scopes: %v)",
+					tt.repoName, result, tt.expected, tt.currentScopes)
+			}
+		})
+	}
+}
