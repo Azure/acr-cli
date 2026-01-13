@@ -386,3 +386,97 @@ func secureRandomNum(minDepth, maxDepth int) int {
 	}
 	return int(n.Int64()) + minDepth
 }
+
+func TestIsLikelyExactRepoName(t *testing.T) {
+	testCases := []struct {
+		name     string
+		pattern  string
+		expected bool
+	}{
+		// Exact repository names (should return true)
+		{
+			name:     "Simple repo name",
+			pattern:  "myrepo",
+			expected: true,
+		},
+		{
+			name:     "Repo name with slash",
+			pattern:  "library/alpine",
+			expected: true,
+		},
+		{
+			name:     "Repo name with multiple slashes",
+			pattern:  "org/team/service",
+			expected: true,
+		},
+		{
+			name:     "Repo name with hyphen and underscore",
+			pattern:  "my-repo_name",
+			expected: true,
+		},
+
+		// Regex patterns (should return false)
+		{
+			name:     "Wildcard pattern",
+			pattern:  "repo.*",
+			expected: false,
+		},
+		{
+			name:     "Character class",
+			pattern:  "repo[0-9]",
+			expected: false,
+		},
+		{
+			name:     "Alternation",
+			pattern:  "repo1|repo2",
+			expected: false,
+		},
+		{
+			name:     "Anchor start",
+			pattern:  "^repo",
+			expected: false,
+		},
+		{
+			name:     "Anchor end",
+			pattern:  "repo$",
+			expected: false,
+		},
+		{
+			name:     "Plus quantifier",
+			pattern:  "repo+",
+			expected: false,
+		},
+		{
+			name:     "Question mark quantifier",
+			pattern:  "repo?",
+			expected: false,
+		},
+		{
+			name:     "Grouping",
+			pattern:  "(repo)",
+			expected: false,
+		},
+		{
+			name:     "Escape sequence",
+			pattern:  "repo\\.name",
+			expected: false,
+		},
+		{
+			name:     "Curly braces quantifier",
+			pattern:  "repo{2}",
+			expected: false,
+		},
+		{
+			name:     "Dot metacharacter",
+			pattern:  "repo.name",
+			expected: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := isLikelyExactRepoName(tc.pattern)
+			assert.Equal(t, tc.expected, result, "Pattern: %s", tc.pattern)
+		})
+	}
+}
