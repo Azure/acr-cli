@@ -293,13 +293,11 @@ func (c *AcrCLIClient) hasRequiredScope(repoName string) bool {
 		if scope == "repository:*:pull" || scope == "repository:*:*" {
 			return true
 		}
-		// Check for specific repository scope
+		// Check for specific repository scope.
+		// We use CutPrefix to safely extract permissions, which handles repo names
+		// that could theoretically contain ':' characters.
 		prefix := fmt.Sprintf("repository:%s:", repoName)
-		if strings.HasPrefix(scope, prefix) {
-			// Extract permissions by removing the known prefix.
-			// This is safer than Split/SplitN because repoName could theoretically
-			// contain ':' characters, which would break index-based parsing.
-			permissionsStr := strings.TrimPrefix(scope, prefix)
+		if permissionsStr, found := strings.CutPrefix(scope, prefix); found {
 			permissions := strings.Split(permissionsStr, ",")
 			for _, perm := range permissions {
 				if perm == "pull" || perm == "push" || perm == "delete" || perm == "*" {
