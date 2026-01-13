@@ -100,8 +100,10 @@ func newAcrCLIClientWithBasicAuth(loginURL string, username string, password str
 func newAcrCLIClientWithBearerAuth(loginURL string, refreshToken string) (AcrCLIClient, error) {
 	newAcrCLIClient := newAcrCLIClient(loginURL)
 	ctx := context.Background()
-	// Try to get a token with both catalog and repository wildcard scope for non-ABAC registries
-	// This maintains backward compatibility while supporting ABAC registries
+	// Try to get a token with catalog and repository wildcard scope for non-ABAC registries.
+	// We use "pull" instead of "*" because it's less likely to be rejected by registries with
+	// stricter permission policies, while still allowing ABAC detection to work correctly.
+	// For actual operations, repository-specific tokens with full permissions are requested.
 	scope := registryCatalogScope + " repository:*:pull"
 	accessTokenResponse, err := newAcrCLIClient.AutorestClient.GetAcrAccessToken(ctx, loginURL, scope, refreshToken)
 	isABAC := false
@@ -292,15 +294,16 @@ func (c *AcrCLIClient) hasRequiredScope(repoName string) bool {
 			return true
 		}
 		// Check for specific repository scope
-		if strings.HasPrefix(scope, fmt.Sprintf("repository:%s:", repoName)) {
-			// Check if we have at least pull permission
-			parts := strings.Split(scope, ":")
-			if len(parts) >= 3 {
-				permissions := strings.Split(parts[2], ",")
-				for _, perm := range permissions {
-					if perm == "pull" || perm == "push" || perm == "delete" || perm == "*" {
-						return true
-					}
+		prefix := fmt.Sprintf("repository:%s:", repoName)
+		if strings.HasPrefix(scope, prefix) {
+			// Extract permissions by removing the known prefix.
+			// This is safer than Split/SplitN because repoName could theoretically
+			// contain ':' characters, which would break index-based parsing.
+			permissionsStr := strings.TrimPrefix(scope, prefix)
+			permissions := strings.Split(permissionsStr, ",")
+			for _, perm := range permissions {
+				if perm == "pull" || perm == "push" || perm == "delete" || perm == "*" {
+					return true
 				}
 			}
 		}
