@@ -43,6 +43,9 @@ USE_FAST_GENERATION="${USE_FAST_GENERATION:-true}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ACR_CLI="${SCRIPT_DIR}/../../bin/acr"
 
+# Source registry utilities
+source "${SCRIPT_DIR}/registry-utils.sh"
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -59,21 +62,8 @@ FAILED_TESTS=()
 
 # Cleanup function
 cleanup_temp_registry() {
-    if [ "$TEMP_REGISTRY_CREATED" = true ] && [ -n "$TEMP_REGISTRY_NAME" ]; then
-        echo -e "\n${YELLOW}Temporary registry cleanup${NC}"
-        echo "Registry: $TEMP_REGISTRY_NAME"
-        echo "Resource group: $RESOURCE_GROUP"
-        read -p "Delete temporary registry and resource group? (y/N) " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            echo -e "${GREEN}Deleting temporary registry...${NC}"
-            az group delete --name "$RESOURCE_GROUP" --yes --no-wait
-            echo "Deletion initiated."
-        else
-            echo -e "${YELLOW}Keeping temporary registry. Delete manually with:${NC}"
-            echo "  az group delete --name $RESOURCE_GROUP --yes"
-        fi
-    fi
+    # Use the registry utility cleanup function
+    cleanup_temporary_registry
 
     # Print test summary
     echo -e "\n${BLUE}=== Test Summary ===${NC}"
@@ -321,38 +311,10 @@ generate_test_images_sequential() {
     echo "Finished creating test images"
 }
 
-# Create temporary registry if needed
-if [ -z "$REGISTRY" ]; then
-    echo -e "${GREEN}Creating temporary registry...${NC}"
-    # Generate random suffix in a portable way
-    if command -v openssl >/dev/null 2>&1; then
-        RANDOM_SUFFIX=$(openssl rand -hex 4)
-    elif command -v sha256sum >/dev/null 2>&1; then
-        RANDOM_SUFFIX=$(date +%s | sha256sum | head -c 8)
-    elif command -v shasum >/dev/null 2>&1; then
-        RANDOM_SUFFIX=$(date +%s | shasum | head -c 8)
-    else
-        # Fallback to using process ID and timestamp
-        RANDOM_SUFFIX=$(printf "%x%x" $$ $(date +%s) | head -c 8)
-    fi
-    TEMP_REGISTRY_NAME="acrtest${RANDOM_SUFFIX}"
-    RESOURCE_GROUP="rg-acr-test-${RANDOM_SUFFIX}"
-
-    echo "Creating resource group: $RESOURCE_GROUP"
-    if ! az group create --name "$RESOURCE_GROUP" --location "eastus" --output none; then
-        echo -e "${RED}Failed to create resource group${NC}"
-        exit 1
-    fi
-
-    echo "Creating registry: $TEMP_REGISTRY_NAME"
-    if ! az acr create --resource-group "$RESOURCE_GROUP" --name "$TEMP_REGISTRY_NAME" --sku Basic --admin-enabled true --output none; then
-        echo -e "${RED}Failed to create registry${NC}"
-        exit 1
-    fi
-
-    REGISTRY="${TEMP_REGISTRY_NAME}.azurecr.io"
-    TEMP_REGISTRY_CREATED=true
-    echo -e "${GREEN}Registry created: $REGISTRY${NC}"
+# Ensure we have a registry to test with
+if ! ensure_test_registry; then
+    echo -e "${RED}Error: Failed to set up test registry${NC}"
+    exit 1
 fi
 
 # Build ACR CLI if needed
@@ -361,9 +323,7 @@ if [ ! -f "$ACR_CLI" ]; then
     (cd "$SCRIPT_DIR/../.." && make binaries)
 fi
 
-# Login to ACR
-echo "Logging in to registry..."
-az acr login --name "$(get_registry_name)" >/dev/null 2>&1
+# Registry is already set up and logged in via ensure_test_registry
 
 echo -e "\n${BLUE}=== ACR Purge Test Suite ===${NC}"
 echo "Registry: $REGISTRY"

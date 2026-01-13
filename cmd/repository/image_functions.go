@@ -104,8 +104,18 @@ func GetRepositoryAndTagRegex(filter string) (string, string, error) {
 // CollectTagFilters collects all matching repos and collects the associated tag filters
 func CollectTagFilters(ctx context.Context, rawFilters []string, client acrapi.BaseClientAPI, regexMatchTimeout int64, repoPageSize int32) (map[string]string, error) {
 	allRepoNames, err := GetAllRepositoryNames(ctx, client, repoPageSize)
+	isABACRegistry := false
+
+	// If catalog listing fails (common in ABAC registries), we'll handle filters differently
 	if err != nil {
-		return nil, err
+		// Check if this is likely an ABAC registry catalog listing permission issue
+		if strings.Contains(err.Error(), "UNAUTHORIZED") || strings.Contains(err.Error(), "401") ||
+			strings.Contains(err.Error(), "403") || strings.Contains(err.Error(), "FORBIDDEN") {
+			isABACRegistry = true
+			allRepoNames = []string{} // Start with empty list for ABAC handling
+		} else {
+			return nil, err // Return other errors as-is
+		}
 	}
 
 	tagFilters := map[string]string{}
@@ -114,10 +124,26 @@ func CollectTagFilters(ctx context.Context, rawFilters []string, client acrapi.B
 		if err != nil {
 			return nil, err
 		}
-		repoNames, err := GetMatchingRepos(allRepoNames, "^"+repoRegex+"$", regexMatchTimeout)
-		if err != nil {
-			return nil, err
+
+		var repoNames []string
+
+		if isABACRegistry {
+			// For ABAC registries, treat repository patterns as exact names if they don't contain regex metacharacters
+			// This handles common cases where users specify exact repository names
+			if isLikelyExactRepoName(repoRegex) {
+				repoNames = []string{repoRegex}
+			} else {
+				// For complex repo patterns in ABAC registries, we can't list repositories,
+				// so return an error with helpful message
+				return nil, fmt.Errorf("ABAC registry detected: complex repository patterns (%s) require catalog listing permissions. Use exact repository names or add 'Container Registry Repository Catalog Lister' role", repoRegex)
+			}
+		} else {
+			repoNames, err = GetMatchingRepos(allRepoNames, "^"+repoRegex+"$", regexMatchTimeout)
+			if err != nil {
+				return nil, err
+			}
 		}
+
 		for _, repoName := range repoNames {
 			if _, ok := tagFilters[repoName]; ok {
 				// To only iterate through a repo once a big regex filter is made of all the filters of a particular repo.
@@ -129,6 +155,20 @@ func CollectTagFilters(ctx context.Context, rawFilters []string, client acrapi.B
 	}
 
 	return tagFilters, nil
+}
+
+// isLikelyExactRepoName checks if a repository pattern is likely an exact repository name
+// rather than a regex pattern by looking for common regex metacharacters
+func isLikelyExactRepoName(repoPattern string) bool {
+	// Common regex metacharacters that would indicate this is a pattern, not an exact name
+	regexChars := []string{".", "*", "+", "?", "^", "$", "[", "]", "(", ")", "|", "\\", "{", "}"}
+
+	for _, char := range regexChars {
+		if strings.Contains(repoPattern, char) {
+			return false
+		}
+	}
+	return true
 }
 
 // GetLastTagFromResponse extracts the last tag from pagination headers in the response.
@@ -187,6 +227,7 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 	for resultManifests != nil && resultManifests.ManifestsAttributes != nil {
 		manifests := *resultManifests.ManifestsAttributes
 		for _, manifest := range manifests {
+			manifest := manifest // capture range variable for goroutines
 			// In the rare event that we run into an error with the errgroup while still doing the manifest acquisition loop,
 			// we need to check if the context is done to break out of the loop early.
 			if ctx.Err() != nil {

@@ -4,6 +4,7 @@
 package api
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"net/http"
@@ -13,7 +14,9 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
+	acrapi "github.com/Azure/acr-cli/acr"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/adal"
 )
@@ -78,7 +81,7 @@ func TestGetExpiration(t *testing.T) {
 
 func TestGetAcrCLIClientWithAuth(t *testing.T) {
 	var testLoginURL string
-	testTokenScope := "registry:catalog:* repository:*:*"
+	testTokenScope := "registry:catalog:*"
 	testAccessToken := strings.Join([]string{
 		base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"RS256"}`)),
 		base64.RawURLEncoding.EncodeToString([]byte(`{"exp":1563910981}`)),
@@ -232,5 +235,81 @@ func TestGetAcrCLIClientWithAuth(t *testing.T) {
 				t.Error("incorrect AutorestClient.Authorizer")
 			}
 		})
+	}
+}
+
+func TestRefreshTokenForRepositoryIncludesCatalogScope(t *testing.T) {
+	repoName := "library/test"
+	refreshToken := "test-refresh-token"
+	exp := time.Now().Add(time.Hour).Unix()
+	payload := fmt.Sprintf(`{"exp":%d,"access":[{"type":"registry","name":"catalog","actions":["*"]},{"type":"repository","name":"%s","actions":["pull","push","delete"]}]}`, exp, repoName)
+	testAccessToken := strings.Join([]string{
+		base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"RS256"}`)),
+		base64.RawURLEncoding.EncodeToString([]byte(payload)),
+		"",
+	}, ".")
+	expectedScope := fmt.Sprintf("%s repository:%s:pull,push,delete", registryCatalogScope, repoName)
+
+	var authServer *httptest.Server
+	authServer = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/oauth2/token" {
+			t.Fatalf("unexpected request path %s", r.URL.Path)
+		}
+		if r.Method != http.MethodPost {
+			t.Fatalf("unexpected request method %s", r.Method)
+		}
+		if err := r.ParseForm(); err != nil {
+			t.Fatalf("unable to parse form: %v", err)
+		}
+		if got := r.PostForm.Get("scope"); got != expectedScope {
+			t.Fatalf("unexpected scope %q", got)
+		}
+		if got := r.PostForm.Get("refresh_token"); got != refreshToken {
+			t.Fatalf("unexpected refresh token %q", got)
+		}
+		if got := r.PostForm.Get("service"); got != authServer.URL {
+			t.Fatalf("unexpected service %q", got)
+		}
+		if _, err := fmt.Fprintf(w, `{"access_token":%q}`, testAccessToken); err != nil {
+			t.Fatalf("unable to write access token: %v", err)
+		}
+	}))
+	defer authServer.Close()
+
+	client := AcrCLIClient{
+		AutorestClient:        acrapi.NewWithoutDefaults(authServer.URL),
+		manifestTagFetchCount: manifestTagFetchCount,
+		loginURL:              authServer.URL,
+		token: &adal.Token{
+			RefreshToken: refreshToken,
+		},
+		currentScopes: []string{registryCatalogScope},
+		isABAC:        true,
+	}
+
+	sender := autorest.CreateSender()
+	httpClient, ok := sender.(*http.Client)
+	if !ok {
+		t.Fatalf("unexpected sender type %T", sender)
+	}
+	httpClient.Transport = authServer.Client().Transport
+	client.AutorestClient.Sender = sender
+
+	if err := refreshTokenForRepository(context.Background(), &client, repoName); err != nil {
+		t.Fatalf("refreshTokenForRepository() error = %v", err)
+	}
+
+	if client.token == nil || client.token.AccessToken != testAccessToken {
+		t.Fatalf("unexpected access token %v", client.token)
+	}
+	expectedScopes := []string{
+		registryCatalogScope,
+		fmt.Sprintf("repository:%s:pull,push,delete", repoName),
+	}
+	if !reflect.DeepEqual(client.currentScopes, expectedScopes) {
+		t.Fatalf("unexpected scopes %v", client.currentScopes)
+	}
+	if client.accessTokenExp != exp {
+		t.Fatalf("unexpected expiration %d", client.accessTokenExp)
 	}
 }

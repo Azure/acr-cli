@@ -32,7 +32,10 @@ func ListTags(ctx context.Context, acrClient api.AcrCLIClientInterface, repoName
 	}
 
 	var tagList []acr.TagAttributesBase
-	tagList = append(tagList, *resultTags.TagsAttributes...)
+	// Check if TagsAttributes is not nil before dereferencing
+	if resultTags.TagsAttributes != nil {
+		tagList = append(tagList, *resultTags.TagsAttributes...)
+	}
 
 	// A for loop is used because the GetAcrTags method returns by default only 100 tags and their attributes.
 	for resultTags != nil && resultTags.TagsAttributes != nil {
