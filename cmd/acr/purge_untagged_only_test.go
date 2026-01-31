@@ -510,8 +510,9 @@ func TestPurgeDanglingManifestsWithAgoAndKeep(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 
 		// Create manifests with different timestamps
-		oldManifest := createManifestWithTime("sha256:old123", "2023-01-01T00:00:00Z")
-		recentManifest := createManifestWithTime("sha256:recent123", "2024-12-01T00:00:00Z")
+		// old manifest: more than 300 days ago from now (2026), recent: less than 300 days
+		oldManifest := createManifestWithTime("sha256:old123", "2025-01-01T00:00:00Z")
+		recentManifest := createManifestWithTime("sha256:recent123", "2026-01-15T00:00:00Z")
 
 		manifestsResult := &acr.Manifests{
 			Response: autorest.Response{
@@ -535,7 +536,7 @@ func TestPurgeDanglingManifestsWithAgoAndKeep(t *testing.T) {
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:old123").Return(nil, nil).Once()
 
 		// Call with 300 days ago (should only delete the old manifest from 2023)
-		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, "300d", 0, nil, false, false)
+		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, mustParseDuration("300d"), 0, nil, false, false)
 
 		assert.Nil(err, "Should not return error")
 		assert.Equal(1, deletedCount, "Should delete only the old manifest")
@@ -580,7 +581,7 @@ func TestPurgeDanglingManifestsWithAgoAndKeep(t *testing.T) {
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:medium").Return(nil, nil).Once()
 
 		// Call with keep=2 (should preserve the 2 most recent manifests)
-		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, "", 2, nil, false, false)
+		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, 0, 2, nil, false, false)
 
 		assert.Nil(err, "Should not return error")
 		assert.Equal(3, deletedCount, "Should delete 3 manifests, keeping 2 most recent")
@@ -592,13 +593,14 @@ func TestPurgeDanglingManifestsWithAgoAndKeep(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 
-		// Create manifests where some are old enough and some are not
+		// Create manifests where some are old enough (>300 days) and some are not
+		// 300 days before 2026-01-31 is approximately 2025-04-06
 		manifests := []acr.ManifestAttributesBase{
-			createManifestWithTime("sha256:veryold1", "2023-01-01T00:00:00Z"),
-			createManifestWithTime("sha256:veryold2", "2023-02-01T00:00:00Z"),
-			createManifestWithTime("sha256:veryold3", "2023-03-01T00:00:00Z"),
-			createManifestWithTime("sha256:recent1", "2024-12-01T00:00:00Z"), // Too recent
-			createManifestWithTime("sha256:recent2", "2024-12-15T00:00:00Z"), // Too recent
+			createManifestWithTime("sha256:veryold1", "2025-01-01T00:00:00Z"), // Old enough
+			createManifestWithTime("sha256:veryold2", "2025-02-01T00:00:00Z"), // Old enough
+			createManifestWithTime("sha256:veryold3", "2025-03-01T00:00:00Z"), // Old enough
+			createManifestWithTime("sha256:recent1", "2026-01-01T00:00:00Z"),  // Too recent (<300 days)
+			createManifestWithTime("sha256:recent2", "2026-01-15T00:00:00Z"),  // Too recent (<300 days)
 		}
 
 		manifestsResult := &acr.Manifests{
@@ -624,7 +626,7 @@ func TestPurgeDanglingManifestsWithAgoAndKeep(t *testing.T) {
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:veryold2").Return(nil, nil).Once()
 
 		// Call with both age filter (300 days) and keep (keep 1 of the old ones)
-		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, "300d", 1, nil, false, false)
+		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, mustParseDuration("300d"), 1, nil, false, false)
 
 		assert.Nil(err, "Should not return error")
 		assert.Equal(2, deletedCount, "Should delete 2 old manifests, keeping 1 old + all recent ones")
@@ -636,8 +638,9 @@ func TestPurgeDanglingManifestsWithAgoAndKeep(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 
-		oldManifest := createManifestWithTime("sha256:old123", "2023-01-01T00:00:00Z")
-		recentManifest := createManifestWithTime("sha256:recent123", "2024-12-01T00:00:00Z")
+		// old manifest: more than 300 days ago, recent: less than 300 days
+		oldManifest := createManifestWithTime("sha256:old123", "2025-01-01T00:00:00Z")
+		recentManifest := createManifestWithTime("sha256:recent123", "2026-01-15T00:00:00Z")
 
 		manifestsResult := &acr.Manifests{
 			Response: autorest.Response{
@@ -660,7 +663,7 @@ func TestPurgeDanglingManifestsWithAgoAndKeep(t *testing.T) {
 		// No UpdateAcrManifestAttributes calls expected for dry run
 
 		// Call with dry run and age filter
-		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, "300d", 0, nil, true, false)
+		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, mustParseDuration("300d"), 0, nil, true, false)
 
 		assert.Nil(err, "Should not return error")
 		assert.Equal(1, deletedCount, "Should report 1 manifest would be deleted")
