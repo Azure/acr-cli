@@ -77,8 +77,8 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 			mockClient,
 			testLoginURL,
 			defaultPoolSize,
-			"", // ago is empty for untagged-only
-			0,  // keep is 0 for untagged-only
+			0, // ago is 0 for untagged-only (meaning all past manifests are eligible)
+			0, // keep is 0 for untagged-only
 			60,
 			true, // removeUntaggedManifests
 			true, // untaggedOnly
@@ -129,8 +129,8 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 			mockClient,
 			testLoginURL,
 			defaultPoolSize,
-			"", // ago is empty for untagged-only
-			0,  // keep is 0 for untagged-only
+			0, // ago is 0 for untagged-only (meaning all past manifests are eligible)
+			0, // keep is 0 for untagged-only
 			60,
 			true, // removeUntaggedManifests
 			true, // untaggedOnly
@@ -198,8 +198,8 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 			mockClient,
 			testLoginURL,
 			defaultPoolSize,
-			"", // ago is empty for untagged-only
-			0,  // keep is 0 for untagged-only
+			0, // ago is 0 for untagged-only (meaning all past manifests are eligible)
+			0, // keep is 0 for untagged-only
 			60,
 			true, // removeUntaggedManifests
 			true, // untaggedOnly
@@ -262,8 +262,8 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 			mockClient,
 			testLoginURL,
 			defaultPoolSize,
-			"", // ago is empty for untagged-only
-			0,  // keep is 0 for untagged-only
+			0, // ago is 0 for untagged-only (meaning all past manifests are eligible)
+			0, // keep is 0 for untagged-only
 			60,
 			true, // removeUntaggedManifests
 			true, // untaggedOnly
@@ -343,8 +343,8 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 			mockClient,
 			testLoginURL,
 			defaultPoolSize,
-			"", // ago is empty for untagged-only
-			0,  // keep is 0 for untagged-only
+			0, // ago is 0 for untagged-only (meaning all past manifests are eligible)
+			0, // keep is 0 for untagged-only
 			60,
 			true, // removeUntaggedManifests
 			true, // untaggedOnly
@@ -421,8 +421,8 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 			mockClient,
 			testLoginURL,
 			defaultPoolSize,
-			"", // ago is empty for untagged-only
-			0,  // keep is 0 for untagged-only
+			0, // ago is 0 for untagged-only (meaning all past manifests are eligible)
+			0, // keep is 0 for untagged-only
 			60,
 			true, // removeUntaggedManifests
 			true, // untaggedOnly

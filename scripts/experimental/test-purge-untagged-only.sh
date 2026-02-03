@@ -601,9 +601,10 @@ run_performance_tests() {
     local untagged_only_time=$((end_time - start_time))
     
     # Test regular purge with --untagged performance
+    # Use ^$ tag filter (matches nothing) to avoid cleaning up tags for a fair comparison
     echo "Testing regular purge with --untagged performance..."
     start_time=$(date +%s%N)
-    "$ACR_CLI" purge --registry "$REGISTRY" --filter "$repo:.*" --ago 0d --untagged --dry-run >/dev/null 2>&1
+    "$ACR_CLI" purge --registry "$REGISTRY" --filter "$repo:^\$" --ago 0d --untagged --dry-run >/dev/null 2>&1
     end_time=$(date +%s%N)
     local regular_purge_time=$((end_time - start_time))
     

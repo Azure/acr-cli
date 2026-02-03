@@ -33,7 +33,7 @@ const (
   - Delete tags older than 7 days that begin with "hello", keeping the latest 2
     	acr purge -r example --filter "hello-world:^hello.*" --ago 7d --keep 2
 
-  - Delete tags containing "test" that are older than 5 days, then clean up any dangling manifests left behind
+  - Delete tags containing "test" that are older than 5 days, then delete any dangling (untagged) manifests older than 5 days
 	acr purge -r example --filter "hello-world:\w*test\w*" --ago 5d --untagged 
 
   DANGLING MANIFEST CLEANUP EXAMPLES (--untagged-only is the primary way to clean up dangling manifests):
@@ -101,13 +101,35 @@ func newPurgeCmd(rootParams *rootParameters) *cobra.Command {
 		Example: purgeExampleMessage,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			// Validate flag combinations before authentication
-			if !purgeParams.untaggedOnly && !purgeParams.untagged {
-				// When neither untagged nor untagged-only is set, require filter and ago
+			// untagged-only mode: filter and ago are optional (skip validation)
+			// untagged mode: requires filter and ago (it's a cleanup step after tag deletion)
+			// standard mode: requires filter and ago for tag deletion
+			if purgeParams.untagged {
+				if len(purgeParams.filters) == 0 {
+					return fmt.Errorf("--filter is required when using --untagged")
+				}
+				if purgeParams.ago == "" {
+					return fmt.Errorf("--ago is required when using --untagged")
+				}
+			} else if !purgeParams.untaggedOnly {
 				if len(purgeParams.filters) == 0 {
 					return fmt.Errorf("--filter is required when not using --untagged-only")
 				}
 				if purgeParams.ago == "" {
 					return fmt.Errorf("--ago is required when not using --untagged-only")
+				}
+			}
+
+			// Parse and validate duration early (before authentication)
+			var agoDuration time.Duration
+			if purgeParams.ago == "" {
+				// Use 0 duration so timeToCompare equals now, meaning all past manifests are eligible
+				agoDuration = 0
+			} else {
+				var err error
+				agoDuration, err = parseDuration(purgeParams.ago)
+				if err != nil {
+					return err
 				}
 			}
 
@@ -134,7 +156,7 @@ func newPurgeCmd(rootParams *rootParameters) *cobra.Command {
 				}
 				tagFilters = make(map[string]string)
 				for _, repoName := range allRepoNames {
-					tagFilters[repoName] = ".*" // dummy filter that won't be used
+					tagFilters[repoName] = "" // empty filter - won't be used in untagged-only mode
 				}
 			} else if len(purgeParams.filters) > 0 {
 				tagFilters, err = repository.CollectTagFilters(ctx, purgeParams.filters, acrClient.AutorestClient, purgeParams.filterTimeout, purgeParams.repoPageSize)
@@ -161,7 +183,10 @@ func newPurgeCmd(rootParams *rootParameters) *cobra.Command {
 				fmt.Printf("Specified concurrency value too large. Set to maximum value: %d \n", maxPoolSize)
 			}
 
-			deletedTagsCount, deletedManifestsCount, err := purge(ctx, acrClient, loginURL, repoParallelism, purgeParams.ago, purgeParams.keep, purgeParams.filterTimeout, purgeParams.untagged || purgeParams.untaggedOnly, purgeParams.untaggedOnly, tagFilters, purgeParams.dryRun, purgeParams.includeLocked)
+			// Combine flags for clarity - these are mutually exclusive
+			supportUntaggedCleanup := purgeParams.untagged || purgeParams.untaggedOnly
+
+			deletedTagsCount, deletedManifestsCount, err := purge(ctx, acrClient, loginURL, repoParallelism, agoDuration, purgeParams.keep, purgeParams.filterTimeout, supportUntaggedCleanup, purgeParams.untaggedOnly, tagFilters, purgeParams.dryRun, purgeParams.includeLocked)
 
 			if err != nil {
 				fmt.Printf("Failed to complete purge: %v \n", err)
@@ -181,7 +206,7 @@ func newPurgeCmd(rootParams *rootParameters) *cobra.Command {
 	}
 
 	cmd.Flags().BoolVar(&purgeParams.untagged, "untagged", false, "In addition to deleting tags (based on --filter and --ago), also delete untagged manifests that were left behind after tag deletion. This is typically used as a cleanup step after deleting tags. Note: This requires --filter and --ago to be specified")
-	cmd.Flags().BoolVar(&purgeParams.untaggedOnly, "untagged-only", false, "Clean up dangling manifests: Delete ONLY untagged manifests (manifests without any tags), without deleting any tags first. This is the primary way to clean up dangling manifests in your registry. Optional: Use --ago to delete only old untagged manifests, --keep to preserve recent ones, and --filter to target specific repositories")
+	cmd.Flags().BoolVar(&purgeParams.untaggedOnly, "untagged-only", false, "Clean up dangling manifests: Delete ONLY untagged manifests (manifests without any tags), without deleting any tags first. This is the primary way to clean up dangling manifests in your registry. Optional: Use --ago to delete only old untagged manifests, --keep to preserve recent ones, and --filter to target specific repositories. Note: Only the repository portion of --filter is used; the tag regex portion is ignored")
 	cmd.Flags().BoolVar(&purgeParams.dryRun, "dry-run", false, "If the dry-run flag is set no manifest or tag will be deleted, the output would be the same as if they were deleted")
 	cmd.Flags().BoolVar(&purgeParams.includeLocked, "include-locked", false, "If the include-locked flag is set, locked manifests and tags (where deleteEnabled or writeEnabled is false) will be unlocked before deletion")
 	cmd.Flags().StringVar(&purgeParams.ago, "ago", "", "Delete tags or untagged manifests that were last updated before this duration. Format: [number]d[string] where the first number represents days and the string is in Go duration format (e.g. 2d3h6m selects images older than 2 days, 3 hours and 6 minutes). Required when deleting tags, optional with --untagged-only. Maximum duration is capped at 150 years to prevent overflow")
@@ -202,48 +227,36 @@ func purge(ctx context.Context,
 	acrClient api.AcrCLIClientInterface,
 	loginURL string,
 	repoParallelism int,
-	tagDeletionSince string,
-	tagsToKeep int,
+	agoDuration time.Duration,
+	keep int,
 	filterTimeout int64,
-	removeUtaggedManifests bool,
+	removeUntaggedManifests bool,
 	untaggedOnly bool,
 	tagFilters map[string]string,
 	dryRun bool,
 	includeLocked bool) (deletedTagsCount int, deletedManifestsCount int, err error) {
-
-	// Parse the duration once instead of for every repository
-	// For untagged-only mode without --ago, use 0 duration to delete all untagged manifests
-	var agoDuration time.Duration
-	if tagDeletionSince == "" {
-		// Use 0 duration so timeToCompare equals now, meaning all past manifests are eligible
-		agoDuration = 0
-	} else {
-		agoDuration, err = parseDuration(tagDeletionSince)
-		if err != nil {
-			return 0, 0, err
-		}
-	}
 
 	// In order to print a summary of the deleted tags/manifests the counters get updated everytime a repo is purged.
 	for repoName, tagRegex := range tagFilters {
 		var singleDeletedTagsCount int
 		var manifestToTagsCountMap map[string]int
 
-		// Skip tag deletion if untagged-only mode is enabled
-		if !untaggedOnly {
-			singleDeletedTagsCount, manifestToTagsCountMap, err = purgeTags(ctx, acrClient, repoParallelism, loginURL, repoName, agoDuration, tagRegex, tagsToKeep, filterTimeout, dryRun, includeLocked)
+		// Handle tag deletion based on mode
+		if untaggedOnly {
+			// Initialize empty map for untagged-only mode (no tag deletion)
+			manifestToTagsCountMap = make(map[string]int)
+		} else {
+			// Standard mode: delete matching tags first
+			singleDeletedTagsCount, manifestToTagsCountMap, err = purgeTags(ctx, acrClient, repoParallelism, loginURL, repoName, agoDuration, tagRegex, keep, filterTimeout, dryRun, includeLocked)
 			if err != nil {
 				return deletedTagsCount, deletedManifestsCount, fmt.Errorf("failed to purge tags: %w", err)
 			}
-		} else {
-			// Initialize empty map for untagged-only mode
-			manifestToTagsCountMap = make(map[string]int)
 		}
 
 		singleDeletedManifestsCount := 0
 		// If the untagged flag is set or untagged-only mode is enabled, delete manifests
-		if removeUtaggedManifests {
-			singleDeletedManifestsCount, err = purgeDanglingManifests(ctx, acrClient, repoParallelism, loginURL, repoName, agoDuration, tagsToKeep, manifestToTagsCountMap, dryRun, includeLocked)
+		if removeUntaggedManifests {
+			singleDeletedManifestsCount, err = purgeDanglingManifests(ctx, acrClient, repoParallelism, loginURL, repoName, agoDuration, keep, manifestToTagsCountMap, dryRun, includeLocked)
 			if err != nil {
 				return deletedTagsCount, deletedManifestsCount, fmt.Errorf("failed to purge manifests: %w", err)
 			}
@@ -451,6 +464,66 @@ func getTagsToDelete(ctx context.Context,
 	return nil, "", skippedTagsCount, nil
 }
 
+// sortManifestsByTime sorts manifests by LastUpdateTime (newest first) with consistent
+// handling of nil or unparseable timestamps and a digest-based tie-breaker for determinism.
+func sortManifestsByTime(manifests []acr.ManifestAttributesBase) {
+	sort.Slice(manifests, func(i, j int) bool {
+		mi := manifests[i]
+		mj := manifests[j]
+
+		// Extract timestamp strings; nil means invalid
+		var si, sj string
+		if mi.LastUpdateTime != nil {
+			si = *mi.LastUpdateTime
+		}
+		if mj.LastUpdateTime != nil {
+			sj = *mj.LastUpdateTime
+		}
+
+		// Parse timestamps, trying RFC3339Nano first then RFC3339
+		ti, errI := time.Parse(time.RFC3339Nano, si)
+		if errI != nil && si != "" {
+			if t, err := time.Parse(time.RFC3339, si); err == nil {
+				ti, errI = t, nil
+			}
+		}
+		tj, errJ := time.Parse(time.RFC3339Nano, sj)
+		if errJ != nil && sj != "" {
+			if t, err := time.Parse(time.RFC3339, sj); err == nil {
+				tj, errJ = t, nil
+			}
+		}
+
+		// Define validity flags
+		vi := (errI == nil)
+		vj := (errJ == nil)
+
+		// Ordering rules (total order):
+		// 1) Valid timestamps come before invalid (invalid considered oldest, so deleted first)
+		if vi != vj {
+			return vi // true if i valid and j invalid (i should be kept, j deleted)
+		}
+
+		// 2) Both valid: newest first
+		if vi && vj {
+			if ti.Equal(tj) {
+				// 3) Tie-breaker for determinism using digest
+				if mi.Digest != nil && mj.Digest != nil {
+					return *mi.Digest < *mj.Digest
+				}
+				return false
+			}
+			return ti.After(tj) // newest first
+		}
+
+		// 4) Both invalid: tie-breaker for determinism using digest
+		if mi.Digest != nil && mj.Digest != nil {
+			return *mi.Digest < *mj.Digest
+		}
+		return false
+	})
+}
+
 // purgeDanglingManifests deletes all manifests that do not have any tags associated with them.
 // except the ones that are referenced by a multiarch manifest or that have subject.
 // If keep is provided, the specified number of most recent manifests will be kept.
@@ -471,18 +544,8 @@ func purgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInter
 
 	// Apply keep logic if keep parameter is provided
 	if keep > 0 && len(manifestsToDelete) > keep {
-		// Sort manifests by LastUpdateTime (newest first)
-		sort.Slice(manifestsToDelete, func(i, j int) bool {
-			if manifestsToDelete[i].LastUpdateTime == nil || manifestsToDelete[j].LastUpdateTime == nil {
-				return false
-			}
-			tiI, errI := time.Parse(time.RFC3339Nano, *manifestsToDelete[i].LastUpdateTime)
-			tiJ, errJ := time.Parse(time.RFC3339Nano, *manifestsToDelete[j].LastUpdateTime)
-			if errI != nil || errJ != nil {
-				return false
-			}
-			return tiI.After(tiJ)
-		})
+		// Sort manifests by LastUpdateTime (newest first) using sortManifestsByTime
+		sortManifestsByTime(manifestsToDelete)
 		// Keep only manifests after the 'keep' count
 		manifestsToDelete = manifestsToDelete[keep:]
 	}
