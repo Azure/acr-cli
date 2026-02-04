@@ -102,16 +102,8 @@ func newPurgeCmd(rootParams *rootParameters) *cobra.Command {
 		RunE: func(_ *cobra.Command, _ []string) error {
 			// Validate flag combinations before authentication
 			// untagged-only mode: filter and ago are optional (skip validation)
-			// untagged mode: requires filter and ago (it's a cleanup step after tag deletion)
-			// standard mode: requires filter and ago for tag deletion
-			if purgeParams.untagged {
-				if len(purgeParams.filters) == 0 {
-					return fmt.Errorf("--filter is required when using --untagged")
-				}
-				if purgeParams.ago == "" {
-					return fmt.Errorf("--ago is required when using --untagged")
-				}
-			} else if !purgeParams.untaggedOnly {
+			// untagged mode and standard mode: both require filter and ago
+			if !purgeParams.untaggedOnly {
 				if len(purgeParams.filters) == 0 {
 					return fmt.Errorf("--filter is required when not using --untagged-only")
 				}
