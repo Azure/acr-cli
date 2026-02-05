@@ -503,6 +503,45 @@ run_test_basic() {
         ((TESTS_FAILED++))
         FAILED_TESTS+=("Should keep 2-3 latest tags")
     fi
+
+    # Test 5: Untagged-only functionality
+    echo -e "\n${YELLOW}Test 5: Untagged-Only Functionality${NC}"
+    local untagged_repo="test-minimal-untagged-only"
+    
+    # Create tagged images
+    echo "Creating tagged images..."
+    for i in 1 2 3; do
+        create_test_image "$untagged_repo" "v$i"
+    done
+    
+    # Create untagged manifests
+    echo "Creating untagged manifests..."
+    for i in 1 2; do
+        local temp_tag="temp-$i-$(date +%s)"
+        create_test_image "$untagged_repo" "$temp_tag"
+        sleep 1
+        # Delete the tag to make manifest untagged
+        az acr repository delete --name "$(get_registry_name)" --image "$untagged_repo:$temp_tag" --yes >/dev/null 2>&1
+    done
+    
+    sleep 2
+    
+    local initial_tags=$(count_tags "$untagged_repo")
+    local initial_manifests=$(count_manifests "$untagged_repo")
+    echo "Initial state: $initial_tags tags, $initial_manifests manifests"
+    
+    # Test --untagged-only dry run
+    echo -n "Testing --untagged-only dry run... "
+    local output=$("$ACR_CLI" purge --registry "$REGISTRY" --filter "$untagged_repo:.*" --untagged-only --dry-run 2>&1)
+    local dry_tags=$(count_tags "$untagged_repo")
+    assert_equals "$initial_tags" "$dry_tags" "Dry run should not delete anything"
+    
+    # Test actual --untagged-only
+    echo -n "Testing --untagged-only delete... "
+    "$ACR_CLI" purge --registry "$REGISTRY" --filter "$untagged_repo:.*" --untagged-only >/dev/null 2>&1
+    local final_tags=$(count_tags "$untagged_repo")
+    local final_manifests=$(count_manifests "$untagged_repo")
+    assert_equals "$initial_tags" "$final_tags" "Tagged images should remain unchanged"
 }
 
 # Run comprehensive tests
@@ -634,6 +673,64 @@ run_comprehensive_tests() {
 
     output=$("$ACR_CLI" purge --registry "$REGISTRY" --filter "$age_repo:.*" --ago 1d --dry-run 2>&1)
     assert_contains "$output" "Number of tags to be deleted: 0" "New images should not be deleted with --ago 1d"
+
+    # Test Suite 8: Comprehensive Untagged-Only Tests
+    echo -e "\n${YELLOW}Test Suite 8: Comprehensive Untagged-Only Tests${NC}"
+    
+    # Test untagged-only with locked manifests
+    local untagged_lock_repo="test-comp-untagged-locks"
+    echo "Creating test image for locking..."
+    create_test_image "$untagged_lock_repo" "temp-lock"
+    
+    # Get digest before deleting tag
+    local lock_digest=$(az acr repository show --name "$(get_registry_name)" --image "$untagged_lock_repo:temp-lock" --query "digest" -o tsv 2>/dev/null)
+    
+    # Delete tag to make it untagged
+    az acr repository delete --name "$(get_registry_name)" --image "$untagged_lock_repo:temp-lock" --yes >/dev/null 2>&1
+    sleep 2
+    
+    # Lock the untagged manifest
+    echo "Locking untagged manifest..."
+    az acr repository update --name "$(get_registry_name)" --image "$untagged_lock_repo@$lock_digest" --delete-enabled false --output none 2>/dev/null
+    
+    # Test without --include-locked
+    echo -n "Testing --untagged-only with locked manifest... "
+    local initial_locked=$(count_manifests "$untagged_lock_repo")
+    "$ACR_CLI" purge --registry "$REGISTRY" --filter "$untagged_lock_repo:.*" --untagged-only 2>&1 >/dev/null || true
+    local after_locked=$(count_manifests "$untagged_lock_repo")
+    assert_equals "$initial_locked" "$after_locked" "Locked untagged manifest should not be deleted"
+    
+    # Test with --include-locked
+    echo -n "Testing --untagged-only with --include-locked... "
+    "$ACR_CLI" purge --registry "$REGISTRY" --filter "$untagged_lock_repo:.*" --untagged-only --include-locked 2>&1 >/dev/null || true
+    local final_locked=$(count_manifests "$untagged_lock_repo")
+    assert_equals "0" "$final_locked" "Locked untagged manifest should be deleted with --include-locked"
+    
+    # Test untagged-only across multiple repositories
+    echo -e "\n${CYAN}Testing --untagged-only across multiple repositories${NC}"
+    local multi_repo1="test-comp-multi1"
+    local multi_repo2="test-comp-multi2"
+    
+    # Create tagged and untagged in both repos
+    create_test_image "$multi_repo1" "keep1"
+    create_test_image "$multi_repo2" "keep2"
+    
+    # Create untagged manifests
+    for repo in "$multi_repo1" "$multi_repo2"; do
+        local temp_tag="temp-$(date +%s)"
+        create_test_image "$repo" "$temp_tag"
+        sleep 1
+        az acr repository delete --name "$(get_registry_name)" --image "$repo:$temp_tag" --yes >/dev/null 2>&1
+    done
+    
+    sleep 2
+    
+    # Test --untagged-only without filter (all repos)
+    echo -n "Testing --untagged-only without filter... "
+    local total_tags_before=$(($(count_tags "$multi_repo1") + $(count_tags "$multi_repo2")))
+    "$ACR_CLI" purge --registry "$REGISTRY" --untagged-only 2>&1 >/dev/null || true
+    local total_tags_after=$(($(count_tags "$multi_repo1") + $(count_tags "$multi_repo2")))
+    assert_equals "$total_tags_before" "$total_tags_after" "All tagged images should remain when using --untagged-only"
 }
 
 # Run benchmark tests

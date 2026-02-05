@@ -1,6 +1,10 @@
 version: "2"
 run:
   concurrency: 2
+  deadline: 15m
+linters-settings:
+  golint:
+    min-confidence: 0
 linters:
   default: none
   enable:
