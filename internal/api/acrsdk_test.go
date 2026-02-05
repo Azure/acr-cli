@@ -234,3 +234,137 @@ func TestGetAcrCLIClientWithAuth(t *testing.T) {
 		})
 	}
 }
+
+// TestHasAadIdentityClaim tests the ABAC detection function
+func TestHasAadIdentityClaim(t *testing.T) {
+	tests := []struct {
+		name     string
+		token    string
+		expected bool
+	}{
+		{
+			name: "token with aad_identity claim - ABAC enabled",
+			// JWT with {"aad_identity": "user@example.com"} in payload
+			token: strings.Join([]string{
+				base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"RS256"}`)),
+				base64.RawURLEncoding.EncodeToString([]byte(`{"exp":1563910981,"aad_identity":"user@example.com"}`)),
+				"",
+			}, "."),
+			expected: true,
+		},
+		{
+			name: "token without aad_identity claim - non-ABAC",
+			// JWT without aad_identity
+			token: strings.Join([]string{
+				base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"RS256"}`)),
+				base64.RawURLEncoding.EncodeToString([]byte(`{"exp":1563910981}`)),
+				"",
+			}, "."),
+			expected: false,
+		},
+		{
+			name:     "invalid token",
+			token:    "not-a-valid-jwt",
+			expected: false,
+		},
+		{
+			name:     "empty token",
+			token:    "",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := hasAadIdentityClaim(tt.token)
+			if result != tt.expected {
+				t.Errorf("hasAadIdentityClaim() = %v, expected %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestAcrCLIClientIsAbac tests the IsAbac method
+func TestAcrCLIClientIsAbac(t *testing.T) {
+	tests := []struct {
+		name     string
+		isAbac   bool
+		expected bool
+	}{
+		{
+			name:     "ABAC enabled client",
+			isAbac:   true,
+			expected: true,
+		},
+		{
+			name:     "non-ABAC client",
+			isAbac:   false,
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := AcrCLIClient{
+				isAbac: tt.isAbac,
+			}
+			result := client.IsAbac()
+			if result != tt.expected {
+				t.Errorf("IsAbac() = %v, expected %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestHasRepoScope tests the hasRepoScope method
+func TestHasRepoScope(t *testing.T) {
+	tests := []struct {
+		name             string
+		isAbac           bool
+		authorizedScopes map[string]bool
+		repoName         string
+		expected         bool
+	}{
+		{
+			name:             "non-ABAC always has scope",
+			isAbac:           false,
+			authorizedScopes: nil,
+			repoName:         "any-repo",
+			expected:         true,
+		},
+		{
+			name:             "ABAC with authorized repo",
+			isAbac:           true,
+			authorizedScopes: map[string]bool{"my-repo": true},
+			repoName:         "my-repo",
+			expected:         true,
+		},
+		{
+			name:             "ABAC without authorized repo",
+			isAbac:           true,
+			authorizedScopes: map[string]bool{"other-repo": true},
+			repoName:         "my-repo",
+			expected:         false,
+		},
+		{
+			name:             "ABAC with empty scopes",
+			isAbac:           true,
+			authorizedScopes: map[string]bool{},
+			repoName:         "my-repo",
+			expected:         false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := AcrCLIClient{
+				isAbac:           tt.isAbac,
+				authorizedScopes: tt.authorizedScopes,
+			}
+			result := client.hasRepoScope(tt.repoName)
+			if result != tt.expected {
+				t.Errorf("hasRepoScope(%s) = %v, expected %v", tt.repoName, result, tt.expected)
+			}
+		})
+	}
+}

@@ -292,7 +292,6 @@ func (c *AcrCLIClient) hasRepoScope(repoName string) bool {
 // ensureRepoAccess ensures the client has a valid token with access to the specified repository.
 // For non-ABAC registries, this only checks token expiration.
 // For ABAC registries, this will request a new token scoped to this repository if needed.
-// This implements Option 1 (per-repository token refresh) for ABAC support.
 func (c *AcrCLIClient) ensureRepoAccess(ctx context.Context, repoName string) error {
 	// For non-ABAC registries, just check expiration and use wildcard refresh
 	if !c.isAbac {
@@ -308,8 +307,6 @@ func (c *AcrCLIClient) ensureRepoAccess(ctx context.Context, repoName string) er
 	}
 
 	// Need to request a token for this repository
-	// Note: This is Option 1 behavior - single repo at a time.
-	// For better performance with many repos, use RefreshTokenForAbac with batching (Option 2).
 	return c.RefreshTokenForAbac(ctx, []string{repoName})
 }
 
@@ -480,4 +477,9 @@ type AcrCLIClientInterface interface {
 	GetAcrManifestAttributes(ctx context.Context, repoName string, reference string) (*acrapi.ManifestAttributes, error)
 	UpdateAcrTagAttributes(ctx context.Context, repoName string, reference string, value *acrapi.ChangeableAttributes) (*autorest.Response, error)
 	UpdateAcrManifestAttributes(ctx context.Context, repoName string, reference string, value *acrapi.ChangeableAttributes) (*autorest.Response, error)
+
+	// IsAbac returns true if the registry uses Attribute-Based Access Control.
+	IsAbac() bool
+	// RefreshTokenForAbac refreshes the access token with scopes for specific repositories.
+	RefreshTokenForAbac(ctx context.Context, repositories []string) error
 }

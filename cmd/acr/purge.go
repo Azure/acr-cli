@@ -53,6 +53,9 @@ const (
 	`
 	maxPoolSize = 32 // The max number of parallel delete requests recommended by ACR server
 	headerLink  = "Link"
+
+	// abacBatchSize is the number of repositories to batch together when requesting tokens for ABAC registries.
+	abacBatchSize = 10
 )
 
 var (
@@ -177,6 +180,54 @@ func purge(ctx context.Context,
 		return 0, 0, err
 	}
 
+	// For ABAC-enabled registries, we process repositories in batches to reduce token requests.
+	// Each batch gets a single token that covers all repositories in that batch.
+	if acrClient.IsAbac() {
+		// Collect all repository names into a slice for batching
+		repos := make([]string, 0, len(tagFilters))
+		for repoName := range tagFilters {
+			repos = append(repos, repoName)
+		}
+
+		// Process repositories in batches of abacBatchSize
+		for i := 0; i < len(repos); i += abacBatchSize {
+			end := i + abacBatchSize
+			if end > len(repos) {
+				end = len(repos)
+			}
+			batch := repos[i:end]
+
+			// Request a token that covers all repositories in this batch
+			// The token scope will include: repository:repo1:pull repository:repo1:delete ... for each repo
+			if err := acrClient.RefreshTokenForAbac(ctx, batch); err != nil {
+				return deletedTagsCount, deletedManifestsCount, fmt.Errorf("failed to authorize ABAC repositories batch: %w", err)
+			}
+
+			// Process all repositories in this batch with the batched token
+			for _, repoName := range batch {
+				tagRegex := tagFilters[repoName]
+				singleDeletedTagsCount, manifestToTagsCountMap, err := purgeTags(ctx, acrClient, repoParallelism, loginURL, repoName, agoDuration, tagRegex, tagsToKeep, filterTimeout, dryRun, includeLocked)
+				if err != nil {
+					return deletedTagsCount, deletedManifestsCount, fmt.Errorf("failed to purge tags: %w", err)
+				}
+				singleDeletedManifestsCount := 0
+				// If the untagged flag is set then also manifests are deleted.
+				if removeUtaggedManifests {
+					singleDeletedManifestsCount, err = purgeDanglingManifests(ctx, acrClient, repoParallelism, loginURL, repoName, agoDuration, manifestToTagsCountMap, dryRun, includeLocked)
+					if err != nil {
+						return deletedTagsCount, deletedManifestsCount, fmt.Errorf("failed to purge manifests: %w", err)
+					}
+				}
+				// After every repository is purged the counters are updated.
+				deletedTagsCount += singleDeletedTagsCount
+				deletedManifestsCount += singleDeletedManifestsCount
+			}
+		}
+
+		return deletedTagsCount, deletedManifestsCount, nil
+	}
+
+	// Non-ABAC registries
 	// In order to print a summary of the deleted tags/manifests the counters get updated everytime a repo is purged.
 	for repoName, tagRegex := range tagFilters {
 		singleDeletedTagsCount, manifestToTagsCountMap, err := purgeTags(ctx, acrClient, repoParallelism, loginURL, repoName, agoDuration, tagRegex, tagsToKeep, filterTimeout, dryRun, includeLocked)
