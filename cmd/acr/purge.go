@@ -535,7 +535,11 @@ func purgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInter
 	}
 
 	// Apply keep logic if keep parameter is provided
-	if keep > 0 && len(manifestsToDelete) > keep {
+	if keep > 0 {
+		if len(manifestsToDelete) <= keep {
+			// If there are fewer manifests than the keep count, delete nothing
+			return 0, nil
+		}
 		// Sort manifests by LastUpdateTime (newest first) using sortManifestsByTime
 		sortManifestsByTime(manifestsToDelete)
 		// Keep only manifests after the 'keep' count
