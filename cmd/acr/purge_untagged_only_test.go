@@ -669,4 +669,84 @@ func TestPurgeDanglingManifestsWithAgoAndKeep(t *testing.T) {
 		assert.Equal(1, deletedCount, "Should report 1 manifest would be deleted")
 		mockClient.AssertExpectations(t)
 	})
+
+	// Test 5: Keep exceeds manifest count - should delete nothing
+	t.Run("KeepExceedsManifestCount", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+
+		// Create only 3 manifests
+		manifests := []acr.ManifestAttributesBase{
+			createManifestWithTime("sha256:manifest1", "2025-01-01T00:00:00Z"),
+			createManifestWithTime("sha256:manifest2", "2025-02-01T00:00:00Z"),
+			createManifestWithTime("sha256:manifest3", "2025-03-01T00:00:00Z"),
+		}
+
+		manifestsResult := &acr.Manifests{
+			Response: autorest.Response{
+				Response: &http.Response{StatusCode: 200},
+			},
+			Registry:            &testLoginURL,
+			ImageName:           &testRepo,
+			ManifestsAttributes: &manifests,
+		}
+
+		// Mock pagination for GetUntaggedManifests
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(manifestsResult, nil).Once()
+		emptyResult := &acr.Manifests{
+			Response:            manifestsResult.Response,
+			Registry:            &testLoginURL,
+			ImageName:           &testRepo,
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{},
+		}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:manifest3").Return(emptyResult, nil).Once()
+		// No DeleteManifest calls expected - keep exceeds manifest count
+
+		// Call with keep=10 but only 3 manifests exist - should delete nothing
+		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, 0, 10, nil, false, false)
+
+		assert.Nil(err, "Should not return error")
+		assert.Equal(0, deletedCount, "Should delete 0 manifests when keep exceeds manifest count")
+		mockClient.AssertExpectations(t)
+	})
+
+	// Test 6: Keep equals manifest count - should delete nothing
+	t.Run("KeepEqualsManifestCount", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+
+		// Create exactly 3 manifests
+		manifests := []acr.ManifestAttributesBase{
+			createManifestWithTime("sha256:manifest1", "2025-01-01T00:00:00Z"),
+			createManifestWithTime("sha256:manifest2", "2025-02-01T00:00:00Z"),
+			createManifestWithTime("sha256:manifest3", "2025-03-01T00:00:00Z"),
+		}
+
+		manifestsResult := &acr.Manifests{
+			Response: autorest.Response{
+				Response: &http.Response{StatusCode: 200},
+			},
+			Registry:            &testLoginURL,
+			ImageName:           &testRepo,
+			ManifestsAttributes: &manifests,
+		}
+
+		// Mock pagination for GetUntaggedManifests
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(manifestsResult, nil).Once()
+		emptyResult := &acr.Manifests{
+			Response:            manifestsResult.Response,
+			Registry:            &testLoginURL,
+			ImageName:           &testRepo,
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{},
+		}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:manifest3").Return(emptyResult, nil).Once()
+		// No DeleteManifest calls expected - keep equals manifest count
+
+		// Call with keep=3 and exactly 3 manifests - should delete nothing
+		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, 0, 3, nil, false, false)
+
+		assert.Nil(err, "Should not return error")
+		assert.Equal(0, deletedCount, "Should delete 0 manifests when keep equals manifest count")
+		mockClient.AssertExpectations(t)
+	})
 }
