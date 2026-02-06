@@ -169,7 +169,7 @@ func purge(ctx context.Context,
 	tagDeletionSince string,
 	tagsToKeep int,
 	filterTimeout int64,
-	removeUtaggedManifests bool,
+	removeUntaggedManifests bool,
 	tagFilters map[string]string,
 	dryRun bool,
 	includeLocked bool) (deletedTagsCount int, deletedManifestsCount int, err error) {
@@ -204,7 +204,14 @@ func purge(ctx context.Context,
 		}
 
 		// Process all repositories in this batch
-		for _, repoName := range batch {
+		for j, repoName := range batch {
+			// For ABAC registries, check if token expired and refresh for remaining repos in batch
+			if acrClient.IsAbac() && acrClient.IsTokenExpired() {
+				remainingRepos := batch[j:]
+				if err := acrClient.RefreshTokenForAbac(ctx, remainingRepos); err != nil {
+					return deletedTagsCount, deletedManifestsCount, fmt.Errorf("failed to refresh ABAC token: %w", err)
+				}
+			}
 			tagRegex := tagFilters[repoName]
 			singleDeletedTagsCount, manifestToTagsCountMap, err := purgeTags(ctx, acrClient, repoParallelism, loginURL, repoName, agoDuration, tagRegex, tagsToKeep, filterTimeout, dryRun, includeLocked)
 			if err != nil {
@@ -212,7 +219,7 @@ func purge(ctx context.Context,
 			}
 			singleDeletedManifestsCount := 0
 			// If the untagged flag is set then also manifests are deleted.
-			if removeUtaggedManifests {
+			if removeUntaggedManifests {
 				singleDeletedManifestsCount, err = purgeDanglingManifests(ctx, acrClient, repoParallelism, loginURL, repoName, agoDuration, manifestToTagsCountMap, dryRun, includeLocked)
 				if err != nil {
 					return deletedTagsCount, deletedManifestsCount, fmt.Errorf("failed to purge manifests: %w", err)

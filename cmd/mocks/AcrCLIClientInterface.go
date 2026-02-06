@@ -215,6 +215,20 @@ func (_m *AcrCLIClientInterface) IsAbac() bool {
 	return r0
 }
 
+// IsTokenExpired provides a mock function for checking if token is expired
+func (_m *AcrCLIClientInterface) IsTokenExpired() bool {
+	ret := _m.Called()
+
+	var r0 bool
+	if rf, ok := ret.Get(0).(func() bool); ok {
+		r0 = rf()
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+
+	return r0
+}
+
 // RefreshTokenForAbac provides a mock function for refreshing tokens with specific repository scopes
 func (_m *AcrCLIClientInterface) RefreshTokenForAbac(ctx context.Context, repositories []string) error {
 	ret := _m.Called(ctx, repositories)

@@ -292,6 +292,13 @@ func (c *AcrCLIClient) isExpired() bool {
 	return (time.Now().Add(5 * time.Minute)).Unix() > c.accessTokenExp
 }
 
+// IsTokenExpired returns true when the token is expired or close to expiring.
+// This is the public version of isExpired for use by callers that need to check
+// token expiration before making batched ABAC token refresh requests.
+func (c *AcrCLIClient) IsTokenExpired() bool {
+	return c.isExpired()
+}
+
 // GetAcrTags list the tags of a repository with their attributes.
 func (c *AcrCLIClient) GetAcrTags(ctx context.Context, repoName string, orderBy string, last string) (*acrapi.RepositoryTagsType, error) {
 	if c.isExpired() {
@@ -445,6 +452,8 @@ type AcrCLIClientInterface interface {
 
 	// IsAbac returns true if the registry uses Attribute-Based Access Control.
 	IsAbac() bool
+	// IsTokenExpired returns true if the access token is expired or close to expiring.
+	IsTokenExpired() bool
 	// RefreshTokenForAbac refreshes the access token with scopes for specific repositories.
 	RefreshTokenForAbac(ctx context.Context, repositories []string) error
 }
