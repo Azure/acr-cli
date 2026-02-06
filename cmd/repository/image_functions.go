@@ -338,6 +338,11 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 		}
 
 		// Get the last manifest digest from the last manifest from manifests.
+		// Check if manifests is empty before accessing
+		if len(manifests) == 0 {
+			// No more manifests to process
+			break
+		}
 		lastManifestDigest = *manifests[len(manifests)-1].Digest
 		// Use this new digest to find next batch of manifests.
 		resultManifests, err = acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)

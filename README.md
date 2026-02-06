@@ -179,6 +179,25 @@ acr purge \
     --untagged
 ```
 
+#### Untagged-only flag
+
+To delete ONLY untagged manifests without deleting any tags, the `--untagged-only` flag should be set. This flag makes the `--ago` and `--keep` flags not applicable, and `--filter` becomes optional.
+
+```sh
+# Delete untagged manifests in all repositories
+acr purge \
+    --registry <Registry Name> \
+    --untagged-only
+
+# Delete untagged manifests in specific repositories matching a filter
+acr purge \
+    --registry <Registry Name> \
+    --filter <Repository Filter/Name>:<Regex Filter> \
+    --untagged-only
+```
+
+Note: The `--untagged` and `--untagged-only` flags are mutually exclusive.
+
 #### Keep flag
 
 To keep the latest x number of to-be-deleted tags, the `--keep` flag should be set.
