@@ -7,6 +7,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io/ioutil"
 	"strings"
 	"time"
@@ -52,6 +53,10 @@ type AcrCLIClient struct {
 	// accessTokenExp refers to the expiration time for the access token, it is in a unix time format represented by a
 	// 64 bit integer.
 	accessTokenExp int64
+	// isAbac indicates whether this registry uses Attribute-Based Access Control (ABAC).
+	// ABAC registries require repository-level permissions instead of registry-wide wildcards.
+	// This is detected by checking if the refresh token contains the "aad_identity" claim.
+	isAbac bool
 }
 
 // LoginURL returns the FQDN for a registry.
@@ -91,10 +96,28 @@ func newAcrCLIClientWithBasicAuth(loginURL string, username string, password str
 }
 
 // newAcrCLIClientWithBearerAuth creates a client that uses bearer token authentication.
+// It detects if the registry is ABAC-enabled by checking for the "aad_identity" claim in the refresh token.
+// For ABAC registries, it only requests catalog access initially; repository access is requested per-batch.
+// For non-ABAC registries, it requests the traditional wildcard scope for all repositories.
 func newAcrCLIClientWithBearerAuth(loginURL string, refreshToken string) (AcrCLIClient, error) {
 	newAcrCLIClient := newAcrCLIClient(loginURL)
+
+	// Detect if this is an ABAC-enabled registry by checking for aad_identity claim
+	newAcrCLIClient.isAbac = hasAadIdentityClaim(refreshToken)
+
 	ctx := context.Background()
-	accessTokenResponse, err := newAcrCLIClient.AutorestClient.GetAcrAccessToken(ctx, loginURL, "registry:catalog:* repository:*:*", refreshToken)
+	var scope string
+	if newAcrCLIClient.isAbac {
+		// For ABAC registries, only request catalog access initially.
+		// Repository-level access will be requested on-demand per repository or batch.
+		// This is because ABAC registries cannot grant wildcard repository access.
+		scope = "registry:catalog:*"
+	} else {
+		// For non-ABAC registries, request full wildcard access to all repositories.
+		scope = "registry:catalog:* repository:*:*"
+	}
+
+	accessTokenResponse, err := newAcrCLIClient.AutorestClient.GetAcrAccessToken(ctx, loginURL, scope, refreshToken)
 	if err != nil {
 		return newAcrCLIClient, err
 	}
@@ -154,6 +177,7 @@ func GetAcrCLIClientWithAuth(loginURL string, username string, password string, 
 }
 
 // refreshAcrCLIClientToken obtains a new token and gets its expiration time.
+// This uses the wildcard scope and should only be called for non-ABAC registries.
 func refreshAcrCLIClientToken(ctx context.Context, c *AcrCLIClient) error {
 	accessTokenResponse, err := c.AutorestClient.GetAcrAccessToken(ctx, c.loginURL, "repository:*:*", c.token.RefreshToken)
 	if err != nil {
@@ -171,6 +195,76 @@ func refreshAcrCLIClientToken(ctx context.Context, c *AcrCLIClient) error {
 	}
 	c.accessTokenExp = exp
 	return nil
+}
+
+// hasAadIdentityClaim checks if a JWT token contains the "aad_identity" claim.
+// The presence of this claim indicates that the registry is ABAC-enabled.
+// ABAC (Attribute-Based Access Control) registries grant permissions at the repository level,
+// not at the registry level, so wildcard scopes like "repository:*:*" will not work.
+func hasAadIdentityClaim(tokenString string) bool {
+	parser := jwt.Parser{SkipClaimsValidation: true}
+	mapC := jwt.MapClaims{}
+	// We only need to check for the claim, not verify the signature
+	_, _, err := parser.ParseUnverified(tokenString, mapC)
+	if err != nil {
+		return false
+	}
+	_, ok := mapC["aad_identity"]
+	return ok
+}
+
+// RefreshTokenForAbac obtains a new access token scoped to specific repositories.
+// This is used for ABAC-enabled registries where wildcard repository access is not allowed.
+// The token will include permissions for all specified repositories.
+//
+// Parameters:
+//   - repositories: list of repository names to request access for
+//
+// The scope format is: "registry:catalog:* repository:<name>:pull repository:<name>:delete ..."
+// This allows batching multiple repositories into a single token request for efficiency.
+func (c *AcrCLIClient) RefreshTokenForAbac(ctx context.Context, repositories []string) error {
+	if c.token == nil {
+		return errors.New("no refresh token available for ABAC token refresh")
+	}
+
+	// Build the scope string for all requested repositories.
+	// Each repository needs pull, delete, and metadata permissions for purge operations.
+	// Format: "registry:catalog:* repository:repo1:pull repository:repo1:delete repository:repo1:metadata_read ..."
+	var scopeParts []string
+	scopeParts = append(scopeParts, "registry:catalog:*")
+	for _, repo := range repositories {
+		scopeParts = append(scopeParts, fmt.Sprintf("repository:%s:pull", repo))
+		scopeParts = append(scopeParts, fmt.Sprintf("repository:%s:delete", repo))
+		scopeParts = append(scopeParts, fmt.Sprintf("repository:%s:metadata_read", repo))
+		scopeParts = append(scopeParts, fmt.Sprintf("repository:%s:metadata_write", repo))
+	}
+	scope := strings.Join(scopeParts, " ")
+
+	accessTokenResponse, err := c.AutorestClient.GetAcrAccessToken(ctx, c.loginURL, scope, c.token.RefreshToken)
+	if err != nil {
+		return errors.Wrap(err, "failed to refresh token for ABAC repositories")
+	}
+
+	token := &adal.Token{
+		AccessToken:  *accessTokenResponse.AccessToken,
+		RefreshToken: c.token.RefreshToken,
+	}
+	c.token = token
+	c.AutorestClient.Authorizer = autorest.NewBearerAuthorizer(token)
+
+	exp, err := getExpiration(token.AccessToken)
+	if err != nil {
+		return err
+	}
+	c.accessTokenExp = exp
+
+	return nil
+}
+
+// IsAbac returns true if this client is connected to an ABAC-enabled registry.
+// ABAC registries require repository-level token scopes instead of wildcard scopes.
+func (c *AcrCLIClient) IsAbac() bool {
+	return c.isAbac
 }
 
 // getExpiration is used to obtain the expiration out of a jwt token.
@@ -348,4 +442,9 @@ type AcrCLIClientInterface interface {
 	GetAcrManifestAttributes(ctx context.Context, repoName string, reference string) (*acrapi.ManifestAttributes, error)
 	UpdateAcrTagAttributes(ctx context.Context, repoName string, reference string, value *acrapi.ChangeableAttributes) (*autorest.Response, error)
 	UpdateAcrManifestAttributes(ctx context.Context, repoName string, reference string, value *acrapi.ChangeableAttributes) (*autorest.Response, error)
+
+	// IsAbac returns true if the registry uses Attribute-Based Access Control.
+	IsAbac() bool
+	// RefreshTokenForAbac refreshes the access token with scopes for specific repositories.
+	RefreshTokenForAbac(ctx context.Context, repositories []string) error
 }
