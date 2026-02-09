@@ -230,14 +230,10 @@ func (c *AcrCLIClient) RefreshTokenForAbac(ctx context.Context, repositories []s
 
 	// Build the scope string for all requested repositories.
 	// Each repository needs pull, delete, and metadata permissions for purge operations.
-	// Format: "registry:catalog:* repository:repo1:pull repository:repo1:delete repository:repo1:metadata_read ..."
+	// Format: "repository:repo1:pull,delete,metadata_read,metadata_write repository:repo2:pull,delete,metadata_read,metadata_write ..."
 	var scopeParts []string
-	scopeParts = append(scopeParts, "registry:catalog:*")
 	for _, repo := range repositories {
-		scopeParts = append(scopeParts, fmt.Sprintf("repository:%s:pull", repo))
-		scopeParts = append(scopeParts, fmt.Sprintf("repository:%s:delete", repo))
-		scopeParts = append(scopeParts, fmt.Sprintf("repository:%s:metadata_read", repo))
-		scopeParts = append(scopeParts, fmt.Sprintf("repository:%s:metadata_write", repo))
+		scopeParts = append(scopeParts, fmt.Sprintf("repository:%s:pull,delete,metadata_read,metadata_write", repo))
 	}
 	scope := strings.Join(scopeParts, " ")
 
