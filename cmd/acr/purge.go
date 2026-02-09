@@ -15,6 +15,7 @@ import (
 	"github.com/Azure/acr-cli/acr"
 	"github.com/Azure/acr-cli/cmd/repository"
 	"github.com/Azure/acr-cli/internal/api"
+	"github.com/Azure/acr-cli/internal/config"
 	"github.com/Azure/acr-cli/internal/worker"
 	"github.com/dlclark/regexp2"
 	"github.com/spf13/cobra"
@@ -61,9 +62,6 @@ const (
 	`
 	maxPoolSize = 32 // The max number of parallel delete requests recommended by ACR server
 	headerLink  = "Link"
-
-	// abacBatchSize is the number of repositories to batch together when requesting tokens for ABAC registries.
-	abacBatchSize = 10
 )
 
 var (
@@ -230,6 +228,10 @@ func purge(ctx context.Context,
 	tagFilters map[string]string,
 	dryRun bool,
 	includeLocked bool) (deletedTagsCount int, deletedManifestsCount int, err error) {
+
+	// Load configuration
+	cfg := config.Load()
+	abacBatchSize := cfg.AbacBatchSize
 
 	// Collect all repository names into a slice for batching
 	repos := make([]string, 0, len(tagFilters))
