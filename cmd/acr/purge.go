@@ -261,6 +261,7 @@ func purge(ctx context.Context,
 			// For ABAC registries, check if token expired and refresh for remaining repos in batch
 			if acrClient.IsAbac() && acrClient.IsTokenExpired() {
 				remainingRepos := batch[j:]
+				fmt.Printf("ABAC token expired, refreshing for remaining repositories: %v\n", remainingRepos)
 				if err := acrClient.RefreshTokenForAbac(ctx, remainingRepos); err != nil {
 					return deletedTagsCount, deletedManifestsCount, fmt.Errorf("failed to refresh ABAC token: %w", err)
 				}

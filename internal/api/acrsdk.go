@@ -100,14 +100,15 @@ func newAcrCLIClientWithBasicAuth(loginURL string, username string, password str
 // For ABAC registries, it only requests catalog access initially; repository access is requested per-batch.
 // For non-ABAC registries, it requests the traditional wildcard scope for all repositories.
 func newAcrCLIClientWithBearerAuth(loginURL string, refreshToken string) (AcrCLIClient, error) {
-	newAcrCLIClient := newAcrCLIClient(loginURL)
-
 	// Detect if this is an ABAC-enabled registry by checking for aad_identity claim
-	newAcrCLIClient.isAbac = hasAadIdentityClaim(refreshToken)
+	isAbac := hasAadIdentityClaim(refreshToken)
+
+	newAcrCLIClient := newAcrCLIClient(loginURL)
+	newAcrCLIClient.isAbac = isAbac
 
 	ctx := context.Background()
 	var scope string
-	if newAcrCLIClient.isAbac {
+	if isAbac {
 		// For ABAC registries, only request catalog access initially.
 		// Repository-level access will be requested on-demand per repository or batch.
 		// This is because ABAC registries cannot grant wildcard repository access.
