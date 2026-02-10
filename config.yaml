@@ -1,6 +1,0 @@
-# ACR CLI Configuration
-
-# Number of repositories to batch together when requesting tokens for ABAC registries.
-# Higher values reduce token requests but may hit scope limits.
-# Default: 10
-abacBatchSize: 10
