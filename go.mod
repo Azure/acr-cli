@@ -6,7 +6,7 @@ require (
 	github.com/Azure/go-autorest/autorest v0.11.30
 	github.com/Azure/go-autorest/autorest/adal v0.9.24
 	github.com/Azure/go-autorest/tracing v0.6.1
-	github.com/alitto/pond/v2 v2.6.0
+	github.com/alitto/pond/v2 v2.6.2
 	github.com/dlclark/regexp2 v1.11.5
 	github.com/docker/cli v29.2.1+incompatible
 	github.com/golang-jwt/jwt/v4 v4.5.2
