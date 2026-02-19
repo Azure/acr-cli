@@ -232,6 +232,24 @@ func (p *pool) DroppedTasks() uint64 {
 
 func (p *pool) worker(task any) {
 	var readTaskErr, err error
+	exitedNormally := false
+	defer func() {
+		if !exitedNormally {
+			// In case of abnormal exit (e.g. runtime.Goexit() in the task),
+			// launch a new worker to execute the next task in the queue.
+			p.updateMetrics(fmt.Errorf("worker exited abnormally: %w", err))
+
+			task, err := p.readTask()
+			if err != nil {
+				return
+			}
+
+			if task != nil {
+				p.launchWorker(task)
+				p.notifySubmitWaiter()
+			}
+		}
+	}()
 	for {
 		if task != nil {
 			_, err = invokeTask[any](task, p.panicRecovery)
@@ -242,6 +260,7 @@ func (p *pool) worker(task any) {
 		task, readTaskErr = p.readTask()
 
 		if readTaskErr != nil {
+			exitedNormally = true
 			return
 		}
 	}
