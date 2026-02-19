@@ -183,13 +183,25 @@ func GetAcrCLIClientWithAuth(loginURL string, username string, password string, 
 // refreshAcrCLIClientToken obtains a new token and gets its expiration time.
 // For non-ABAC registries, this uses the wildcard scope.
 // For ABAC registries, this uses the currentRepositories to refresh with the appropriate scope.
-func refreshAcrCLIClientToken(ctx context.Context, c *AcrCLIClient) error {
+func refreshAcrCLIClientToken(ctx context.Context, c *AcrCLIClient, repoName string) error {
 	var scope string
-	if c.isAbac && len(c.currentRepositories) > 0 {
-		// For ABAC registries, use the current repository scope
-		var scopeParts []string
+	if c.isAbac {
+		// For ABAC registries, build scope from currentRepositories and ensure repoName is included
+		repoSet := make(map[string]bool)
 		for _, repo := range c.currentRepositories {
+			repoSet[repo] = true
+		}
+		// Ensure the current repoName is in the set
+		if repoName != "" {
+			repoSet[repoName] = true
+		}
+		var scopeParts []string
+		for repo := range repoSet {
 			scopeParts = append(scopeParts, fmt.Sprintf("repository:%s:pull,delete,metadata_read,metadata_write", repo))
+		}
+		if len(scopeParts) == 0 {
+			// Fallback: if no repositories specified, return error for ABAC
+			return errors.New("ABAC registry requires repository scope but none specified")
 		}
 		scope = strings.Join(scopeParts, " ")
 	} else {
@@ -327,7 +339,7 @@ func (c *AcrCLIClient) IsTokenExpired() bool {
 // GetAcrTags list the tags of a repository with their attributes.
 func (c *AcrCLIClient) GetAcrTags(ctx context.Context, repoName string, orderBy string, last string) (*acrapi.RepositoryTagsType, error) {
 	if c.isExpired() {
-		if err := refreshAcrCLIClientToken(ctx, c); err != nil {
+		if err := refreshAcrCLIClientToken(ctx, c, repoName); err != nil {
 			return nil, err
 		}
 	}
@@ -342,7 +354,7 @@ func (c *AcrCLIClient) GetAcrTags(ctx context.Context, repoName string, orderBy 
 // DeleteAcrTag deletes the tag by reference.
 func (c *AcrCLIClient) DeleteAcrTag(ctx context.Context, repoName string, reference string) (*autorest.Response, error) {
 	if c.isExpired() {
-		if err := refreshAcrCLIClientToken(ctx, c); err != nil {
+		if err := refreshAcrCLIClientToken(ctx, c, repoName); err != nil {
 			return nil, err
 		}
 	}
@@ -356,7 +368,7 @@ func (c *AcrCLIClient) DeleteAcrTag(ctx context.Context, repoName string, refere
 // GetAcrManifests list all the manifest in a repository with their attributes.
 func (c *AcrCLIClient) GetAcrManifests(ctx context.Context, repoName string, orderBy string, last string) (*acrapi.Manifests, error) {
 	if c.isExpired() {
-		if err := refreshAcrCLIClientToken(ctx, c); err != nil {
+		if err := refreshAcrCLIClientToken(ctx, c, repoName); err != nil {
 			return nil, err
 		}
 	}
@@ -370,7 +382,7 @@ func (c *AcrCLIClient) GetAcrManifests(ctx context.Context, repoName string, ord
 // DeleteManifest deletes a manifest using the digest as a reference.
 func (c *AcrCLIClient) DeleteManifest(ctx context.Context, repoName string, reference string) (*autorest.Response, error) {
 	if c.isExpired() {
-		if err := refreshAcrCLIClientToken(ctx, c); err != nil {
+		if err := refreshAcrCLIClientToken(ctx, c, repoName); err != nil {
 			return nil, err
 		}
 	}
@@ -385,7 +397,7 @@ func (c *AcrCLIClient) DeleteManifest(ctx context.Context, repoName string, refe
 // This is used when a manifest list is wanted, first the bytes are obtained and then unmarshalled into a new struct.
 func (c *AcrCLIClient) GetManifest(ctx context.Context, repoName string, reference string) ([]byte, error) {
 	if c.isExpired() {
-		if err := refreshAcrCLIClientToken(ctx, c); err != nil {
+		if err := refreshAcrCLIClientToken(ctx, c, repoName); err != nil {
 			return nil, err
 		}
 	}
@@ -425,7 +437,7 @@ func (c *AcrCLIClient) GetManifest(ctx context.Context, repoName string, referen
 // GetAcrManifestAttributes gets the attributes of a manifest.
 func (c *AcrCLIClient) GetAcrManifestAttributes(ctx context.Context, repoName string, reference string) (*acrapi.ManifestAttributes, error) {
 	if c.isExpired() {
-		if err := refreshAcrCLIClientToken(ctx, c); err != nil {
+		if err := refreshAcrCLIClientToken(ctx, c, repoName); err != nil {
 			return nil, err
 		}
 	}
@@ -439,7 +451,7 @@ func (c *AcrCLIClient) GetAcrManifestAttributes(ctx context.Context, repoName st
 // UpdateAcrTagAttributes updates tag attributes to enable/disable deletion and writing.
 func (c *AcrCLIClient) UpdateAcrTagAttributes(ctx context.Context, repoName string, reference string, value *acrapi.ChangeableAttributes) (*autorest.Response, error) {
 	if c.isExpired() {
-		if err := refreshAcrCLIClientToken(ctx, c); err != nil {
+		if err := refreshAcrCLIClientToken(ctx, c, repoName); err != nil {
 			return nil, err
 		}
 	}
@@ -453,7 +465,7 @@ func (c *AcrCLIClient) UpdateAcrTagAttributes(ctx context.Context, repoName stri
 // UpdateAcrManifestAttributes updates manifest attributes to enable/disable deletion and writing.
 func (c *AcrCLIClient) UpdateAcrManifestAttributes(ctx context.Context, repoName string, reference string, value *acrapi.ChangeableAttributes) (*autorest.Response, error) {
 	if c.isExpired() {
-		if err := refreshAcrCLIClientToken(ctx, c); err != nil {
+		if err := refreshAcrCLIClientToken(ctx, c, repoName); err != nil {
 			return nil, err
 		}
 	}

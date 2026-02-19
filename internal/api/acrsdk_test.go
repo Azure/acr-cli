@@ -4,6 +4,7 @@
 package api
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"net/http"
@@ -311,6 +312,131 @@ func TestAcrCLIClientIsAbac(t *testing.T) {
 			result := client.IsAbac()
 			if result != tt.expected {
 				t.Errorf("IsAbac() = %v, expected %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestRefreshAcrCLIClientTokenAbac tests the ABAC-aware token refresh path.
+// This ensures that when SDK methods (GetAcrTags, DeleteAcrTag, etc.) detect token expiry,
+// the refresh uses repository-scoped tokens for ABAC registries instead of wildcard scope.
+func TestRefreshAcrCLIClientTokenAbac(t *testing.T) {
+	testAccessToken := strings.Join([]string{
+		base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"RS256"}`)),
+		base64.RawURLEncoding.EncodeToString([]byte(`{"exp":9999999999}`)), // Far future expiry
+		"",
+	}, ".")
+	testRefreshToken := "test/refresh/token"
+
+	tests := []struct {
+		name                string
+		isAbac              bool
+		currentRepositories []string
+		repoName            string
+		expectedScopePrefix string // What the scope should start with or contain
+		shouldContainRepo   string // Specific repo that must be in scope
+		wantErr             bool
+	}{
+		{
+			name:                "ABAC with currentRepositories and repoName - includes both",
+			isAbac:              true,
+			currentRepositories: []string{"repo1", "repo2"},
+			repoName:            "repo3",
+			expectedScopePrefix: "repository:",
+			shouldContainRepo:   "repo3",
+			wantErr:             false,
+		},
+		{
+			name:                "ABAC with only repoName - uses repoName for scope",
+			isAbac:              true,
+			currentRepositories: []string{},
+			repoName:            "my-repo",
+			expectedScopePrefix: "repository:my-repo:",
+			shouldContainRepo:   "my-repo",
+			wantErr:             false,
+		},
+		{
+			name:                "ABAC with repoName already in currentRepositories - no duplicate",
+			isAbac:              true,
+			currentRepositories: []string{"repo1", "repo2"},
+			repoName:            "repo1",
+			expectedScopePrefix: "repository:",
+			shouldContainRepo:   "repo1",
+			wantErr:             false,
+		},
+		{
+			name:                "ABAC with no repos and no repoName - returns error",
+			isAbac:              true,
+			currentRepositories: []string{},
+			repoName:            "",
+			wantErr:             true,
+		},
+		{
+			name:                "Non-ABAC registry - uses wildcard scope",
+			isAbac:              false,
+			currentRepositories: []string{},
+			repoName:            "any-repo",
+			expectedScopePrefix: "repository:*:*",
+			wantErr:             false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var capturedScope string
+
+			// Create a test server that captures the scope parameter
+			as := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost {
+					w.WriteHeader(http.StatusNotFound)
+					return
+				}
+				if err := r.ParseForm(); err != nil {
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+				capturedScope = r.PostForm.Get("scope")
+				// Return a valid access token
+				fmt.Fprintf(w, `{"access_token":%q}`, testAccessToken)
+			}))
+			defer as.Close()
+
+			// Create client with test configuration
+			client := newAcrCLIClient(as.URL)
+			client.isAbac = tt.isAbac
+			client.currentRepositories = tt.currentRepositories
+			client.token = &adal.Token{
+				AccessToken:  testAccessToken,
+				RefreshToken: testRefreshToken,
+			}
+			// Replace transport to trust test server
+			client.AutorestClient.Sender = as.Client()
+
+			// Call refreshAcrCLIClientToken
+			err := refreshAcrCLIClientToken(context.Background(), &client, tt.repoName)
+
+			// Check error expectation
+			if (err != nil) != tt.wantErr {
+				t.Errorf("refreshAcrCLIClientToken() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			if tt.wantErr {
+				return
+			}
+
+			// Verify the scope was correct
+			if tt.expectedScopePrefix != "" && !strings.Contains(capturedScope, tt.expectedScopePrefix) {
+				t.Errorf("Expected scope to contain %q, got %q", tt.expectedScopePrefix, capturedScope)
+			}
+
+			if tt.shouldContainRepo != "" && !strings.Contains(capturedScope, tt.shouldContainRepo) {
+				t.Errorf("Expected scope to contain repo %q, got %q", tt.shouldContainRepo, capturedScope)
+			}
+
+			// For ABAC, verify we're NOT using wildcard
+			if tt.isAbac && strings.Contains(capturedScope, "repository:*:*") {
+				t.Errorf("ABAC refresh should NOT use wildcard scope, got %q", capturedScope)
 			}
 		})
 	}
