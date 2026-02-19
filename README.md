@@ -257,6 +257,10 @@ acr purge \
     --include-locked
 ```
 
+#### ABAC batch size (environment variable)
+For registries with ABAC enabled, repositories are processed in batches. The batch size controls how many repositories share a single token scope. Token refresh happens dynamically when API calls detect token expiration, using the current batch's repository scope. The batch size can be configured via the `ABAC_BATCH_SIZE` environment variable (default=10)
+
+
 ### Integration with ACR Tasks
 
 To run a locally built version of the ACR-CLI using ACR Tasks follow these steps:

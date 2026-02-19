@@ -245,8 +245,9 @@ func purge(ctx context.Context,
 	}
 
 	// Process repositories in batches of abacBatchSize.
-	// For ABAC-enabled registries, we refresh the token per batch.
-	// For non-ABAC registries, the batching loop is harmless (no token refresh needed).
+	// For ABAC-enabled registries, we set the current repositories for the batch so that
+	// token refresh happens dynamically when needed (on API calls that detect token expiration).
+	// For non-ABAC registries, the batching loop is harmless (no special token handling needed).
 	for i := 0; i < len(repos); i += abacBatchSize {
 		end := i + abacBatchSize
 		if end > len(repos) {
@@ -254,23 +255,14 @@ func purge(ctx context.Context,
 		}
 		batch := repos[i:end]
 
-		// For ABAC registries, request a token that covers all repositories in this batch
+		// For ABAC registries, set the current repositories for this batch.
+		// Token refresh will happen dynamically when API calls detect token expiration.
 		if acrClient.IsAbac() {
-			if err := acrClient.RefreshTokenForAbac(ctx, batch); err != nil {
-				return deletedTagsCount, deletedManifestsCount, fmt.Errorf("failed to authorize ABAC repositories batch: %w", err)
-			}
+			acrClient.SetCurrentRepositories(batch)
 		}
 
 		// Process all repositories in this batch
-		for j, repoName := range batch {
-			// For ABAC registries, check if token expired and refresh for remaining repos in batch
-			if acrClient.IsAbac() && acrClient.IsTokenExpired() {
-				remainingRepos := batch[j:]
-				fmt.Printf("ABAC token expired, refreshing for remaining repositories: %v\n", remainingRepos)
-				if err := acrClient.RefreshTokenForAbac(ctx, remainingRepos); err != nil {
-					return deletedTagsCount, deletedManifestsCount, fmt.Errorf("failed to refresh ABAC token: %w", err)
-				}
-			}
+		for _, repoName := range batch {
 			tagRegex := tagFilters[repoName]
 			var singleDeletedTagsCount int
 			var manifestToTagsCountMap map[string]int

@@ -57,6 +57,9 @@ type AcrCLIClient struct {
 	// ABAC registries require repository-level permissions instead of registry-wide wildcards.
 	// This is detected by checking if the refresh token contains the "aad_identity" claim.
 	isAbac bool
+	// currentRepositories holds the repository names for which the current ABAC token has permissions.
+	// This is used for dynamic token refresh when the token expires during operations.
+	currentRepositories []string
 }
 
 // LoginURL returns the FQDN for a registry.
@@ -178,9 +181,23 @@ func GetAcrCLIClientWithAuth(loginURL string, username string, password string, 
 }
 
 // refreshAcrCLIClientToken obtains a new token and gets its expiration time.
-// This uses the wildcard scope and should only be called for non-ABAC registries.
+// For non-ABAC registries, this uses the wildcard scope.
+// For ABAC registries, this uses the currentRepositories to refresh with the appropriate scope.
 func refreshAcrCLIClientToken(ctx context.Context, c *AcrCLIClient) error {
-	accessTokenResponse, err := c.AutorestClient.GetAcrAccessToken(ctx, c.loginURL, "repository:*:*", c.token.RefreshToken)
+	var scope string
+	if c.isAbac && len(c.currentRepositories) > 0 {
+		// For ABAC registries, use the current repository scope
+		var scopeParts []string
+		for _, repo := range c.currentRepositories {
+			scopeParts = append(scopeParts, fmt.Sprintf("repository:%s:pull,delete,metadata_read,metadata_write", repo))
+		}
+		scope = strings.Join(scopeParts, " ")
+	} else {
+		// For non-ABAC registries, use the wildcard scope
+		scope = "repository:*:*"
+	}
+
+	accessTokenResponse, err := c.AutorestClient.GetAcrAccessToken(ctx, c.loginURL, scope, c.token.RefreshToken)
 	if err != nil {
 		return err
 	}
@@ -214,9 +231,17 @@ func hasAadIdentityClaim(tokenString string) bool {
 	return ok
 }
 
+// SetCurrentRepositories sets the repositories for which ABAC token refresh should request permissions.
+// This should be called before performing operations on repositories in ABAC-enabled registries.
+// When the token expires, the refresh will automatically request permissions for these repositories.
+func (c *AcrCLIClient) SetCurrentRepositories(repositories []string) {
+	c.currentRepositories = repositories
+}
+
 // RefreshTokenForAbac obtains a new access token scoped to specific repositories.
 // This is used for ABAC-enabled registries where wildcard repository access is not allowed.
 // The token will include permissions for all specified repositories.
+// It also updates currentRepositories so subsequent automatic refreshes use the same scope.
 //
 // Parameters:
 //   - repositories: list of repository names to request access for
@@ -227,6 +252,9 @@ func (c *AcrCLIClient) RefreshTokenForAbac(ctx context.Context, repositories []s
 	if c.token == nil {
 		return errors.New("no refresh token available for ABAC token refresh")
 	}
+
+	// Update the current repositories so automatic refreshes use the same scope
+	c.currentRepositories = repositories
 
 	// Build the scope string for all requested repositories.
 	// Each repository needs pull, delete, and metadata permissions for purge operations.
@@ -453,4 +481,6 @@ type AcrCLIClientInterface interface {
 	IsTokenExpired() bool
 	// RefreshTokenForAbac refreshes the access token with scopes for specific repositories.
 	RefreshTokenForAbac(ctx context.Context, repositories []string) error
+	// SetCurrentRepositories sets the repositories for ABAC token refresh scope.
+	SetCurrentRepositories(repositories []string)
 }

@@ -242,3 +242,8 @@ func (_m *AcrCLIClientInterface) RefreshTokenForAbac(ctx context.Context, reposi
 
 	return r0
 }
+
+// SetCurrentRepositories provides a mock function for setting the current repositories for ABAC token scope
+func (_m *AcrCLIClientInterface) SetCurrentRepositories(repositories []string) {
+	_m.Called(repositories)
+}
