@@ -91,6 +91,7 @@ type purgeParameters struct {
 	includeLocked bool
 	concurrency   int
 	repoPageSize  int32
+	verbose       bool
 }
 
 // newPurgeCmd defines the purge command.
@@ -180,7 +181,7 @@ func newPurgeCmd(rootParams *rootParameters) *cobra.Command {
 			// Combine flags for clarity - these are mutually exclusive
 			supportUntaggedCleanup := purgeParams.untagged || purgeParams.untaggedOnly
 
-			deletedTagsCount, deletedManifestsCount, err := purge(ctx, acrClient, loginURL, repoParallelism, agoDuration, purgeParams.keep, purgeParams.filterTimeout, supportUntaggedCleanup, purgeParams.untaggedOnly, tagFilters, purgeParams.dryRun, purgeParams.includeLocked)
+			deletedTagsCount, deletedManifestsCount, err := purge(ctx, acrClient, loginURL, repoParallelism, agoDuration, purgeParams.keep, purgeParams.filterTimeout, supportUntaggedCleanup, purgeParams.untaggedOnly, tagFilters, purgeParams.dryRun, purgeParams.includeLocked, purgeParams.verbose)
 
 			if err != nil {
 				fmt.Printf("Failed to complete purge: %v \n", err)
@@ -210,6 +211,7 @@ func newPurgeCmd(rootParams *rootParameters) *cobra.Command {
 	cmd.Flags().Int64Var(&purgeParams.filterTimeout, "filter-timeout-seconds", defaultRegexpMatchTimeoutSeconds, "This limits the evaluation of the regex filter, and will return a timeout error if this duration is exceeded during a single evaluation. If written incorrectly a regexp filter with backtracking can result in an infinite loop.")
 	cmd.Flags().IntVar(&purgeParams.concurrency, "concurrency", defaultPoolSize, concurrencyDescription)
 	cmd.Flags().Int32Var(&purgeParams.repoPageSize, "repository-page-size", defaultRepoPageSize, repoPageSizeDescription)
+	cmd.Flags().BoolVar(&purgeParams.verbose, "verbose", false, "Enable verbose output including detailed repository names during ABAC token operations")
 	cmd.Flags().BoolP("help", "h", false, "Print usage")
 	// Make filter and ago conditionally required based on untagged-only flag
 	cmd.MarkFlagsOneRequired("filter", "untagged-only")
@@ -228,7 +230,8 @@ func purge(ctx context.Context,
 	untaggedOnly bool,
 	tagFilters map[string]string,
 	dryRun bool,
-	includeLocked bool) (deletedTagsCount int, deletedManifestsCount int, err error) {
+	includeLocked bool,
+	verbose bool) (deletedTagsCount int, deletedManifestsCount int, err error) {
 
 	// Load ABAC batch size from environment variable
 	abacBatchSize := 10 // default
@@ -259,6 +262,11 @@ func purge(ctx context.Context,
 		// Token refresh will happen dynamically when API calls detect token expiration.
 		if acrClient.IsAbac() {
 			acrClient.SetCurrentRepositories(batch)
+			if verbose {
+				fmt.Printf("ABAC: Setting token scope for %d repositories: %v\n", len(batch), batch)
+			} else {
+				fmt.Printf("ABAC: Setting token scope for %d repositories\n", len(batch))
+			}
 		}
 
 		// Process all repositories in this batch
