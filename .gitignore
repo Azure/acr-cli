@@ -5,9 +5,3 @@
 coverage.txt
 *.test
 *.out
-
-# Build artifacts
-/acr-cli
-/acr/acr
-/cmd/acr/acr
-*.html
