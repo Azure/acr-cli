@@ -258,10 +258,13 @@ func purge(ctx context.Context,
 		}
 		batch := repos[i:end]
 
-		// For ABAC registries, set the current repositories for this batch.
-		// Token refresh will happen dynamically when API calls detect token expiration.
+		// For ABAC registries, refresh the token with scopes for this batch of repositories.
+		// ABAC registries don't support wildcard repository scopes, so we must explicitly
+		// request access for each repository before operating on it.
 		if acrClient.IsAbac() {
-			acrClient.SetCurrentRepositories(batch)
+			if err := acrClient.RefreshTokenForAbac(ctx, batch); err != nil {
+				return deletedTagsCount, deletedManifestsCount, fmt.Errorf("failed to refresh ABAC token for batch: %w", err)
+			}
 			if verbose {
 				fmt.Printf("ABAC: Setting token scope for %d repositories: %v\n", len(batch), batch)
 			} else {

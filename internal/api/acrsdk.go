@@ -99,27 +99,16 @@ func newAcrCLIClientWithBasicAuth(loginURL string, username string, password str
 }
 
 // newAcrCLIClientWithBearerAuth creates a client that uses bearer token authentication.
-// It detects if the registry is ABAC-enabled by checking for the "aad_identity" claim in the refresh token.
-// For ABAC registries, it only requests catalog access initially; repository access is requested per-batch.
-// For non-ABAC registries, it requests the traditional wildcard scope for all repositories.
+// It detects ABAC-enabled registries via the "aad_identity" claim in the refresh token.
+// It always requests both catalog and wildcard repository access; on ABAC registries the
+// wildcard is silently ignored by the server, so callers must use RefreshTokenForAbac to
+// request repository-specific scopes before accessing individual repositories.
 func newAcrCLIClientWithBearerAuth(loginURL string, refreshToken string) (AcrCLIClient, error) {
-	// Detect if this is an ABAC-enabled registry by checking for aad_identity claim
-	isAbac := hasAadIdentityClaim(refreshToken)
-
 	newAcrCLIClient := newAcrCLIClient(loginURL)
-	newAcrCLIClient.isAbac = isAbac
+	newAcrCLIClient.isAbac = hasAadIdentityClaim(refreshToken)
 
 	ctx := context.Background()
-	var scope string
-	if isAbac {
-		// For ABAC registries, only request catalog access initially.
-		// Repository-level access will be requested on-demand per repository or batch.
-		// This is because ABAC registries cannot grant wildcard repository access.
-		scope = "registry:catalog:*"
-	} else {
-		// For non-ABAC registries, request full wildcard access to all repositories.
-		scope = "registry:catalog:* repository:*:*"
-	}
+	scope := "registry:catalog:* repository:*:*"
 
 	accessTokenResponse, err := newAcrCLIClient.AutorestClient.GetAcrAccessToken(ctx, loginURL, scope, refreshToken)
 	if err != nil {
@@ -196,6 +185,14 @@ func refreshAcrCLIClientToken(ctx context.Context, c *AcrCLIClient, repoName str
 			repoSet[repoName] = true
 		}
 		var scopeParts []string
+		// "catalog" is a sentinel value meaning "include registry:catalog:* scope"
+		// (access to the catalog API for listing repositories). It must NOT be
+		// treated as a repository name, since "repository:catalog:..." would try
+		// to access a repository literally named "catalog".
+		if repoSet["catalog"] {
+			scopeParts = append(scopeParts, "registry:catalog:*")
+			delete(repoSet, "catalog")
+		}
 		for repo := range repoSet {
 			scopeParts = append(scopeParts, fmt.Sprintf("repository:%s:pull,delete,metadata_read,metadata_write", repo))
 		}
@@ -270,10 +267,17 @@ func (c *AcrCLIClient) RefreshTokenForAbac(ctx context.Context, repositories []s
 
 	// Build the scope string for all requested repositories.
 	// Each repository needs pull, delete, and metadata permissions for purge operations.
-	// Format: "repository:repo1:pull,delete,metadata_read,metadata_write repository:repo2:pull,delete,metadata_read,metadata_write ..."
+	// "catalog" is a sentinel value meaning "include registry:catalog:* scope"
+	// (access to the catalog API for listing repositories). It must NOT be
+	// treated as a repository name, since "repository:catalog:..." would try
+	// to access a repository literally named "catalog".
 	var scopeParts []string
 	for _, repo := range repositories {
-		scopeParts = append(scopeParts, fmt.Sprintf("repository:%s:pull,delete,metadata_read,metadata_write", repo))
+		if repo == "catalog" {
+			scopeParts = append(scopeParts, "registry:catalog:*")
+		} else {
+			scopeParts = append(scopeParts, fmt.Sprintf("repository:%s:pull,delete,metadata_read,metadata_write", repo))
+		}
 	}
 	scope := strings.Join(scopeParts, " ")
 

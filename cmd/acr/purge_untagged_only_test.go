@@ -785,7 +785,7 @@ func TestPurgeAbacVerboseMode(t *testing.T) {
 
 		// Mock ABAC registry
 		mockClient.On("IsAbac").Return(true)
-		mockClient.On("SetCurrentRepositories", mock.Anything).Return()
+		mockClient.On("RefreshTokenForAbac", mock.Anything, mock.Anything).Return(nil)
 
 		// Empty manifests result for each repo
 		emptyManifestsResult := &acr.Manifests{
@@ -844,7 +844,7 @@ func TestPurgeAbacVerboseMode(t *testing.T) {
 		assert.Contains(output, "repo1", "Should output repo1 in verbose mode")
 		assert.Contains(output, "repo2", "Should output repo2 in verbose mode")
 		assert.Contains(output, "repo3", "Should output repo3 in verbose mode")
-		mockClient.AssertCalled(t, "SetCurrentRepositories", mock.Anything)
+		mockClient.AssertCalled(t, "RefreshTokenForAbac", mock.Anything, mock.Anything)
 		mockClient.AssertExpectations(t)
 	})
 
@@ -855,7 +855,7 @@ func TestPurgeAbacVerboseMode(t *testing.T) {
 
 		// Mock ABAC registry
 		mockClient.On("IsAbac").Return(true)
-		mockClient.On("SetCurrentRepositories", mock.Anything).Return()
+		mockClient.On("RefreshTokenForAbac", mock.Anything, mock.Anything).Return(nil)
 
 		// Empty manifests result for each repo
 		emptyManifestsResult := &acr.Manifests{
@@ -913,12 +913,12 @@ func TestPurgeAbacVerboseMode(t *testing.T) {
 		assert.Contains(output, "ABAC: Setting token scope for 3 repositories", "Should output repo count")
 		// The non-verbose output should NOT contain the bracketed list of repos
 		assert.NotContains(output, "[repo1", "Should NOT output repo list in non-verbose mode")
-		mockClient.AssertCalled(t, "SetCurrentRepositories", mock.Anything)
+		mockClient.AssertCalled(t, "RefreshTokenForAbac", mock.Anything, mock.Anything)
 		mockClient.AssertExpectations(t)
 	})
 
-	// Test: Non-ABAC registry should not call SetCurrentRepositories
-	t.Run("NonAbacDoesNotCallSetCurrentRepositories", func(t *testing.T) {
+	// Test: Non-ABAC registry should not call RefreshTokenForAbac
+	t.Run("NonAbacDoesNotCallRefreshTokenForAbac", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 
@@ -957,8 +957,8 @@ func TestPurgeAbacVerboseMode(t *testing.T) {
 		assert.Equal(0, deletedTagsCount, "No tags should be deleted")
 		assert.Equal(0, deletedManifestsCount, "No manifests deleted")
 		assert.Nil(err, "Error should be nil")
-		// Verify SetCurrentRepositories was NOT called for non-ABAC
-		mockClient.AssertNotCalled(t, "SetCurrentRepositories", mock.Anything)
+		// Verify RefreshTokenForAbac was NOT called for non-ABAC
+		mockClient.AssertNotCalled(t, "RefreshTokenForAbac", mock.Anything, mock.Anything)
 		mockClient.AssertExpectations(t)
 	})
 }
