@@ -185,7 +185,7 @@ func newPurgeCmd(rootParams *rootParameters) *cobra.Command {
 
 			deletedTagsCount, deletedManifestsCount, err := purge(ctx, acrClient, loginURL, repoParallelism, agoDuration, purgeParams.keep, purgeParams.filterTimeout, supportUntaggedCleanup, purgeParams.untaggedOnly, tagFilters, purgeParams.dryRun, purgeParams.includeLocked, purgeParams.verbose)
 
-			if err != nil {
+			if err != nil && !strings.Contains(err.Error(), "insufficient permissions") {
 				fmt.Printf("Failed to complete purge: %v \n", err)
 			}
 
