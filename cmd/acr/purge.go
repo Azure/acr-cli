@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -18,6 +19,7 @@ import (
 	"github.com/Azure/acr-cli/cmd/repository"
 	"github.com/Azure/acr-cli/internal/api"
 	"github.com/Azure/acr-cli/internal/worker"
+	"github.com/Azure/go-autorest/autorest"
 	"github.com/dlclark/regexp2"
 	"github.com/spf13/cobra"
 )
@@ -247,6 +249,9 @@ func purge(ctx context.Context,
 		repos = append(repos, repoName)
 	}
 
+	// Track which repositories have been successfully processed for error reporting.
+	var completedRepos []string
+
 	// Process repositories in batches of abacBatchSize.
 	// For ABAC-enabled registries, we set the current repositories for the batch so that
 	// token refresh happens dynamically when needed (on API calls that detect token expiration).
@@ -286,6 +291,11 @@ func purge(ctx context.Context,
 				// Standard mode: delete matching tags first
 				singleDeletedTagsCount, manifestToTagsCountMap, err = purgeTags(ctx, acrClient, repoParallelism, loginURL, repoName, agoDuration, tagRegex, keep, filterTimeout, dryRun, includeLocked)
 				if err != nil {
+					if isUnauthorizedError(err) {
+						remainingRepos := repos[i+indexOf(batch, repoName):]
+						return deletedTagsCount, deletedManifestsCount,
+							formatPermissionError(repoName, "purge tags", completedRepos, remainingRepos)
+					}
 					return deletedTagsCount, deletedManifestsCount, fmt.Errorf("failed to purge tags: %w", err)
 				}
 			}
@@ -295,12 +305,18 @@ func purge(ctx context.Context,
 			if removeUntaggedManifests {
 				singleDeletedManifestsCount, err = purgeDanglingManifests(ctx, acrClient, repoParallelism, loginURL, repoName, agoDuration, keep, manifestToTagsCountMap, dryRun, includeLocked)
 				if err != nil {
+					if isUnauthorizedError(err) {
+						remainingRepos := repos[i+indexOf(batch, repoName):]
+						return deletedTagsCount, deletedManifestsCount,
+							formatPermissionError(repoName, "purge manifests", completedRepos, remainingRepos)
+					}
 					return deletedTagsCount, deletedManifestsCount, fmt.Errorf("failed to purge manifests: %w", err)
 				}
 			}
 			// After every repository is purged the counters are updated.
 			deletedTagsCount += singleDeletedTagsCount
 			deletedManifestsCount += singleDeletedManifestsCount
+			completedRepos = append(completedRepos, repoName)
 		}
 	}
 
@@ -608,4 +624,52 @@ func purgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInter
 		return -1, purgeErr
 	}
 	return deletedManifestsCount, nil
+}
+
+// isUnauthorizedError checks if an error is an HTTP 401 Unauthorized response.
+// This is used to detect permission failures on ABAC-enabled registries where
+// the user may have access to some repositories but not others.
+func isUnauthorizedError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var detailedErr autorest.DetailedError
+	if errors.As(err, &detailedErr) {
+		if statusCode, ok := detailedErr.StatusCode.(int); ok {
+			return statusCode == http.StatusUnauthorized
+		}
+	}
+	return strings.Contains(err.Error(), "StatusCode=401")
+}
+
+// formatPermissionError builds a clear error message when a purge operation fails
+// due to insufficient permissions on a repository. It reports which repository
+// failed, which repositories were already processed, and which remain untouched.
+func formatPermissionError(failedRepo string, operation string, completedRepos []string, remainingRepos []string) error {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("insufficient permissions to %s for repository %q", operation, failedRepo))
+
+	if len(completedRepos) > 0 {
+		sb.WriteString(fmt.Sprintf("\n  Completed repositories (%d): %s", len(completedRepos), strings.Join(completedRepos, ", ")))
+	} else {
+		sb.WriteString("\n  Completed repositories: none")
+	}
+
+	// remainingRepos includes the failed repo; show the ones after it as not yet processed
+	if len(remainingRepos) > 1 {
+		sb.WriteString(fmt.Sprintf("\n  Remaining repositories not yet processed (%d): %s", len(remainingRepos)-1, strings.Join(remainingRepos[1:], ", ")))
+	}
+
+	sb.WriteString("\n  Hint: use a more specific --filter to target only repositories you have permissions for")
+	return errors.New(sb.String())
+}
+
+// indexOf returns the index of s in slice, or 0 if not found.
+func indexOf(slice []string, s string) int {
+	for i, v := range slice {
+		if v == s {
+			return i
+		}
+	}
+	return 0
 }
