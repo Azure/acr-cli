@@ -240,13 +240,6 @@ func hasAadIdentityClaim(tokenString string) bool {
 	return ok
 }
 
-// SetCurrentRepositories sets the repositories for which ABAC token refresh should request permissions.
-// This should be called before performing operations on repositories in ABAC-enabled registries.
-// When the token expires, the refresh will automatically request permissions for these repositories.
-func (c *AcrCLIClient) SetCurrentRepositories(repositories []string) {
-	c.currentRepositories = repositories
-}
-
 // RefreshTokenForAbac obtains a new access token scoped to specific repositories.
 // This is used for ABAC-enabled registries where wildcard repository access is not allowed.
 // The token will include permissions for all specified repositories.
@@ -497,6 +490,4 @@ type AcrCLIClientInterface interface {
 	IsTokenExpired() bool
 	// RefreshTokenForAbac refreshes the access token with scopes for specific repositories.
 	RefreshTokenForAbac(ctx context.Context, repositories []string) error
-	// SetCurrentRepositories sets the repositories for ABAC token refresh scope.
-	SetCurrentRepositories(repositories []string)
 }
