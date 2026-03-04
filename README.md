@@ -257,8 +257,26 @@ acr purge \
     --include-locked
 ```
 
-#### ABAC batch size (environment variable)
-For registries with ABAC enabled, repositories are processed in batches. The batch size controls how many repositories share a single token scope. Token refresh happens dynamically when API calls detect token expiration, using the current batch's repository scope. The batch size can be configured via the `ABAC_BATCH_SIZE` environment variable (default=10)
+#### ABAC (Attribute-Based Access Control) registries
+
+Registries with ABAC enabled use repository-scoped permissions instead of registry-wide roles. When using `acr purge` with an ABAC registry, keep the following in mind:
+
+**Required permissions:**
+- **Catalog listing:** The user must have permission to list repositories (e.g., the `Container Registry Repository Catalog Lister` role or equivalent `registry:catalog:*` scope).
+- **Repository access:** The user needs the `Container Registry Repository Contributor` role for deletes, which can be scoped to specific repositories using ABAC conditions.
+
+**Partial access behavior:**
+
+If a broad `--filter` matches repositories that the user does not have permission to purge, the command will stop at the first unauthorized repository and report:
+- Which repository failed due to insufficient permissions
+- Which repositories were already successfully purged
+- Which repositories were not yet processed
+
+To avoid this, use a more specific `--filter` to target only repositories you have access to.
+
+**Batch size (environment variable):**
+
+ABAC registries process repositories in batches, where each batch shares a single token scope. Token refresh happens dynamically when API calls detect token expiration. The batch size can be configured via the `ABAC_BATCH_SIZE` environment variable (default: 10).
 
 
 ### Integration with ACR Tasks

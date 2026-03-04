@@ -5,3 +5,4 @@
 coverage.txt
 *.test
 *.out
+*.html
