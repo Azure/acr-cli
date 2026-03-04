@@ -1617,84 +1617,27 @@ run_test_comp_manifest() {
 run_test_comp_age() {
     local age_repo="test-comp-age"
 
-    # Clean up any leftover data from previous runs
-    echo -e " Step 1: Cleaning up previous test data...${NC}"
-    az acr repository delete --name "$(get_registry_name)" --repository "$age_repo" --yes 2>/dev/null || true
-    az acr repository delete --name "$(get_registry_name)" --repository "${age_repo}-untagged" --yes 2>/dev/null || true
-    sleep 2
-
-    # Test 1: Tag age filtering
-    echo -e " Step 2: Testing tag age filtering...${NC}"
-    echo "  Creating test images: $age_repo:old and $age_repo:new"
     create_test_image "$age_repo" "old"
     create_test_image "$age_repo" "new"
 
-    echo "  Running purge with --ago 1d --dry-run (should delete 0 tags)"
     local output=$("$ACR_CLI" purge --registry "$REGISTRY" --filter "$age_repo:.*" --ago 1d --dry-run 2>&1)
-    if [ "$DEBUG" = "1" ]; then
-        echo "  Purge output:"
-        echo "$output" | sed 's/^/    /'
-    fi
     assert_contains "$output" "Number of tags to be deleted: 0" "New images should not be deleted with --ago 1d"
 
-    # Test 2: Untagged manifest age filtering
-    echo -e " Step 3: Testing untagged manifest age filtering...${NC}"
     local manifest_repo="${age_repo}-untagged"
-    
-    # Create "keep" image with unique content
-    echo "  Creating unique image: $manifest_repo:keep"
-    create_unique_test_image "$manifest_repo" "keep" "keep-content-$(date +%s)"
-    
-    # Record baseline manifest count (after keep is created)
-    local manifests_baseline=$(count_manifests "$manifest_repo")
-    local tags_baseline=$(count_tags "$manifest_repo")
-    echo "  Baseline state: $tags_baseline tag(s), $manifests_baseline manifest(s)"
-    
-    # Create "temp" image with unique content
-    echo "  Creating unique image: $manifest_repo:temp"
-    create_unique_test_image "$manifest_repo" "temp" "temp-content-$(date +%s)"
-    sleep 1
-    
-    local manifests_after_temp=$(count_manifests "$manifest_repo")
-    local tags_after_temp=$(count_tags "$manifest_repo")
-    echo "  After creating temp: $tags_after_temp tag(s), $manifests_after_temp manifest(s)"
+    create_unique_test_image "$manifest_repo" "keep"
+    create_unique_test_image "$manifest_repo" "temp"
 
-    # Delete the temp TAG - this leaves the temp manifest untagged
-    echo -e " Step 4: Deleting 'temp' tag to create untagged manifest...${NC}"
-    az acr repository delete --name "$(get_registry_name)" --image "$manifest_repo:temp" --yes >/dev/null 2>&1
-    sleep 2
+    "$ACR_CLI" purge --registry "$REGISTRY" --filter "$manifest_repo:temp" --ago 0d >/dev/null 2>&1
 
-    local tags_after_delete=$(count_tags "$manifest_repo")
     local manifests_before=$(count_manifests "$manifest_repo")
-    echo "  After deleting temp tag: $tags_after_delete tag(s), $manifests_before manifest(s)"
-    echo "  Untagged manifests created: $((manifests_before - manifests_baseline))"
 
-    # Purge with --ago 1d should NOT delete the recently-created untagged manifest
-    echo -e " Step 5: Testing --ago 1d --untagged-only (should preserve recent untagged)...${NC}"
-    "$ACR_CLI" purge --registry "$REGISTRY" --filter "$manifest_repo:.*" --ago 1d --untagged-only >/dev/null 2>&1
+    "$ACR_CLI" purge --registry "$REGISTRY" --filter "$manifest_repo:.*" --ago 1d --untagged >/dev/null 2>&1
     local manifests_after=$(count_manifests "$manifest_repo")
-    echo "  Manifests after --ago 1d purge: $manifests_after (expected: $manifests_before, no change)"
     assert_equals "$manifests_before" "$manifests_after" "Recent untagged manifests should be preserved by --ago"
 
-    # Purge with --ago 0d SHOULD delete the untagged manifest(s)
-    echo -e " Step 6: Testing --ago 0d --untagged-only (should delete untagged)...${NC}"
-    "$ACR_CLI" purge --registry "$REGISTRY" --filter "$manifest_repo:.*" --ago 0d --untagged-only >/dev/null 2>&1
+    "$ACR_CLI" purge --registry "$REGISTRY" --filter "$manifest_repo:.*" --ago 0d --untagged >/dev/null 2>&1
     local manifests_final=$(count_manifests "$manifest_repo")
-    local tags_final=$(count_tags "$manifest_repo")
-    echo "  Final state: $tags_final tag(s), $manifests_final manifest(s)"
-    echo "  Untagged manifests deleted: $((manifests_before - manifests_final))"
-    
-    # Verify that untagged manifests were deleted (final count should be <= baseline)
-    # We use <= because the baseline might include some shared layers
-    if [ "$manifests_final" -le "$manifests_baseline" ]; then
-        echo -e " Untagged manifests meeting --ago cutoff should be deleted${NC}"
-        ((TESTS_PASSED++))
-    else
-        echo -e " Untagged manifests meeting --ago cutoff should be deleted${NC}"
-        echo -e "  Expected: <= $manifests_baseline, Actual: $manifests_final"
-        ((TESTS_FAILED++))
-        FAILED_TESTS+=("Untagged manifests meeting --ago cutoff should be deleted")
-    fi
+    assert_equals "$((manifests_before - 1))" "$manifests_final" "Untagged manifests meeting --ago cutoff should be deleted"
 }
 
 # Test suite runners
