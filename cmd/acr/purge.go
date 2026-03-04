@@ -243,11 +243,12 @@ func purge(ctx context.Context,
 		}
 	}
 
-	// Collect all repository names into a slice for batching
+	// Collect all repository names into a sorted slice for deterministic batching and output.
 	repos := make([]string, 0, len(tagFilters))
 	for repoName := range tagFilters {
 		repos = append(repos, repoName)
 	}
+	sort.Strings(repos)
 
 	// Track which repositories have been successfully processed for error reporting.
 	var completedRepos []string
