@@ -441,3 +441,72 @@ func TestRefreshAcrCLIClientTokenAbac(t *testing.T) {
 		})
 	}
 }
+
+// TestBuildAbacScope tests that buildAbacScope correctly maps repository names
+// to token scope strings and handles the "catalog" sentinel value.
+func TestBuildAbacScope(t *testing.T) {
+	tests := []struct {
+		name         string
+		repositories []string
+		wantContains []string
+		wantExcludes []string
+	}{
+		{
+			name:         "single repository",
+			repositories: []string{"my-repo"},
+			wantContains: []string{"repository:my-repo:pull,delete,metadata_read,metadata_write"},
+		},
+		{
+			name:         "multiple repositories",
+			repositories: []string{"repo1", "repo2"},
+			wantContains: []string{
+				"repository:repo1:pull,delete,metadata_read,metadata_write",
+				"repository:repo2:pull,delete,metadata_read,metadata_write",
+			},
+		},
+		{
+			name:         "catalog sentinel maps to registry scope",
+			repositories: []string{"catalog"},
+			wantContains: []string{"registry:catalog:*"},
+			wantExcludes: []string{"repository:catalog:"},
+		},
+		{
+			name:         "catalog mixed with regular repos",
+			repositories: []string{"catalog", "my-repo"},
+			wantContains: []string{
+				"registry:catalog:*",
+				"repository:my-repo:pull,delete,metadata_read,metadata_write",
+			},
+			wantExcludes: []string{"repository:catalog:"},
+		},
+		{
+			name:         "empty list returns empty string",
+			repositories: []string{},
+			wantContains: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := buildAbacScope(tt.repositories)
+
+			if len(tt.repositories) == 0 {
+				if got != "" {
+					t.Errorf("buildAbacScope([]) = %q, want empty string", got)
+				}
+				return
+			}
+
+			for _, want := range tt.wantContains {
+				if !strings.Contains(got, want) {
+					t.Errorf("buildAbacScope() = %q, want it to contain %q", got, want)
+				}
+			}
+			for _, exclude := range tt.wantExcludes {
+				if strings.Contains(got, exclude) {
+					t.Errorf("buildAbacScope() = %q, should NOT contain %q", got, exclude)
+				}
+			}
+		})
+	}
+}
