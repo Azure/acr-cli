@@ -66,7 +66,7 @@ func newTagListCmd(tagParams *tagParameters) *cobra.Command {
 			}
 			loginURL := api.LoginURL(registryName)
 			// An acrClient is created to make the http requests to the registry.
-			acrClient, err := api.GetAcrCLIClientWithAuth(loginURL, tagParams.username, tagParams.password, tagParams.configs)
+			acrClient, err := api.GetAcrCLIClientWithAuth(loginURL, tagParams.username, tagParams.password, tagParams.configs, tagParams.repoName)
 			if err != nil {
 				return err
 			}
@@ -99,7 +99,7 @@ func newTagDeleteCmd(tagParams *tagParameters) *cobra.Command {
 				return err
 			}
 			loginURL := api.LoginURL(registryName)
-			acrClient, err := api.GetAcrCLIClientWithAuth(loginURL, tagParams.username, tagParams.password, tagParams.configs)
+			acrClient, err := api.GetAcrCLIClientWithAuth(loginURL, tagParams.username, tagParams.password, tagParams.configs, tagParams.repoName)
 			if err != nil {
 				return err
 			}

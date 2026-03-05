@@ -58,8 +58,11 @@ type AcrCLIClient struct {
 	// This is detected by checking if the refresh token contains the "aad_identity" claim.
 	isAbac bool
 	// currentRepositories holds the repository names for which the current ABAC token has permissions.
-	// This is used for dynamic token refresh when the token expires during operations.
+	// This is used for dynamic token refresh when the token expires during operations (purge batching).
 	currentRepositories []string
+	// repoName stores the target repository for repo-scoped token requests on ABAC registries.
+	// Used by tag/manifest commands where a single repo is known upfront.
+	repoName string
 }
 
 // LoginURL returns the FQDN for a registry.
@@ -99,16 +102,26 @@ func newAcrCLIClientWithBasicAuth(loginURL string, username string, password str
 }
 
 // newAcrCLIClientWithBearerAuth creates a client that uses bearer token authentication.
-// It detects ABAC-enabled registries via the "aad_identity" claim in the refresh token.
-// It always requests both catalog and wildcard repository access; on ABAC registries the
-// wildcard is silently ignored by the server, so callers must use RefreshTokenForAbac to
-// request repository-specific scopes before accessing individual repositories.
-func newAcrCLIClientWithBearerAuth(loginURL string, refreshToken string) (AcrCLIClient, error) {
+// When repoName is provided and the registry uses ABAC, a repo-scoped token is requested
+// instead of the wildcard scope (which ABAC registries silently ignore).
+func newAcrCLIClientWithBearerAuth(loginURL string, refreshToken string, repoName string) (AcrCLIClient, error) {
 	newAcrCLIClient := newAcrCLIClient(loginURL)
-	newAcrCLIClient.isAbac = hasAadIdentityClaim(refreshToken)
-
 	ctx := context.Background()
-	scope := "registry:catalog:* repository:*:*"
+
+	// Detect ABAC by checking for the aad_identity claim in the refresh token.
+	isAbac := hasAadIdentityClaim(refreshToken)
+	newAcrCLIClient.isAbac = isAbac
+	newAcrCLIClient.repoName = repoName
+
+	// Build token scope based on ABAC status and whether a repo is known.
+	var scope string
+	if isAbac && repoName != "" {
+		// For ABAC registries with a known repo, request repo-scoped permissions.
+		scope = fmt.Sprintf("repository:%s:pull,delete,metadata_read,metadata_write", repoName)
+	} else {
+		// For non-ABAC registries (or when no repo is known yet), use wildcard scope.
+		scope = "registry:catalog:* repository:*:*"
+	}
 
 	accessTokenResponse, err := newAcrCLIClient.AutorestClient.GetAcrAccessToken(ctx, loginURL, scope, refreshToken)
 	if err != nil {
@@ -129,8 +142,9 @@ func newAcrCLIClientWithBearerAuth(loginURL string, refreshToken string) (AcrCLI
 	return newAcrCLIClient, nil
 }
 
-// GetAcrCLIClientWithAuth obtains a client that has authentication for making ACR http requests
-func GetAcrCLIClientWithAuth(loginURL string, username string, password string, configs []string) (*AcrCLIClient, error) {
+// GetAcrCLIClientWithAuth obtains a client that has authentication for making ACR http requests.
+// repoName is optional; when provided for ABAC registries, the token is scoped to that repository.
+func GetAcrCLIClientWithAuth(loginURL string, username string, password string, configs []string, repoName string) (*AcrCLIClient, error) {
 	if username == "" && password == "" {
 		// If both username and password are empty then the docker config file will be used, it can be found in the default
 		// location or in a location specified by the configs string array
@@ -158,7 +172,7 @@ func GetAcrCLIClientWithAuth(loginURL string, username string, password string, 
 	if username == "" || username == "00000000-0000-0000-0000-000000000000" {
 		// If the username is empty an ACR refresh token was used.
 		var err error
-		acrClient, err = newAcrCLIClientWithBearerAuth(loginURL, password)
+		acrClient, err = newAcrCLIClientWithBearerAuth(loginURL, password, repoName)
 		if err != nil {
 			return nil, errors.Wrap(err, "error resolving authentication")
 		}
@@ -187,7 +201,8 @@ func buildAbacScope(repositories []string) string {
 
 // refreshAcrCLIClientToken obtains a new token and gets its expiration time.
 // For non-ABAC registries, this uses the wildcard scope.
-// For ABAC registries, this uses the currentRepositories to refresh with the appropriate scope.
+// For ABAC registries, this uses the currentRepositories (set by purge batching)
+// or the stored repoName (set by tag/manifest commands) to refresh with the appropriate scope.
 func refreshAcrCLIClientToken(ctx context.Context, c *AcrCLIClient, repoName string) error {
 	var scope string
 	if c.isAbac {
@@ -196,17 +211,30 @@ func refreshAcrCLIClientToken(ctx context.Context, c *AcrCLIClient, repoName str
 		for _, repo := range c.currentRepositories {
 			repoSet[repo] = true
 		}
+		// Ensure the current repoName is in the set
 		if repoName != "" {
 			repoSet[repoName] = true
 		}
-		repos := make([]string, 0, len(repoSet))
-		for repo := range repoSet {
-			repos = append(repos, repo)
+		// Fall back to the stored repoName (used by tag/manifest commands)
+		if len(repoSet) == 0 && c.repoName != "" {
+			repoSet[c.repoName] = true
 		}
-		scope = buildAbacScope(repos)
-		if scope == "" {
+		var scopeParts []string
+		// "catalog" is a sentinel value meaning "include registry:catalog:* scope"
+		// (access to the catalog API for listing repositories). It must NOT be
+		// treated as a repository name, since "repository:catalog:..." would try
+		// to access a repository literally named "catalog".
+		if repoSet["catalog"] {
+			scopeParts = append(scopeParts, "registry:catalog:*")
+			delete(repoSet, "catalog")
+		}
+		for repo := range repoSet {
+			scopeParts = append(scopeParts, fmt.Sprintf("repository:%s:pull,delete,metadata_read,metadata_write", repo))
+		}
+		if len(scopeParts) == 0 {
 			return errors.New("ABAC registry requires repository scope but none specified")
 		}
+		scope = strings.Join(scopeParts, " ")
 	} else {
 		// For non-ABAC registries, use the wildcard scope
 		scope = "repository:*:*"

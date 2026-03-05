@@ -66,7 +66,7 @@ func newManifestListCmd(manifestParams *manifestParameters) *cobra.Command {
 			}
 			loginURL := api.LoginURL(registryName)
 			// An acrClient is created to make the http requests to the registry.
-			acrClient, err := api.GetAcrCLIClientWithAuth(loginURL, manifestParams.username, manifestParams.password, manifestParams.configs)
+			acrClient, err := api.GetAcrCLIClientWithAuth(loginURL, manifestParams.username, manifestParams.password, manifestParams.configs, manifestParams.repoName)
 			if err != nil {
 				return err
 			}
@@ -122,7 +122,7 @@ func newManifestDeleteCmd(manifestParams *manifestParameters) *cobra.Command {
 				return err
 			}
 			loginURL := api.LoginURL(registryName)
-			acrClient, err := api.GetAcrCLIClientWithAuth(loginURL, manifestParams.username, manifestParams.password, manifestParams.configs)
+			acrClient, err := api.GetAcrCLIClientWithAuth(loginURL, manifestParams.username, manifestParams.password, manifestParams.configs, manifestParams.repoName)
 			if err != nil {
 				return err
 			}

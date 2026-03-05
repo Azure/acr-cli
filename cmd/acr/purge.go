@@ -138,7 +138,7 @@ func newPurgeCmd(rootParams *rootParameters) *cobra.Command {
 			}
 			loginURL := api.LoginURL(registryName)
 			// An acrClient with authentication is generated, if the authentication cannot be resolved an error is returned.
-			acrClient, err := api.GetAcrCLIClientWithAuth(loginURL, purgeParams.username, purgeParams.password, purgeParams.configs)
+			acrClient, err := api.GetAcrCLIClientWithAuth(loginURL, purgeParams.username, purgeParams.password, purgeParams.configs, "")
 			if err != nil {
 				return err
 			}

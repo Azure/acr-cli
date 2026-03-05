@@ -212,7 +212,7 @@ func TestGetAcrCLIClientWithAuth(t *testing.T) {
 				t.Errorf("cannot create test config file: %v", err)
 				return
 			}
-			got, err := GetAcrCLIClientWithAuth(tt.loginURL, tt.username, tt.password, []string{configFilePath})
+			got, err := GetAcrCLIClientWithAuth(tt.loginURL, tt.username, tt.password, []string{configFilePath}, "")
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetAcrCLIClientWithAuth() error = %v, wantErr %v", err, tt.wantErr)
 				return
