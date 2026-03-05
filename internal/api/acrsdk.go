@@ -169,6 +169,22 @@ func GetAcrCLIClientWithAuth(loginURL string, username string, password string, 
 	return &acrClient, nil
 }
 
+// buildAbacScope constructs a token scope string from a set of repository names.
+// "catalog" is a sentinel value mapped to "registry:catalog:*" (access to the
+// catalog API for listing repositories). All other names are mapped to
+// "repository:<name>:pull,delete,metadata_read,metadata_write".
+func buildAbacScope(repositories []string) string {
+	var scopeParts []string
+	for _, repo := range repositories {
+		if repo == "catalog" {
+			scopeParts = append(scopeParts, "registry:catalog:*")
+		} else {
+			scopeParts = append(scopeParts, fmt.Sprintf("repository:%s:pull,delete,metadata_read,metadata_write", repo))
+		}
+	}
+	return strings.Join(scopeParts, " ")
+}
+
 // refreshAcrCLIClientToken obtains a new token and gets its expiration time.
 // For non-ABAC registries, this uses the wildcard scope.
 // For ABAC registries, this uses the currentRepositories to refresh with the appropriate scope.
@@ -180,27 +196,17 @@ func refreshAcrCLIClientToken(ctx context.Context, c *AcrCLIClient, repoName str
 		for _, repo := range c.currentRepositories {
 			repoSet[repo] = true
 		}
-		// Ensure the current repoName is in the set
 		if repoName != "" {
 			repoSet[repoName] = true
 		}
-		var scopeParts []string
-		// "catalog" is a sentinel value meaning "include registry:catalog:* scope"
-		// (access to the catalog API for listing repositories). It must NOT be
-		// treated as a repository name, since "repository:catalog:..." would try
-		// to access a repository literally named "catalog".
-		if repoSet["catalog"] {
-			scopeParts = append(scopeParts, "registry:catalog:*")
-			delete(repoSet, "catalog")
-		}
+		repos := make([]string, 0, len(repoSet))
 		for repo := range repoSet {
-			scopeParts = append(scopeParts, fmt.Sprintf("repository:%s:pull,delete,metadata_read,metadata_write", repo))
+			repos = append(repos, repo)
 		}
-		if len(scopeParts) == 0 {
-			// Fallback: if no repositories specified, return error for ABAC
+		scope = buildAbacScope(repos)
+		if scope == "" {
 			return errors.New("ABAC registry requires repository scope but none specified")
 		}
-		scope = strings.Join(scopeParts, " ")
 	} else {
 		// For non-ABAC registries, use the wildcard scope
 		scope = "repository:*:*"
@@ -258,21 +264,7 @@ func (c *AcrCLIClient) RefreshTokenForAbac(ctx context.Context, repositories []s
 	// Update the current repositories so automatic refreshes use the same scope
 	c.currentRepositories = repositories
 
-	// Build the scope string for all requested repositories.
-	// Each repository needs pull, delete, and metadata permissions for purge operations.
-	// "catalog" is a sentinel value meaning "include registry:catalog:* scope"
-	// (access to the catalog API for listing repositories). It must NOT be
-	// treated as a repository name, since "repository:catalog:..." would try
-	// to access a repository literally named "catalog".
-	var scopeParts []string
-	for _, repo := range repositories {
-		if repo == "catalog" {
-			scopeParts = append(scopeParts, "registry:catalog:*")
-		} else {
-			scopeParts = append(scopeParts, fmt.Sprintf("repository:%s:pull,delete,metadata_read,metadata_write", repo))
-		}
-	}
-	scope := strings.Join(scopeParts, " ")
+	scope := buildAbacScope(repositories)
 
 	accessTokenResponse, err := c.AutorestClient.GetAcrAccessToken(ctx, c.loginURL, scope, c.token.RefreshToken)
 	if err != nil {
