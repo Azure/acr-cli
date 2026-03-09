@@ -552,9 +552,13 @@ func TestDryRun(t *testing.T) {
 	t.Run("RepositoryNotFoundTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
+		// Mock IsAbac to return false (non-ABAC registry) to use standard wildcard token flow
+		mockClient.On("IsAbac").Return(false)
+		// Need a .Maybe() since it's only called for ABAC registries (this test mocks IsAbac to return false)
+		mockClient.On("IsTokenExpired").Return(false).Maybe()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(notFoundManifestResponse, errors.New("testRepo not found")).Once()
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(notFoundTagResponse, errors.New("testRepo not found")).Once()
-		deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 60, -24*time.Hour, 0, 1, true, false, map[string]string{testRepo: "[\\s\\S]*"}, true, false)
+		deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 60, -24*time.Hour, 0, 1, true, false, map[string]string{testRepo: "[\\s\\S]*"}, true, false, false)
 		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
 		assert.Equal(0, deletedManifests, "Number of deleted elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")

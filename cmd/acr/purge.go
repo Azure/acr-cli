@@ -5,10 +5,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,6 +19,7 @@ import (
 	"github.com/Azure/acr-cli/cmd/repository"
 	"github.com/Azure/acr-cli/internal/api"
 	"github.com/Azure/acr-cli/internal/worker"
+	"github.com/Azure/go-autorest/autorest"
 	"github.com/dlclark/regexp2"
 	"github.com/spf13/cobra"
 )
@@ -89,6 +93,7 @@ type purgeParameters struct {
 	includeLocked bool
 	concurrency   int
 	repoPageSize  int32
+	verbose       bool
 }
 
 // newPurgeCmd defines the purge command.
@@ -178,9 +183,9 @@ func newPurgeCmd(rootParams *rootParameters) *cobra.Command {
 			// Combine flags for clarity - these are mutually exclusive
 			supportUntaggedCleanup := purgeParams.untagged || purgeParams.untaggedOnly
 
-			deletedTagsCount, deletedManifestsCount, err := purge(ctx, acrClient, loginURL, repoParallelism, agoDuration, purgeParams.keep, purgeParams.filterTimeout, supportUntaggedCleanup, purgeParams.untaggedOnly, tagFilters, purgeParams.dryRun, purgeParams.includeLocked)
+			deletedTagsCount, deletedManifestsCount, err := purge(ctx, acrClient, loginURL, repoParallelism, agoDuration, purgeParams.keep, purgeParams.filterTimeout, supportUntaggedCleanup, purgeParams.untaggedOnly, tagFilters, purgeParams.dryRun, purgeParams.includeLocked, purgeParams.verbose)
 
-			if err != nil {
+			if err != nil && !strings.Contains(err.Error(), "insufficient permissions") {
 				fmt.Printf("Failed to complete purge: %v \n", err)
 			}
 
@@ -208,6 +213,7 @@ func newPurgeCmd(rootParams *rootParameters) *cobra.Command {
 	cmd.Flags().Int64Var(&purgeParams.filterTimeout, "filter-timeout-seconds", defaultRegexpMatchTimeoutSeconds, "This limits the evaluation of the regex filter, and will return a timeout error if this duration is exceeded during a single evaluation. If written incorrectly a regexp filter with backtracking can result in an infinite loop.")
 	cmd.Flags().IntVar(&purgeParams.concurrency, "concurrency", defaultPoolSize, concurrencyDescription)
 	cmd.Flags().Int32Var(&purgeParams.repoPageSize, "repository-page-size", defaultRepoPageSize, repoPageSizeDescription)
+	cmd.Flags().BoolVar(&purgeParams.verbose, "verbose", false, "Enable verbose output including detailed repository names during ABAC token operations")
 	cmd.Flags().BoolP("help", "h", false, "Print usage")
 	// Make filter and ago conditionally required based on untagged-only flag
 	cmd.MarkFlagsOneRequired("filter", "untagged-only")
@@ -226,36 +232,93 @@ func purge(ctx context.Context,
 	untaggedOnly bool,
 	tagFilters map[string]string,
 	dryRun bool,
-	includeLocked bool) (deletedTagsCount int, deletedManifestsCount int, err error) {
+	includeLocked bool,
+	verbose bool) (deletedTagsCount int, deletedManifestsCount int, err error) {
 
-	// In order to print a summary of the deleted tags/manifests the counters get updated everytime a repo is purged.
-	for repoName, tagRegex := range tagFilters {
-		var singleDeletedTagsCount int
-		var manifestToTagsCountMap map[string]int
+	// Load ABAC batch size from environment variable
+	abacBatchSize := 10 // default
+	if envVal, exists := os.LookupEnv("ABAC_BATCH_SIZE"); exists {
+		if parsed, err := strconv.Atoi(envVal); err == nil && parsed > 0 {
+			abacBatchSize = parsed
+		}
+	}
 
-		// Handle tag deletion based on mode
-		if untaggedOnly {
-			// Initialize empty map for untagged-only mode (no tag deletion)
-			manifestToTagsCountMap = make(map[string]int)
-		} else {
-			// Standard mode: delete matching tags first
-			singleDeletedTagsCount, manifestToTagsCountMap, err = purgeTags(ctx, acrClient, repoParallelism, loginURL, repoName, agoDuration, tagRegex, keep, filterTimeout, dryRun, includeLocked)
-			if err != nil {
-				return deletedTagsCount, deletedManifestsCount, fmt.Errorf("failed to purge tags: %w", err)
+	// Collect all repository names into a sorted slice for deterministic batching and output.
+	repos := make([]string, 0, len(tagFilters))
+	for repoName := range tagFilters {
+		repos = append(repos, repoName)
+	}
+	sort.Strings(repos)
+
+	// Track which repositories have been successfully processed for error reporting.
+	var completedRepos []string
+
+	// Process repositories in batches of abacBatchSize.
+	// For ABAC-enabled registries, we set the current repositories for the batch so that
+	// token refresh happens dynamically when needed (on API calls that detect token expiration).
+	// For non-ABAC registries, the batching loop is harmless (no special token handling needed).
+	for i := 0; i < len(repos); i += abacBatchSize {
+		end := i + abacBatchSize
+		if end > len(repos) {
+			end = len(repos)
+		}
+		batch := repos[i:end]
+
+		// For ABAC registries, refresh the token with scopes for this batch of repositories.
+		// ABAC registries don't support wildcard repository scopes, so we must explicitly
+		// request access for each repository before operating on it.
+		if acrClient.IsAbac() {
+			if err := acrClient.RefreshTokenForAbac(ctx, batch); err != nil {
+				return deletedTagsCount, deletedManifestsCount, fmt.Errorf("failed to refresh ABAC token for batch: %w", err)
+			}
+			if verbose {
+				fmt.Printf("ABAC: Setting token scope for %d repositories: %v\n", len(batch), batch)
+			} else {
+				fmt.Printf("ABAC: Setting token scope for %d repositories\n", len(batch))
 			}
 		}
 
-		singleDeletedManifestsCount := 0
-		// If the untagged flag is set or untagged-only mode is enabled, delete manifests
-		if removeUntaggedManifests {
-			singleDeletedManifestsCount, err = purgeDanglingManifests(ctx, acrClient, repoParallelism, loginURL, repoName, agoDuration, keep, manifestToTagsCountMap, dryRun, includeLocked)
-			if err != nil {
-				return deletedTagsCount, deletedManifestsCount, fmt.Errorf("failed to purge manifests: %w", err)
+		// Process all repositories in this batch
+		for _, repoName := range batch {
+			tagRegex := tagFilters[repoName]
+			var singleDeletedTagsCount int
+			var manifestToTagsCountMap map[string]int
+
+			// Handle tag deletion based on mode
+			if untaggedOnly {
+				// Initialize empty map for untagged-only mode (no tag deletion)
+				manifestToTagsCountMap = make(map[string]int)
+			} else {
+				// Standard mode: delete matching tags first
+				singleDeletedTagsCount, manifestToTagsCountMap, err = purgeTags(ctx, acrClient, repoParallelism, loginURL, repoName, agoDuration, tagRegex, keep, filterTimeout, dryRun, includeLocked)
+				if err != nil {
+					if isUnauthorizedError(err) {
+						remainingRepos := repos[i+indexOf(batch, repoName):]
+						return deletedTagsCount, deletedManifestsCount,
+							formatPermissionError(repoName, "purge tags", completedRepos, remainingRepos)
+					}
+					return deletedTagsCount, deletedManifestsCount, fmt.Errorf("failed to purge tags: %w", err)
+				}
 			}
+
+			singleDeletedManifestsCount := 0
+			// If the untagged flag is set or untagged-only mode is enabled, delete manifests
+			if removeUntaggedManifests {
+				singleDeletedManifestsCount, err = purgeDanglingManifests(ctx, acrClient, repoParallelism, loginURL, repoName, agoDuration, keep, manifestToTagsCountMap, dryRun, includeLocked)
+				if err != nil {
+					if isUnauthorizedError(err) {
+						remainingRepos := repos[i+indexOf(batch, repoName):]
+						return deletedTagsCount, deletedManifestsCount,
+							formatPermissionError(repoName, "purge manifests", completedRepos, remainingRepos)
+					}
+					return deletedTagsCount, deletedManifestsCount, fmt.Errorf("failed to purge manifests: %w", err)
+				}
+			}
+			// After every repository is purged the counters are updated.
+			deletedTagsCount += singleDeletedTagsCount
+			deletedManifestsCount += singleDeletedManifestsCount
+			completedRepos = append(completedRepos, repoName)
 		}
-		// After every repository is purged the counters are updated.
-		deletedTagsCount += singleDeletedTagsCount
-		deletedManifestsCount += singleDeletedManifestsCount
 	}
 
 	return deletedTagsCount, deletedManifestsCount, nil
@@ -562,4 +625,52 @@ func purgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInter
 		return -1, purgeErr
 	}
 	return deletedManifestsCount, nil
+}
+
+// isUnauthorizedError checks if an error is an HTTP 401 Unauthorized response.
+// This is used to detect permission failures on ABAC-enabled registries where
+// the user may have access to some repositories but not others.
+func isUnauthorizedError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var detailedErr autorest.DetailedError
+	if errors.As(err, &detailedErr) {
+		if statusCode, ok := detailedErr.StatusCode.(int); ok {
+			return statusCode == http.StatusUnauthorized
+		}
+	}
+	return strings.Contains(err.Error(), "StatusCode=401")
+}
+
+// formatPermissionError builds a clear error message when a purge operation fails
+// due to insufficient permissions on a repository. It reports which repository
+// failed, which repositories were already processed, and which remain untouched.
+func formatPermissionError(failedRepo string, operation string, completedRepos []string, remainingRepos []string) error {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("insufficient permissions to %s for repository %q", operation, failedRepo))
+
+	if len(completedRepos) > 0 {
+		sb.WriteString(fmt.Sprintf("\n  Completed repositories (%d): %s", len(completedRepos), strings.Join(completedRepos, ", ")))
+	} else {
+		sb.WriteString("\n  Completed repositories: none")
+	}
+
+	// remainingRepos includes the failed repo; show the ones after it as not yet processed
+	if len(remainingRepos) > 1 {
+		sb.WriteString(fmt.Sprintf("\n  Remaining repositories not yet processed (%d): %s", len(remainingRepos)-1, strings.Join(remainingRepos[1:], ", ")))
+	}
+
+	sb.WriteString("\n  Hint: use a more specific --filter to target only repositories you have permissions for")
+	return errors.New(sb.String())
+}
+
+// indexOf returns the index of s in slice, or 0 if not found.
+func indexOf(slice []string, s string) int {
+	for i, v := range slice {
+		if v == s {
+			return i
+		}
+	}
+	return 0
 }

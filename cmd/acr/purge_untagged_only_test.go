@@ -3,8 +3,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"net/http"
+	"os"
 	"testing"
 
 	"github.com/Azure/acr-cli/acr"
@@ -25,6 +28,8 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 	t.Run("UntaggedOnlyPurgeManifestsOnly", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
+		mockClient.On("IsAbac").Return(false)
+		mockClient.On("IsTokenExpired").Return(false).Maybe()
 
 		// Setup mock response for manifests without tags
 		manifestDigest := "sha256:abc123"
@@ -85,6 +90,7 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 			map[string]string{testRepo: ".*"},
 			false, // dryRun
 			false, // includeLocked
+			false, // verbose
 		)
 
 		assert.Equal(0, deletedTagsCount, "No tags should be deleted in untagged-only mode")
@@ -97,6 +103,8 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 	t.Run("UntaggedOnlyNoFilterAllRepos", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
+		mockClient.On("IsAbac").Return(false)
+		mockClient.On("IsTokenExpired").Return(false).Maybe()
 
 		// We won't test GetRepositories here since the purge function is called
 		// with already-created tagFilters. Instead test that all repos are processed.
@@ -137,6 +145,7 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 			tagFilters,
 			false, // dryRun
 			false, // includeLocked
+			false, // verbose
 		)
 
 		assert.Equal(0, deletedTagsCount, "No tags should be deleted")
@@ -149,6 +158,8 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 	t.Run("UntaggedOnlyWithFilter", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
+		mockClient.On("IsAbac").Return(false)
+		mockClient.On("IsTokenExpired").Return(false).Maybe()
 
 		manifestDigest := "sha256:def456"
 		mediaType := "application/vnd.docker.distribution.manifest.v2+json"
@@ -206,6 +217,7 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 			map[string]string{"specific-repo": ".*"},
 			false, // dryRun
 			false, // includeLocked
+			false, // verbose
 		)
 
 		assert.Equal(0, deletedTagsCount, "No tags should be deleted in untagged-only mode")
@@ -218,6 +230,8 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 	t.Run("UntaggedOnlyDryRun", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
+		mockClient.On("IsAbac").Return(false)
+		mockClient.On("IsTokenExpired").Return(false).Maybe()
 
 		manifestDigest := "sha256:ghi789"
 		mediaType := "application/vnd.docker.distribution.manifest.v2+json"
@@ -270,6 +284,7 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 			map[string]string{testRepo: ".*"},
 			true,  // dryRun
 			false, // includeLocked
+			false, // verbose
 		)
 
 		assert.Equal(0, deletedTagsCount, "No tags should be deleted in dry-run")
@@ -282,6 +297,8 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 	t.Run("UntaggedOnlyWithLockedManifests", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
+		mockClient.On("IsAbac").Return(false)
+		mockClient.On("IsTokenExpired").Return(false).Maybe()
 
 		// Create locked and unlocked untagged manifests
 		lockedDigest := "sha256:locked123"
@@ -351,6 +368,7 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 			map[string]string{testRepo: ".*"},
 			false, // dryRun
 			false, // includeLocked = false
+			false, // verbose
 		)
 
 		assert.Equal(0, deletedTagsCount, "No tags should be deleted")
@@ -363,6 +381,8 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 	t.Run("UntaggedOnlyWithIncludeLocked", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
+		mockClient.On("IsAbac").Return(false)
+		mockClient.On("IsTokenExpired").Return(false).Maybe()
 
 		// Create locked untagged manifest
 		lockedDigest := "sha256:locked789"
@@ -429,6 +449,7 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 			map[string]string{testRepo: ".*"},
 			false, // dryRun
 			true,  // includeLocked = true
+			false, // verbose
 		)
 
 		assert.Equal(0, deletedTagsCount, "No tags should be deleted")
@@ -747,6 +768,197 @@ func TestPurgeDanglingManifestsWithAgoAndKeep(t *testing.T) {
 
 		assert.Nil(err, "Should not return error")
 		assert.Equal(0, deletedCount, "Should delete 0 manifests when keep equals manifest count")
+		mockClient.AssertExpectations(t)
+	})
+}
+
+// TestPurgeAbacVerboseMode tests the verbose output for ABAC registries
+func TestPurgeAbacVerboseMode(t *testing.T) {
+	testCtx := context.Background()
+	testLoginURL := "registry.azurecr.io"
+	defaultPoolSize := 1
+
+	// Test: ABAC verbose mode should output repository names
+	t.Run("AbacVerboseModeOutputsRepoNames", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+
+		// Mock ABAC registry
+		mockClient.On("IsAbac").Return(true)
+		mockClient.On("RefreshTokenForAbac", mock.Anything, mock.Anything).Return(nil)
+
+		// Empty manifests result for each repo
+		emptyManifestsResult := &acr.Manifests{
+			Response: autorest.Response{
+				Response: &http.Response{
+					StatusCode: 200,
+				},
+			},
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{},
+		}
+
+		repos := []string{"repo1", "repo2", "repo3"}
+		for _, repo := range repos {
+			mockClient.On("GetAcrManifests", mock.Anything, repo, "", "").Return(emptyManifestsResult, nil).Once()
+		}
+
+		tagFilters := make(map[string]string)
+		for _, repo := range repos {
+			tagFilters[repo] = ".*"
+		}
+
+		// Capture stdout to verify verbose output
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		// Call purge with verbose=true and ABAC enabled
+		deletedTagsCount, deletedManifestsCount, err := purge(
+			testCtx,
+			mockClient,
+			testLoginURL,
+			defaultPoolSize,
+			0,    // ago
+			0,    // keep
+			60,   // filterTimeout
+			true, // removeUntaggedManifests
+			true, // untaggedOnly
+			tagFilters,
+			false, // dryRun
+			false, // includeLocked
+			true,  // verbose = true
+		)
+
+		// Restore stdout and read captured output
+		w.Close()
+		os.Stdout = oldStdout
+		var buf bytes.Buffer
+		io.Copy(&buf, r)
+		output := buf.String()
+
+		assert.Equal(0, deletedTagsCount, "No tags should be deleted")
+		assert.Equal(0, deletedManifestsCount, "No manifests deleted when none are untagged")
+		assert.Nil(err, "Error should be nil")
+		// Verify verbose output contains repository names
+		assert.Contains(output, "ABAC: Setting token scope for 3 repositories:", "Should output repo count")
+		assert.Contains(output, "repo1", "Should output repo1 in verbose mode")
+		assert.Contains(output, "repo2", "Should output repo2 in verbose mode")
+		assert.Contains(output, "repo3", "Should output repo3 in verbose mode")
+		mockClient.AssertCalled(t, "RefreshTokenForAbac", mock.Anything, mock.Anything)
+		mockClient.AssertExpectations(t)
+	})
+
+	// Test: ABAC non-verbose mode should only output count, not names
+	t.Run("AbacNonVerboseModeOutputsCountOnly", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+
+		// Mock ABAC registry
+		mockClient.On("IsAbac").Return(true)
+		mockClient.On("RefreshTokenForAbac", mock.Anything, mock.Anything).Return(nil)
+
+		// Empty manifests result for each repo
+		emptyManifestsResult := &acr.Manifests{
+			Response: autorest.Response{
+				Response: &http.Response{
+					StatusCode: 200,
+				},
+			},
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{},
+		}
+
+		repos := []string{"repo1", "repo2", "repo3"}
+		for _, repo := range repos {
+			mockClient.On("GetAcrManifests", mock.Anything, repo, "", "").Return(emptyManifestsResult, nil).Once()
+		}
+
+		tagFilters := make(map[string]string)
+		for _, repo := range repos {
+			tagFilters[repo] = ".*"
+		}
+
+		// Capture stdout to verify non-verbose output
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		// Call purge with verbose=false and ABAC enabled
+		deletedTagsCount, deletedManifestsCount, err := purge(
+			testCtx,
+			mockClient,
+			testLoginURL,
+			defaultPoolSize,
+			0,    // ago
+			0,    // keep
+			60,   // filterTimeout
+			true, // removeUntaggedManifests
+			true, // untaggedOnly
+			tagFilters,
+			false, // dryRun
+			false, // includeLocked
+			false, // verbose = false
+		)
+
+		// Restore stdout and read captured output
+		w.Close()
+		os.Stdout = oldStdout
+		var buf bytes.Buffer
+		io.Copy(&buf, r)
+		output := buf.String()
+
+		assert.Equal(0, deletedTagsCount, "No tags should be deleted")
+		assert.Equal(0, deletedManifestsCount, "No manifests deleted when none are untagged")
+		assert.Nil(err, "Error should be nil")
+		// Verify non-verbose output contains count but NOT the repository list
+		assert.Contains(output, "ABAC: Setting token scope for 3 repositories", "Should output repo count")
+		// The non-verbose output should NOT contain the bracketed list of repos
+		assert.NotContains(output, "[repo1", "Should NOT output repo list in non-verbose mode")
+		mockClient.AssertCalled(t, "RefreshTokenForAbac", mock.Anything, mock.Anything)
+		mockClient.AssertExpectations(t)
+	})
+
+	// Test: Non-ABAC registry should not call RefreshTokenForAbac
+	t.Run("NonAbacDoesNotCallRefreshTokenForAbac", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+
+		// Mock non-ABAC registry
+		mockClient.On("IsAbac").Return(false)
+
+		// Empty manifests result
+		emptyManifestsResult := &acr.Manifests{
+			Response: autorest.Response{
+				Response: &http.Response{
+					StatusCode: 200,
+				},
+			},
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{},
+		}
+
+		mockClient.On("GetAcrManifests", mock.Anything, "test-repo", "", "").Return(emptyManifestsResult, nil).Once()
+
+		// Call purge with verbose=true but non-ABAC registry
+		deletedTagsCount, deletedManifestsCount, err := purge(
+			testCtx,
+			mockClient,
+			testLoginURL,
+			defaultPoolSize,
+			0,    // ago
+			0,    // keep
+			60,   // filterTimeout
+			true, // removeUntaggedManifests
+			true, // untaggedOnly
+			map[string]string{"test-repo": ".*"},
+			false, // dryRun
+			false, // includeLocked
+			true,  // verbose = true
+		)
+
+		assert.Equal(0, deletedTagsCount, "No tags should be deleted")
+		assert.Equal(0, deletedManifestsCount, "No manifests deleted")
+		assert.Nil(err, "Error should be nil")
+		// Verify RefreshTokenForAbac was NOT called for non-ABAC
+		mockClient.AssertNotCalled(t, "RefreshTokenForAbac", mock.Anything, mock.Anything)
 		mockClient.AssertExpectations(t)
 	})
 }

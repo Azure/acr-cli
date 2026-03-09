@@ -7,6 +7,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io/ioutil"
 	"strings"
 	"time"
@@ -52,6 +53,13 @@ type AcrCLIClient struct {
 	// accessTokenExp refers to the expiration time for the access token, it is in a unix time format represented by a
 	// 64 bit integer.
 	accessTokenExp int64
+	// isAbac indicates whether this registry uses Attribute-Based Access Control (ABAC).
+	// ABAC registries require repository-level permissions instead of registry-wide wildcards.
+	// This is detected by checking if the refresh token contains the "aad_identity" claim.
+	isAbac bool
+	// currentRepositories holds the repository names for which the current ABAC token has permissions.
+	// This is used for dynamic token refresh when the token expires during operations.
+	currentRepositories []string
 }
 
 // LoginURL returns the FQDN for a registry.
@@ -91,10 +99,18 @@ func newAcrCLIClientWithBasicAuth(loginURL string, username string, password str
 }
 
 // newAcrCLIClientWithBearerAuth creates a client that uses bearer token authentication.
+// It detects ABAC-enabled registries via the "aad_identity" claim in the refresh token.
+// It always requests both catalog and wildcard repository access; on ABAC registries the
+// wildcard is silently ignored by the server, so callers must use RefreshTokenForAbac to
+// request repository-specific scopes before accessing individual repositories.
 func newAcrCLIClientWithBearerAuth(loginURL string, refreshToken string) (AcrCLIClient, error) {
 	newAcrCLIClient := newAcrCLIClient(loginURL)
+	newAcrCLIClient.isAbac = hasAadIdentityClaim(refreshToken)
+
 	ctx := context.Background()
-	accessTokenResponse, err := newAcrCLIClient.AutorestClient.GetAcrAccessToken(ctx, loginURL, "registry:catalog:* repository:*:*", refreshToken)
+	scope := "registry:catalog:* repository:*:*"
+
+	accessTokenResponse, err := newAcrCLIClient.AutorestClient.GetAcrAccessToken(ctx, loginURL, scope, refreshToken)
 	if err != nil {
 		return newAcrCLIClient, err
 	}
@@ -153,9 +169,50 @@ func GetAcrCLIClientWithAuth(loginURL string, username string, password string, 
 	return &acrClient, nil
 }
 
+// buildAbacScope constructs a token scope string from a set of repository names.
+// "catalog" is a sentinel value mapped to "registry:catalog:*" (access to the
+// catalog API for listing repositories). All other names are mapped to
+// "repository:<name>:pull,delete,metadata_read,metadata_write".
+func buildAbacScope(repositories []string) string {
+	var scopeParts []string
+	for _, repo := range repositories {
+		if repo == "catalog" {
+			scopeParts = append(scopeParts, "registry:catalog:*")
+		} else {
+			scopeParts = append(scopeParts, fmt.Sprintf("repository:%s:pull,delete,metadata_read,metadata_write", repo))
+		}
+	}
+	return strings.Join(scopeParts, " ")
+}
+
 // refreshAcrCLIClientToken obtains a new token and gets its expiration time.
-func refreshAcrCLIClientToken(ctx context.Context, c *AcrCLIClient) error {
-	accessTokenResponse, err := c.AutorestClient.GetAcrAccessToken(ctx, c.loginURL, "repository:*:*", c.token.RefreshToken)
+// For non-ABAC registries, this uses the wildcard scope.
+// For ABAC registries, this uses the currentRepositories to refresh with the appropriate scope.
+func refreshAcrCLIClientToken(ctx context.Context, c *AcrCLIClient, repoName string) error {
+	var scope string
+	if c.isAbac {
+		// For ABAC registries, build scope from currentRepositories and ensure repoName is included
+		repoSet := make(map[string]bool)
+		for _, repo := range c.currentRepositories {
+			repoSet[repo] = true
+		}
+		if repoName != "" {
+			repoSet[repoName] = true
+		}
+		repos := make([]string, 0, len(repoSet))
+		for repo := range repoSet {
+			repos = append(repos, repo)
+		}
+		scope = buildAbacScope(repos)
+		if scope == "" {
+			return errors.New("ABAC registry requires repository scope but none specified")
+		}
+	} else {
+		// For non-ABAC registries, use the wildcard scope
+		scope = "repository:*:*"
+	}
+
+	accessTokenResponse, err := c.AutorestClient.GetAcrAccessToken(ctx, c.loginURL, scope, c.token.RefreshToken)
 	if err != nil {
 		return err
 	}
@@ -171,6 +228,69 @@ func refreshAcrCLIClientToken(ctx context.Context, c *AcrCLIClient) error {
 	}
 	c.accessTokenExp = exp
 	return nil
+}
+
+// hasAadIdentityClaim checks if a JWT token contains the "aad_identity" claim.
+// The presence of this claim indicates that the registry is ABAC-enabled.
+// ABAC (Attribute-Based Access Control) registries grant permissions at the repository level,
+// not at the registry level, so wildcard scopes like "repository:*:*" will not work.
+func hasAadIdentityClaim(tokenString string) bool {
+	parser := jwt.Parser{SkipClaimsValidation: true}
+	mapC := jwt.MapClaims{}
+	// We only need to check for the claim, not verify the signature
+	_, _, err := parser.ParseUnverified(tokenString, mapC)
+	if err != nil {
+		return false
+	}
+	_, ok := mapC["aad_identity"]
+	return ok
+}
+
+// RefreshTokenForAbac obtains a new access token scoped to specific repositories.
+// This is used for ABAC-enabled registries where wildcard repository access is not allowed.
+// The token will include permissions for all specified repositories.
+// It also updates currentRepositories so subsequent automatic refreshes use the same scope.
+//
+// Parameters:
+//   - repositories: list of repository names to request access for
+//
+// The scope format is: "registry:catalog:* repository:<name>:pull repository:<name>:delete ..."
+// This allows batching multiple repositories into a single token request for efficiency.
+func (c *AcrCLIClient) RefreshTokenForAbac(ctx context.Context, repositories []string) error {
+	if c.token == nil {
+		return errors.New("no refresh token available for ABAC token refresh")
+	}
+
+	// Update the current repositories so automatic refreshes use the same scope
+	c.currentRepositories = repositories
+
+	scope := buildAbacScope(repositories)
+
+	accessTokenResponse, err := c.AutorestClient.GetAcrAccessToken(ctx, c.loginURL, scope, c.token.RefreshToken)
+	if err != nil {
+		return errors.Wrap(err, "failed to refresh token for ABAC repositories")
+	}
+
+	token := &adal.Token{
+		AccessToken:  *accessTokenResponse.AccessToken,
+		RefreshToken: c.token.RefreshToken,
+	}
+	c.token = token
+	c.AutorestClient.Authorizer = autorest.NewBearerAuthorizer(token)
+
+	exp, err := getExpiration(token.AccessToken)
+	if err != nil {
+		return err
+	}
+	c.accessTokenExp = exp
+
+	return nil
+}
+
+// IsAbac returns true if this client is connected to an ABAC-enabled registry.
+// ABAC registries require repository-level token scopes instead of wildcard scopes.
+func (c *AcrCLIClient) IsAbac() bool {
+	return c.isAbac
 }
 
 // getExpiration is used to obtain the expiration out of a jwt token.
@@ -198,10 +318,17 @@ func (c *AcrCLIClient) isExpired() bool {
 	return (time.Now().Add(5 * time.Minute)).Unix() > c.accessTokenExp
 }
 
+// IsTokenExpired returns true when the token is expired or close to expiring.
+// This is the public version of isExpired for use by callers that need to check
+// token expiration before making batched ABAC token refresh requests.
+func (c *AcrCLIClient) IsTokenExpired() bool {
+	return c.isExpired()
+}
+
 // GetAcrTags list the tags of a repository with their attributes.
 func (c *AcrCLIClient) GetAcrTags(ctx context.Context, repoName string, orderBy string, last string) (*acrapi.RepositoryTagsType, error) {
 	if c.isExpired() {
-		if err := refreshAcrCLIClientToken(ctx, c); err != nil {
+		if err := refreshAcrCLIClientToken(ctx, c, repoName); err != nil {
 			return nil, err
 		}
 	}
@@ -216,7 +343,7 @@ func (c *AcrCLIClient) GetAcrTags(ctx context.Context, repoName string, orderBy 
 // DeleteAcrTag deletes the tag by reference.
 func (c *AcrCLIClient) DeleteAcrTag(ctx context.Context, repoName string, reference string) (*autorest.Response, error) {
 	if c.isExpired() {
-		if err := refreshAcrCLIClientToken(ctx, c); err != nil {
+		if err := refreshAcrCLIClientToken(ctx, c, repoName); err != nil {
 			return nil, err
 		}
 	}
@@ -230,7 +357,7 @@ func (c *AcrCLIClient) DeleteAcrTag(ctx context.Context, repoName string, refere
 // GetAcrManifests list all the manifest in a repository with their attributes.
 func (c *AcrCLIClient) GetAcrManifests(ctx context.Context, repoName string, orderBy string, last string) (*acrapi.Manifests, error) {
 	if c.isExpired() {
-		if err := refreshAcrCLIClientToken(ctx, c); err != nil {
+		if err := refreshAcrCLIClientToken(ctx, c, repoName); err != nil {
 			return nil, err
 		}
 	}
@@ -244,7 +371,7 @@ func (c *AcrCLIClient) GetAcrManifests(ctx context.Context, repoName string, ord
 // DeleteManifest deletes a manifest using the digest as a reference.
 func (c *AcrCLIClient) DeleteManifest(ctx context.Context, repoName string, reference string) (*autorest.Response, error) {
 	if c.isExpired() {
-		if err := refreshAcrCLIClientToken(ctx, c); err != nil {
+		if err := refreshAcrCLIClientToken(ctx, c, repoName); err != nil {
 			return nil, err
 		}
 	}
@@ -259,7 +386,7 @@ func (c *AcrCLIClient) DeleteManifest(ctx context.Context, repoName string, refe
 // This is used when a manifest list is wanted, first the bytes are obtained and then unmarshalled into a new struct.
 func (c *AcrCLIClient) GetManifest(ctx context.Context, repoName string, reference string) ([]byte, error) {
 	if c.isExpired() {
-		if err := refreshAcrCLIClientToken(ctx, c); err != nil {
+		if err := refreshAcrCLIClientToken(ctx, c, repoName); err != nil {
 			return nil, err
 		}
 	}
@@ -299,7 +426,7 @@ func (c *AcrCLIClient) GetManifest(ctx context.Context, repoName string, referen
 // GetAcrManifestAttributes gets the attributes of a manifest.
 func (c *AcrCLIClient) GetAcrManifestAttributes(ctx context.Context, repoName string, reference string) (*acrapi.ManifestAttributes, error) {
 	if c.isExpired() {
-		if err := refreshAcrCLIClientToken(ctx, c); err != nil {
+		if err := refreshAcrCLIClientToken(ctx, c, repoName); err != nil {
 			return nil, err
 		}
 	}
@@ -313,7 +440,7 @@ func (c *AcrCLIClient) GetAcrManifestAttributes(ctx context.Context, repoName st
 // UpdateAcrTagAttributes updates tag attributes to enable/disable deletion and writing.
 func (c *AcrCLIClient) UpdateAcrTagAttributes(ctx context.Context, repoName string, reference string, value *acrapi.ChangeableAttributes) (*autorest.Response, error) {
 	if c.isExpired() {
-		if err := refreshAcrCLIClientToken(ctx, c); err != nil {
+		if err := refreshAcrCLIClientToken(ctx, c, repoName); err != nil {
 			return nil, err
 		}
 	}
@@ -327,7 +454,7 @@ func (c *AcrCLIClient) UpdateAcrTagAttributes(ctx context.Context, repoName stri
 // UpdateAcrManifestAttributes updates manifest attributes to enable/disable deletion and writing.
 func (c *AcrCLIClient) UpdateAcrManifestAttributes(ctx context.Context, repoName string, reference string, value *acrapi.ChangeableAttributes) (*autorest.Response, error) {
 	if c.isExpired() {
-		if err := refreshAcrCLIClientToken(ctx, c); err != nil {
+		if err := refreshAcrCLIClientToken(ctx, c, repoName); err != nil {
 			return nil, err
 		}
 	}
@@ -348,4 +475,11 @@ type AcrCLIClientInterface interface {
 	GetAcrManifestAttributes(ctx context.Context, repoName string, reference string) (*acrapi.ManifestAttributes, error)
 	UpdateAcrTagAttributes(ctx context.Context, repoName string, reference string, value *acrapi.ChangeableAttributes) (*autorest.Response, error)
 	UpdateAcrManifestAttributes(ctx context.Context, repoName string, reference string, value *acrapi.ChangeableAttributes) (*autorest.Response, error)
+
+	// IsAbac returns true if the registry uses Attribute-Based Access Control.
+	IsAbac() bool
+	// IsTokenExpired returns true if the access token is expired or close to expiring.
+	IsTokenExpired() bool
+	// RefreshTokenForAbac refreshes the access token with scopes for specific repositories.
+	RefreshTokenForAbac(ctx context.Context, repositories []string) error
 }
