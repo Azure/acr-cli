@@ -82,7 +82,7 @@ func newPatchFilterCmd(csscParams *csscParameters) *cobra.Command {
 			}
 			loginURL := api.LoginURL(registryName)
 			resolveRegistryCredentials(csscParams, loginURL)
-			acrClient, err := api.GetAcrCLIClientWithAuth(loginURL, csscParams.username, csscParams.password, csscParams.configs, "")
+			acrClient, err := api.GetAcrCLIClientWithAuth(loginURL, csscParams.username, csscParams.password, csscParams.configs)
 			if err != nil {
 				return err
 			}

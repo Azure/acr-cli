@@ -72,7 +72,7 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 			}
 			loginURL := api.LoginURL(registryName)
 			// An acrClient with authentication is generated, if the authentication cannot be resolved an error is returned.
-			acrClient, err := api.GetAcrCLIClientWithAuth(loginURL, annotateParams.username, annotateParams.password, annotateParams.configs, "")
+			acrClient, err := api.GetAcrCLIClientWithAuth(loginURL, annotateParams.username, annotateParams.password, annotateParams.configs)
 			if err != nil {
 				return err
 			}
