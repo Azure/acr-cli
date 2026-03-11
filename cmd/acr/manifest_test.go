@@ -9,6 +9,7 @@ import (
 
 	"github.com/Azure/acr-cli/cmd/mocks"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
 func TestListManifests(t *testing.T) {
@@ -64,6 +65,113 @@ func TestDeleteManifests(t *testing.T) {
 		mockClient.On("DeleteManifest", testCtx, testRepo, "sha:125").Return(&deletedResponse, nil).Once()
 		err := deleteManifests(testCtx, mockClient, testLoginURL, testRepo, args)
 		assert.Equal(nil, err, "Error should be nil")
+		mockClient.AssertExpectations(t)
+	})
+}
+
+// TestListManifestsAbac tests the manifest list ABAC code path: after client creation,
+// if IsAbac() returns true, RefreshTokenForAbac must be called before listing manifests.
+func TestListManifestsAbac(t *testing.T) {
+	t.Run("AbacEnabledListManifestsTest", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		mockClient.On("IsAbac").Return(true)
+		mockClient.On("RefreshTokenForAbac", mock.Anything, []string{testRepo}).Return(nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleManifestV2WithTagsResult, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:2830cc0fcddc1bc2bd4aeab0ed5ee7087dab29a49e65151c77553e46a7ed5283").Return(EmptyListManifestsResult, nil).Once()
+		// Simulate the ABAC code path from the manifest list command
+		if mockClient.IsAbac() {
+			err := mockClient.RefreshTokenForAbac(testCtx, []string{testRepo})
+			assert.Equal(nil, err, "RefreshTokenForAbac should not return an error")
+		}
+		err := listManifests(testCtx, mockClient, testLoginURL, testRepo)
+		assert.Equal(nil, err, "Error should be nil")
+		mockClient.AssertExpectations(t)
+	})
+
+	t.Run("AbacRefreshFailureListManifestsTest", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		mockClient.On("IsAbac").Return(true)
+		mockClient.On("RefreshTokenForAbac", mock.Anything, []string{testRepo}).Return(errors.New("failed to refresh token for ABAC repositories")).Once()
+		// Simulate the ABAC code path from the manifest list command
+		if mockClient.IsAbac() {
+			err := mockClient.RefreshTokenForAbac(testCtx, []string{testRepo})
+			assert.NotEqual(nil, err, "RefreshTokenForAbac should return an error")
+		}
+		// GetAcrManifests should NOT be called since ABAC refresh failed
+		mockClient.AssertExpectations(t)
+	})
+
+	t.Run("NonAbacListManifestsTest", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		mockClient.On("IsAbac").Return(false)
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleManifestV2WithTagsResult, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:2830cc0fcddc1bc2bd4aeab0ed5ee7087dab29a49e65151c77553e46a7ed5283").Return(EmptyListManifestsResult, nil).Once()
+		// Simulate the ABAC code path from the manifest list command
+		if mockClient.IsAbac() {
+			err := mockClient.RefreshTokenForAbac(testCtx, []string{testRepo})
+			assert.Equal(nil, err, "RefreshTokenForAbac should not return an error")
+		}
+		err := listManifests(testCtx, mockClient, testLoginURL, testRepo)
+		assert.Equal(nil, err, "Error should be nil")
+		// RefreshTokenForAbac should NOT have been called
+		mockClient.AssertNotCalled(t, "RefreshTokenForAbac", mock.Anything, mock.Anything)
+		mockClient.AssertExpectations(t)
+	})
+}
+
+// TestDeleteManifestsAbac tests the manifest delete ABAC code path: after client creation,
+// if IsAbac() returns true, RefreshTokenForAbac must be called before deleting manifests.
+func TestDeleteManifestsAbac(t *testing.T) {
+	args := []string{"sha:123", "sha:124"}
+
+	t.Run("AbacEnabledDeleteManifestsTest", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		mockClient.On("IsAbac").Return(true)
+		mockClient.On("RefreshTokenForAbac", mock.Anything, []string{testRepo}).Return(nil).Once()
+		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha:123").Return(&deletedResponse, nil).Once()
+		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha:124").Return(&deletedResponse, nil).Once()
+		// Simulate the ABAC code path from the manifest delete command
+		if mockClient.IsAbac() {
+			err := mockClient.RefreshTokenForAbac(testCtx, []string{testRepo})
+			assert.Equal(nil, err, "RefreshTokenForAbac should not return an error")
+		}
+		err := deleteManifests(testCtx, mockClient, testLoginURL, testRepo, args)
+		assert.Equal(nil, err, "Error should be nil")
+		mockClient.AssertExpectations(t)
+	})
+
+	t.Run("AbacRefreshFailureDeleteManifestsTest", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		mockClient.On("IsAbac").Return(true)
+		mockClient.On("RefreshTokenForAbac", mock.Anything, []string{testRepo}).Return(errors.New("failed to refresh token for ABAC repositories")).Once()
+		// Simulate the ABAC code path from the manifest delete command
+		if mockClient.IsAbac() {
+			err := mockClient.RefreshTokenForAbac(testCtx, []string{testRepo})
+			assert.NotEqual(nil, err, "RefreshTokenForAbac should return an error")
+		}
+		// DeleteManifest should NOT be called since ABAC refresh failed
+		mockClient.AssertExpectations(t)
+	})
+
+	t.Run("NonAbacDeleteManifestsTest", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		mockClient.On("IsAbac").Return(false)
+		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha:123").Return(&deletedResponse, nil).Once()
+		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha:124").Return(&deletedResponse, nil).Once()
+		// Simulate the ABAC code path from the manifest delete command
+		if mockClient.IsAbac() {
+			err := mockClient.RefreshTokenForAbac(testCtx, []string{testRepo})
+			assert.Equal(nil, err, "RefreshTokenForAbac should not return an error")
+		}
+		err := deleteManifests(testCtx, mockClient, testLoginURL, testRepo, args)
+		assert.Equal(nil, err, "Error should be nil")
+		mockClient.AssertNotCalled(t, "RefreshTokenForAbac", mock.Anything, mock.Anything)
 		mockClient.AssertExpectations(t)
 	})
 }

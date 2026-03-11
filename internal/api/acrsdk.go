@@ -191,6 +191,7 @@ func buildAbacScope(repositories []string) string {
 func refreshAcrCLIClientToken(ctx context.Context, c *AcrCLIClient, repoName string) error {
 	var scope string
 	if c.isAbac {
+		// For ABAC registries, build scope from currentRepositories and ensure repoName is included
 		repoSet := make(map[string]bool)
 		for _, repo := range c.currentRepositories {
 			repoSet[repo] = true

@@ -65,6 +65,7 @@ func newManifestListCmd(manifestParams *manifestParameters) *cobra.Command {
 				return err
 			}
 			loginURL := api.LoginURL(registryName)
+			ctx := context.Background()
 			// An acrClient is created to make the http requests to the registry.
 			acrClient, err := api.GetAcrCLIClientWithAuth(loginURL, manifestParams.username, manifestParams.password, manifestParams.configs)
 			if err != nil {
@@ -72,11 +73,10 @@ func newManifestListCmd(manifestParams *manifestParameters) *cobra.Command {
 			}
 			// For ABAC registries, scope the token to the target repository.
 			if acrClient.IsAbac() {
-				if err := acrClient.RefreshTokenForAbac(context.Background(), []string{manifestParams.repoName}); err != nil {
+				if err := acrClient.RefreshTokenForAbac(ctx, []string{manifestParams.repoName}); err != nil {
 					return err
 				}
 			}
-			ctx := context.Background()
 			err = listManifests(ctx, acrClient, loginURL, manifestParams.repoName)
 			if err != nil {
 				return err
@@ -128,17 +128,17 @@ func newManifestDeleteCmd(manifestParams *manifestParameters) *cobra.Command {
 				return err
 			}
 			loginURL := api.LoginURL(registryName)
+			ctx := context.Background()
 			acrClient, err := api.GetAcrCLIClientWithAuth(loginURL, manifestParams.username, manifestParams.password, manifestParams.configs)
 			if err != nil {
 				return err
 			}
 			// For ABAC registries, scope the token to the target repository.
 			if acrClient.IsAbac() {
-				if err := acrClient.RefreshTokenForAbac(context.Background(), []string{manifestParams.repoName}); err != nil {
+				if err := acrClient.RefreshTokenForAbac(ctx, []string{manifestParams.repoName}); err != nil {
 					return err
 				}
 			}
-			ctx := context.Background()
 			err = deleteManifests(ctx, acrClient, loginURL, manifestParams.repoName, args)
 			if err != nil {
 				return err

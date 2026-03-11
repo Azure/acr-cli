@@ -65,6 +65,7 @@ func newTagListCmd(tagParams *tagParameters) *cobra.Command {
 				return err
 			}
 			loginURL := api.LoginURL(registryName)
+			ctx := context.Background()
 			// An acrClient is created to make the http requests to the registry.
 			acrClient, err := api.GetAcrCLIClientWithAuth(loginURL, tagParams.username, tagParams.password, tagParams.configs)
 			if err != nil {
@@ -72,11 +73,10 @@ func newTagListCmd(tagParams *tagParameters) *cobra.Command {
 			}
 			// For ABAC registries, scope the token to the target repository.
 			if acrClient.IsAbac() {
-				if err := acrClient.RefreshTokenForAbac(context.Background(), []string{tagParams.repoName}); err != nil {
+				if err := acrClient.RefreshTokenForAbac(ctx, []string{tagParams.repoName}); err != nil {
 					return err
 				}
 			}
-			ctx := context.Background()
 			tagList, err := tag.ListTags(ctx, acrClient, tagParams.repoName)
 			if err != nil {
 				return err
@@ -105,17 +105,17 @@ func newTagDeleteCmd(tagParams *tagParameters) *cobra.Command {
 				return err
 			}
 			loginURL := api.LoginURL(registryName)
+			ctx := context.Background()
 			acrClient, err := api.GetAcrCLIClientWithAuth(loginURL, tagParams.username, tagParams.password, tagParams.configs)
 			if err != nil {
 				return err
 			}
 			// For ABAC registries, scope the token to the target repository.
 			if acrClient.IsAbac() {
-				if err := acrClient.RefreshTokenForAbac(context.Background(), []string{tagParams.repoName}); err != nil {
+				if err := acrClient.RefreshTokenForAbac(ctx, []string{tagParams.repoName}); err != nil {
 					return err
 				}
 			}
-			ctx := context.Background()
 			err = tag.DeleteTags(ctx, acrClient, loginURL, tagParams.repoName, args)
 			if err != nil {
 				return err
