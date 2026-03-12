@@ -813,7 +813,7 @@ func TestPurgeAbacVerboseMode(t *testing.T) {
 		os.Stdout = w
 
 		// Call purge with verbose=true and ABAC enabled
-		deletedTagsCount, deletedManifestsCount, err := purge(
+		deletedTagsCount, deletedManifestsCount, purgeErr := purge(
 			testCtx,
 			mockClient,
 			testLoginURL,
@@ -830,15 +830,21 @@ func TestPurgeAbacVerboseMode(t *testing.T) {
 		)
 
 		// Restore stdout and read captured output
-		w.Close()
+		err := w.Close()
+		if err != nil {
+			t.Fatalf("Failed to close pipe writer: %v", err)
+		}
 		os.Stdout = oldStdout
 		var buf bytes.Buffer
-		io.Copy(&buf, r)
+		_, err = io.Copy(&buf, r)
+		if err != nil {
+			t.Fatalf("Failed to read from pipe: %v", err)
+		}
 		output := buf.String()
 
 		assert.Equal(0, deletedTagsCount, "No tags should be deleted")
 		assert.Equal(0, deletedManifestsCount, "No manifests deleted when none are untagged")
-		assert.Nil(err, "Error should be nil")
+		assert.Nil(purgeErr, "Error should be nil")
 		// Verify verbose output contains repository names
 		assert.Contains(output, "ABAC: Setting token scope for 3 repositories:", "Should output repo count")
 		assert.Contains(output, "repo1", "Should output repo1 in verbose mode")
@@ -883,7 +889,7 @@ func TestPurgeAbacVerboseMode(t *testing.T) {
 		os.Stdout = w
 
 		// Call purge with verbose=false and ABAC enabled
-		deletedTagsCount, deletedManifestsCount, err := purge(
+		deletedTagsCount, deletedManifestsCount, purgeErr := purge(
 			testCtx,
 			mockClient,
 			testLoginURL,
@@ -900,15 +906,21 @@ func TestPurgeAbacVerboseMode(t *testing.T) {
 		)
 
 		// Restore stdout and read captured output
-		w.Close()
+		err := w.Close()
+		if err != nil {
+			t.Fatalf("Failed to close pipe writer: %v", err)
+		}
 		os.Stdout = oldStdout
 		var buf bytes.Buffer
-		io.Copy(&buf, r)
+		_, err = io.Copy(&buf, r)
+		if err != nil {
+			t.Fatalf("Failed to read from pipe: %v", err)
+		}
 		output := buf.String()
 
 		assert.Equal(0, deletedTagsCount, "No tags should be deleted")
 		assert.Equal(0, deletedManifestsCount, "No manifests deleted when none are untagged")
-		assert.Nil(err, "Error should be nil")
+		assert.Nil(purgeErr, "Error should be nil")
 		// Verify non-verbose output contains count but NOT the repository list
 		assert.Contains(output, "ABAC: Setting token scope for 3 repositories", "Should output repo count")
 		// The non-verbose output should NOT contain the bracketed list of repos

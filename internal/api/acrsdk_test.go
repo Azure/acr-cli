@@ -96,7 +96,7 @@ func TestGetAcrCLIClientWithAuth(t *testing.T) {
 		}
 		switch path {
 		case "/oauth2/token":
-			if err := r.ParseForm(); err != nil {
+			if err := r.ParseForm(); err != nil { //nolint:gosec // G120: test server, no risk of memory exhaustion
 				w.WriteHeader(http.StatusUnauthorized)
 				t.Fatal("unable to parse form")
 			}
@@ -263,7 +263,7 @@ func TestHasAadIdentityClaim(t *testing.T) {
 			}, "."),
 			expected: false,
 		},
-		{
+		{ //nolint:gosec // G101: not a real credential, test data
 			name:     "invalid token",
 			token:    "not-a-valid-jwt",
 			expected: false,
@@ -391,7 +391,7 @@ func TestRefreshAcrCLIClientTokenAbac(t *testing.T) {
 					w.WriteHeader(http.StatusNotFound)
 					return
 				}
-				if err := r.ParseForm(); err != nil {
+				if err := r.ParseForm(); err != nil { //nolint:gosec // G120: test server, no risk of memory exhaustion
 					w.WriteHeader(http.StatusBadRequest)
 					return
 				}
