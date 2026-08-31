@@ -129,8 +129,7 @@ Examples of filters
 | Untag all tags in repositories ending in /cache                                     | --filter `".*/cache:.*"`              |
 | Untag all tags in app repository                                                    | --filter `"app:.*"`                   |
 | Untag all tags in all repositories                                                  | --filter `".*:.*"`                    |
-| Clean only untagged manifests in all repos (with --untagged)                        | --filter `".*:^$"`                    |
-| Clean only untagged manifests in app repo (with --untagged)                         | --filter `"app:^$"`                   |
+| Clean only untagged manifests in app repository (with --untagged-only)             | --filter `"app:.*"`                   |
 
 ##### Literal vs. regex repository names
 
@@ -163,7 +162,7 @@ acr purge \
 
 #### Ago flag
 
-The ago flag can be used to change the default expiration time of a tag, for example, the following command would purge all tags that are older than 30 days:
+The `--ago` flag sets the age cutoff for deletion. It is required when deleting tags and optional with `--untagged-only`. For example, the following command purges all matching tags older than 30 days:
 
 ```sh
 acr purge \
@@ -191,13 +190,13 @@ The following table further explains the functionality of this flag.
 | To delete all images that were last modified before 10 minutes ago            | --ago 10m   |
 | To delete all images that were last modified before 1 hour and 15 minutes ago | --ago 1h15m |
 
-The duration should be of the form \[integer\]d\[string\] where the first integer specifies the number of days and the string is in a go style duration (can be omitted). The maximimum ago duration is set to 150 years but that will effectively clean nothing up as no images should be that old.
+The duration should be of the form \[integer\]d\[string\] where the first integer specifies the number of days and the string is in a go style duration (can be omitted). The maximum ago duration is set to 150 years but that will effectively clean nothing up as no images should be that old.
 
 ### Optional purge flags
 
 #### Untagged flag
 
-To delete all the manifests that do not have any tags linked to them, the `--untagged` flag should be set. The manifest cleanup respects the same `--ago` cutoff that is used for tag deletions, so recently-untagged images that are newer than the configured age threshold are preserved.
+To delete all the manifests that do not have any tags linked to them, the `--untagged` flag should be set. Tag deletion runs first, followed by deletion of eligible manifests that have no tags. Manifest cleanup respects the same `--ago` cutoff used for tag deletion, so recently-untagged images newer than the configured age threshold are preserved. If `--keep` is specified, it is applied independently to tags and untagged manifests.
 
 ```sh
 acr purge \
@@ -209,7 +208,7 @@ acr purge \
 
 #### Untagged-only flag
 
-To delete ONLY untagged manifests without deleting any tags, the `--untagged-only` flag should be set. This flag makes the `--ago` and `--keep` flags not applicable, and `--filter` becomes optional.
+To delete ONLY untagged manifests without deleting any tags, the `--untagged-only` flag should be set. The `--ago`, `--keep`, and `--filter` flags are optional in this mode. When specified, `--ago` limits deletion to untagged manifests older than the configured duration, and `--keep` preserves the specified number of most recently updated manifests among those eligible for deletion. If `--ago` is omitted, all existing untagged manifests are eligible for deletion. When `--filter` is specified, only its repository portion is used; the tag regex portion is ignored.
 
 ```sh
 # Delete untagged manifests in all repositories
@@ -222,13 +221,21 @@ acr purge \
     --registry <Registry Name> \
     --filter <Repository Filter/Name>:<Regex Filter> \
     --untagged-only
+
+# Delete untagged manifests older than 30 days, keeping the 5 most recent
+# manifests that are eligible for deletion
+acr purge \
+    --registry <Registry Name> \
+    --untagged-only \
+    --ago 30d \
+    --keep 5
 ```
 
 Note: The `--untagged` and `--untagged-only` flags are mutually exclusive.
 
 #### Keep flag
 
-To keep the latest x number of to-be-deleted tags, the `--keep` flag should be set.
+To keep the latest x number of items that would otherwise be deleted, the `--keep` flag should be set. The count is applied per repository. By default, it preserves tags. When `--untagged` is also set, `--keep` is applied independently to tags and untagged manifests, preserving up to the specified number of each in every repository. With `--untagged-only`, it applies only to untagged manifests.
 
 ```sh
 acr purge \
@@ -240,7 +247,7 @@ acr purge \
 
 #### Dry run flag
 
-To know which tags and manifests would be deleted the `dry-run` flag can be set, nothing will be deleted and the output would be the same as if the purge command was executed normally.
+To know which tags and manifests would be deleted, the `--dry-run` flag can be set. Nothing will be deleted, and the output will show what would happen if the purge command were executed normally.
 An example of this would be:
 
 ```sh
