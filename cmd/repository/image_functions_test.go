@@ -15,6 +15,7 @@ import (
 	"github.com/Azure/go-autorest/autorest/azure"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
 func TestFindDirectDependentManifests(t *testing.T) {
@@ -411,7 +412,7 @@ func TestGetUntaggedManifestsWithAgeCriteria(t *testing.T) {
 
 		cutoff := parseTime(t, "2024-11-01T12:00:00Z") // 30 days ago from "now"
 
-		result, err := GetUntaggedManifests(ctx, poolSize, mockClient, repoName, false, nil, false, false, &cutoff)
+		result, err := GetUntaggedManifests(ctx, poolSize, mockClient, repoName, false, nil, false, false, &cutoff, -1, -1)
 
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(result))
@@ -431,7 +432,7 @@ func TestGetUntaggedManifestsWithAgeCriteria(t *testing.T) {
 
 		cutoff := parseTime(t, "2024-11-01T12:00:00Z")
 
-		result, err := GetUntaggedManifests(ctx, poolSize, mockClient, repoName, false, nil, false, false, &cutoff)
+		result, err := GetUntaggedManifests(ctx, poolSize, mockClient, repoName, false, nil, false, false, &cutoff, -1, -1)
 
 		assert.NoError(t, err)
 		assert.Equal(t, 0, len(result), "Recent manifest should be protected")
@@ -450,7 +451,7 @@ func TestGetUntaggedManifestsWithAgeCriteria(t *testing.T) {
 
 		cutoff := parseTime(t, "2024-11-01T12:00:00Z")
 
-		result, err := GetUntaggedManifests(ctx, poolSize, mockClient, repoName, false, nil, false, false, &cutoff)
+		result, err := GetUntaggedManifests(ctx, poolSize, mockClient, repoName, false, nil, false, false, &cutoff, -1, -1)
 
 		assert.NoError(t, err)
 		assert.Equal(t, 0, len(result), "Manifest with nil timestamp should be protected")
@@ -469,7 +470,7 @@ func TestGetUntaggedManifestsWithAgeCriteria(t *testing.T) {
 
 		cutoff := parseTime(t, "2024-11-01T12:00:00Z")
 
-		result, err := GetUntaggedManifests(ctx, poolSize, mockClient, repoName, false, nil, false, false, &cutoff)
+		result, err := GetUntaggedManifests(ctx, poolSize, mockClient, repoName, false, nil, false, false, &cutoff, -1, -1)
 
 		assert.NoError(t, err)
 		assert.Equal(t, 0, len(result), "Tagged manifest should be protected regardless of age")
@@ -494,7 +495,7 @@ func TestGetUntaggedManifestsWithAgeCriteria(t *testing.T) {
 
 		cutoff := parseTime(t, "2024-11-01T12:00:00Z")
 
-		result, err := GetUntaggedManifests(ctx, poolSize, mockClient, repoName, false, nil, false, false, &cutoff)
+		result, err := GetUntaggedManifests(ctx, poolSize, mockClient, repoName, false, nil, false, false, &cutoff, -1, -1)
 
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(result))
@@ -513,7 +514,7 @@ func TestGetUntaggedManifestsWithAgeCriteria(t *testing.T) {
 		mockClient.On("GetAcrManifests", ctx, repoName, "", "").Return(manifests, nil).Once()
 		mockClient.On("GetAcrManifests", ctx, repoName, "", "sha256:recent1").Return(createEmptyManifestsResult(), nil).Once()
 
-		result, err := GetUntaggedManifests(ctx, poolSize, mockClient, repoName, false, nil, false, false, nil)
+		result, err := GetUntaggedManifests(ctx, poolSize, mockClient, repoName, false, nil, false, false, nil, -1, -1)
 
 		assert.NoError(t, err)
 		assert.Equal(t, 2, len(result), "All untagged manifests should be candidates when no cutoff is specified")
@@ -533,7 +534,7 @@ func TestGetUntaggedManifestsWithAgeCriteria(t *testing.T) {
 
 		cutoff := parseTime(t, "2024-11-01T12:00:00Z")
 
-		result, err := GetUntaggedManifests(ctx, poolSize, mockClient, repoName, false, nil, true, false, &cutoff)
+		result, err := GetUntaggedManifests(ctx, poolSize, mockClient, repoName, false, nil, true, false, &cutoff, -1, -1)
 
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(result), "Dry run should still apply age criteria")
@@ -667,4 +668,452 @@ func parseTime(t *testing.T, timeStr string) time.Time {
 		t.Fatalf("Failed to parse time %s: %v", timeStr, err)
 	}
 	return parsed
+}
+
+func TestGetUntaggedManifestsWithMinAndAgeCriteria(t *testing.T) {
+	ctx := context.Background()
+	repoName := "test-repo"
+	mediaType := "application/vnd.docker.distribution.manifest.v2+json"
+	cutoff := parseTime(t, "2024-11-01T12:00:00Z")
+
+	t.Run("Paginated old manifests count locks and break minimum ties by digest", func(t *testing.T) {
+		first := createManifestsResult([]manifestTestData{
+			{digest: "sha256:c", lastUpdate: "2024-10-02T12:00:00Z", mediaType: mediaType},
+			{digest: "sha256:e", lastUpdate: "2024-10-01T12:00:00Z", mediaType: mediaType},
+			{digest: "sha256:a", lastUpdate: "2024-10-03T12:00:00Z", mediaType: mediaType},
+		})
+		second := createManifestsResult([]manifestTestData{
+			{digest: "sha256:f", lastUpdate: "2024-09-30T12:00:00Z", mediaType: mediaType},
+			{digest: "sha256:d", lastUpdate: "2024-10-02T12:00:00Z", mediaType: mediaType},
+			{digest: "sha256:b", lastUpdate: "2024-10-02T12:00:00Z", mediaType: mediaType},
+		})
+		*(*first.ManifestsAttributes)[1].ChangeableAttributes.WriteEnabled = false
+		*(*first.ManifestsAttributes)[2].ChangeableAttributes.DeleteEnabled = false
+
+		t.Run("Locked manifests occupy positions before exclusion", func(t *testing.T) {
+			client := &mocks.AcrCLIClientInterface{}
+			client.On("GetAcrManifests", ctx, repoName, "", "").Return(first, nil).Once()
+			client.On("GetAcrManifests", ctx, repoName, "", "sha256:a").Return(second, nil).Once()
+			client.On("GetAcrManifests", ctx, repoName, "", "sha256:b").Return(createEmptyManifestsResult(), nil).Once()
+
+			result, err := GetUntaggedManifests(ctx, 1, client, repoName, false, nil, false, false, &cutoff, 2, -1)
+			assert.NoError(t, err)
+			var digests []string
+			for _, manifest := range result {
+				digests = append(digests, *manifest.Digest)
+			}
+			assert.Equal(t, []string{"sha256:c", "sha256:d", "sha256:f"}, digests)
+			client.AssertNotCalled(t, "UpdateAcrManifestAttributes", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+			client.AssertNotCalled(t, "DeleteManifest", mock.Anything, mock.Anything, mock.Anything)
+			client.AssertExpectations(t)
+		})
+
+		t.Run("Include locked selects eligible locks but retains the old minimum", func(t *testing.T) {
+			client := &mocks.AcrCLIClientInterface{}
+			client.On("GetAcrManifests", ctx, repoName, "", "").Return(first, nil).Once()
+			client.On("GetAcrManifests", ctx, repoName, "", "sha256:a").Return(second, nil).Once()
+			client.On("GetAcrManifests", ctx, repoName, "", "sha256:b").Return(createEmptyManifestsResult(), nil).Once()
+
+			result, err := GetUntaggedManifests(ctx, 1, client, repoName, false, nil, false, true, &cutoff, 2, -1)
+			assert.NoError(t, err)
+			var digests []string
+			for _, manifest := range result {
+				digests = append(digests, *manifest.Digest)
+			}
+			assert.Equal(t, []string{"sha256:c", "sha256:d", "sha256:e", "sha256:f"}, digests)
+			client.AssertNotCalled(t, "UpdateAcrManifestAttributes", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+			client.AssertNotCalled(t, "DeleteManifest", mock.Anything, mock.Anything, mock.Anything)
+			client.AssertExpectations(t)
+		})
+	})
+
+	t.Run("Young manifests occupy the minimum and cutoff equality is retained", func(t *testing.T) {
+		client := &mocks.AcrCLIClientInterface{}
+		page := createManifestsResult([]manifestTestData{
+			{digest: "sha256:old", lastUpdate: "2024-10-01T12:00:00Z", mediaType: mediaType},
+			{digest: "sha256:young", lastUpdate: "2024-11-03T12:00:00Z", mediaType: mediaType},
+			{digest: "sha256:cutoff", lastUpdate: "2024-11-01T12:00:00Z", mediaType: mediaType},
+		})
+		client.On("GetAcrManifests", ctx, repoName, "", "").Return(page, nil).Once()
+		client.On("GetAcrManifests", ctx, repoName, "", "sha256:cutoff").Return(createEmptyManifestsResult(), nil).Once()
+
+		result, err := GetUntaggedManifests(ctx, 1, client, repoName, false, nil, false, false, &cutoff, 1, -1)
+		assert.NoError(t, err)
+		if assert.Len(t, result, 1) {
+			assert.Equal(t, "sha256:old", *result[0].Digest)
+		}
+		client.AssertExpectations(t)
+	})
+
+	t.Run("Zero minimum retains missing and malformed timestamps and their dependencies", func(t *testing.T) {
+		for _, retainedType := range []string{mediaType, mediaTypeDockerManifestList, v1.MediaTypeImageIndex} {
+			t.Run(retainedType, func(t *testing.T) {
+				client := &mocks.AcrCLIClientInterface{}
+				page := createManifestsResult([]manifestTestData{
+					{digest: "sha256:missing", mediaType: retainedType},
+					{digest: "sha256:invalid", lastUpdate: "invalid", mediaType: retainedType},
+					{digest: "sha256:child-missing", lastUpdate: "2024-10-01T12:00:00Z", mediaType: mediaType},
+					{digest: "sha256:child-invalid", lastUpdate: "2024-10-01T12:00:00Z", mediaType: mediaType},
+					{digest: "sha256:free", lastUpdate: "2024-10-01T12:00:00Z", mediaType: mediaType},
+				})
+				client.On("GetAcrManifests", ctx, repoName, "", "").Return(page, nil).Once()
+				client.On("GetAcrManifests", ctx, repoName, "", "sha256:free").Return(createEmptyManifestsResult(), nil).Once()
+				expected := []string{"sha256:child-invalid", "sha256:child-missing", "sha256:free"}
+				if retainedType != mediaType {
+					reads := 1
+					if retainedType == v1.MediaTypeImageIndex {
+						reads = 2
+					}
+					for _, state := range []string{"missing", "invalid"} {
+						content := []byte(fmt.Sprintf(`{"manifests":[{"digest":"sha256:child-%s","mediaType":%q}]}`, state, mediaType))
+						client.On("GetManifest", ctx, repoName, "sha256:"+state).Return(content, nil).Times(reads)
+					}
+					expected = []string{"sha256:free"}
+				}
+
+				result, err := GetUntaggedManifests(ctx, 1, client, repoName, false, nil, false, false, &cutoff, 0, -1)
+				assert.NoError(t, err)
+				var digests []string
+				for _, manifest := range result {
+					digests = append(digests, *manifest.Digest)
+				}
+				assert.Equal(t, expected, digests)
+				client.AssertExpectations(t)
+			})
+		}
+	})
+
+	t.Run("Retained index dependencies do not trigger replacement deletions", func(t *testing.T) {
+		first := createManifestsResult([]manifestTestData{
+			{digest: "sha256:child", lastUpdate: "2024-10-01T12:00:00Z", mediaType: mediaType},
+			{digest: "sha256:parent", lastUpdate: "2024-10-03T12:00:00Z", mediaType: mediaTypeDockerManifestList},
+		})
+		second := createManifestsResult([]manifestTestData{
+			{digest: "sha256:free", lastUpdate: "2024-10-01T12:00:00Z", mediaType: mediaType},
+			{digest: "sha256:retained", lastUpdate: "2024-10-02T12:00:00Z", mediaType: mediaType},
+		})
+		content := []byte(fmt.Sprintf(`{"manifests":[{"digest":"sha256:child","mediaType":%q}]}`, mediaType))
+
+		t.Run("Normal discovery", func(t *testing.T) {
+			client := &mocks.AcrCLIClientInterface{}
+			client.On("GetAcrManifests", ctx, repoName, "", "").Return(first, nil).Once()
+			client.On("GetAcrManifests", ctx, repoName, "", "sha256:parent").Return(second, nil).Once()
+			client.On("GetAcrManifests", ctx, repoName, "", "sha256:retained").Return(createEmptyManifestsResult(), nil).Once()
+			client.On("GetManifest", ctx, repoName, "sha256:parent").Return(content, nil).Once()
+
+			result, err := GetUntaggedManifests(ctx, 1, client, repoName, false, nil, false, false, &cutoff, 2, -1)
+			assert.NoError(t, err)
+			if assert.Len(t, result, 1) {
+				assert.Equal(t, "sha256:free", *result[0].Digest)
+			}
+			client.AssertNotCalled(t, "DeleteManifest", mock.Anything, mock.Anything, mock.Anything)
+			client.AssertExpectations(t)
+		})
+
+		t.Run("Dry run discovery", func(t *testing.T) {
+			client := &mocks.AcrCLIClientInterface{}
+			client.On("GetAcrManifests", ctx, repoName, "", "").Return(first, nil).Once()
+			client.On("GetAcrManifests", ctx, repoName, "", "sha256:parent").Return(second, nil).Once()
+			client.On("GetAcrManifests", ctx, repoName, "", "sha256:retained").Return(createEmptyManifestsResult(), nil).Once()
+			client.On("GetManifest", ctx, repoName, "sha256:parent").Return(content, nil).Once()
+
+			result, err := GetUntaggedManifests(ctx, 1, client, repoName, false, nil, true, false, &cutoff, 2, -1)
+			assert.NoError(t, err)
+			if assert.Len(t, result, 1) {
+				assert.Equal(t, "sha256:free", *result[0].Digest)
+			}
+			client.AssertNotCalled(t, "DeleteManifest", mock.Anything, mock.Anything, mock.Anything)
+			client.AssertExpectations(t)
+		})
+	})
+}
+
+func TestGetUntaggedManifestsWithMinMaxAndAgeCriteria(t *testing.T) {
+	ctx := context.Background()
+	repoName := "test-repo"
+	mediaType := "application/vnd.docker.distribution.manifest.v2+json"
+	cutoff := parseTime(t, "2024-11-01T12:00:00Z")
+
+	t.Run("Paginated young middle is retained but tied overflow is selected", func(t *testing.T) {
+		first := createManifestsResult([]manifestTestData{
+			{digest: "sha256:d", lastUpdate: "2024-11-03T12:00:00Z", mediaType: mediaType},
+			{digest: "sha256:f", lastUpdate: "2024-10-01T12:00:00Z", mediaType: mediaType},
+			{digest: "sha256:a", lastUpdate: "2024-11-05T12:00:00Z", mediaType: mediaType},
+		})
+		second := createManifestsResult([]manifestTestData{
+			{digest: "sha256:e", lastUpdate: "2024-11-02T12:00:00Z", mediaType: mediaType},
+			{digest: "sha256:b", lastUpdate: "2024-11-04T12:00:00Z", mediaType: mediaType},
+			{digest: "sha256:c", lastUpdate: "2024-11-03T12:00:00Z", mediaType: mediaType},
+		})
+		*(*first.ManifestsAttributes)[2].ChangeableAttributes.WriteEnabled = false
+		*(*second.ManifestsAttributes)[0].ChangeableAttributes.DeleteEnabled = false
+
+		t.Run("Locked overflow is excluded without shifting positions", func(t *testing.T) {
+			client := &mocks.AcrCLIClientInterface{}
+			client.On("GetAcrManifests", ctx, repoName, "", "").Return(first, nil).Once()
+			client.On("GetAcrManifests", ctx, repoName, "", "sha256:a").Return(second, nil).Once()
+			client.On("GetAcrManifests", ctx, repoName, "", "sha256:c").Return(createEmptyManifestsResult(), nil).Once()
+
+			result, err := GetUntaggedManifests(ctx, 1, client, repoName, false, nil, false, false, &cutoff, 1, 3)
+			assert.NoError(t, err)
+			var digests []string
+			for _, manifest := range result {
+				digests = append(digests, *manifest.Digest)
+			}
+			assert.Equal(t, []string{"sha256:d", "sha256:f"}, digests)
+			client.AssertNotCalled(t, "UpdateAcrManifestAttributes", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+			client.AssertNotCalled(t, "DeleteManifest", mock.Anything, mock.Anything, mock.Anything)
+			client.AssertExpectations(t)
+		})
+
+		t.Run("Include locked selects overflow without unlocking it", func(t *testing.T) {
+			client := &mocks.AcrCLIClientInterface{}
+			client.On("GetAcrManifests", ctx, repoName, "", "").Return(first, nil).Once()
+			client.On("GetAcrManifests", ctx, repoName, "", "sha256:a").Return(second, nil).Once()
+			client.On("GetAcrManifests", ctx, repoName, "", "sha256:c").Return(createEmptyManifestsResult(), nil).Once()
+
+			result, err := GetUntaggedManifests(ctx, 1, client, repoName, false, nil, false, true, &cutoff, 1, 3)
+			assert.NoError(t, err)
+			var digests []string
+			for _, manifest := range result {
+				digests = append(digests, *manifest.Digest)
+			}
+			assert.Equal(t, []string{"sha256:d", "sha256:e", "sha256:f"}, digests)
+			client.AssertNotCalled(t, "UpdateAcrManifestAttributes", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+			client.AssertNotCalled(t, "DeleteManifest", mock.Anything, mock.Anything, mock.Anything)
+			client.AssertExpectations(t)
+		})
+	})
+
+	t.Run("Old minimum is retained while old middle and overflow are selected", func(t *testing.T) {
+		client := &mocks.AcrCLIClientInterface{}
+		first := createManifestsResult([]manifestTestData{
+			{digest: "sha256:b", lastUpdate: "2024-10-03T12:00:00Z", mediaType: mediaType},
+			{digest: "sha256:d", lastUpdate: "2024-10-01T12:00:00Z", mediaType: mediaType},
+		})
+		second := createManifestsResult([]manifestTestData{
+			{digest: "sha256:c", lastUpdate: "2024-10-02T12:00:00Z", mediaType: mediaType},
+			{digest: "sha256:a", lastUpdate: "2024-10-03T12:00:00Z", mediaType: mediaType},
+		})
+		client.On("GetAcrManifests", ctx, repoName, "", "").Return(first, nil).Once()
+		client.On("GetAcrManifests", ctx, repoName, "", "sha256:d").Return(second, nil).Once()
+		client.On("GetAcrManifests", ctx, repoName, "", "sha256:a").Return(createEmptyManifestsResult(), nil).Once()
+
+		result, err := GetUntaggedManifests(ctx, 1, client, repoName, false, nil, false, false, &cutoff, 1, 3)
+		assert.NoError(t, err)
+		var digests []string
+		for _, manifest := range result {
+			digests = append(digests, *manifest.Digest)
+		}
+		assert.Equal(t, []string{"sha256:b", "sha256:c", "sha256:d"}, digests)
+		client.AssertExpectations(t)
+	})
+
+	t.Run("Equal bounds retain exactly the minimum even when overflow is young", func(t *testing.T) {
+		client := &mocks.AcrCLIClientInterface{}
+		page := createManifestsResult([]manifestTestData{
+			{digest: "sha256:b", lastUpdate: "2024-11-03T12:00:00Z", mediaType: mediaType},
+			{digest: "sha256:a", lastUpdate: "2024-11-03T12:00:00Z", mediaType: mediaType},
+		})
+		client.On("GetAcrManifests", ctx, repoName, "", "").Return(page, nil).Once()
+		client.On("GetAcrManifests", ctx, repoName, "", "sha256:a").Return(createEmptyManifestsResult(), nil).Once()
+
+		result, err := GetUntaggedManifests(ctx, 1, client, repoName, false, nil, false, false, &cutoff, 1, 1)
+		assert.NoError(t, err)
+		if assert.Len(t, result, 1) {
+			assert.Equal(t, "sha256:b", *result[0].Digest)
+		}
+		client.AssertExpectations(t)
+	})
+
+	t.Run("Zero bounds select valid timestamps regardless of age", func(t *testing.T) {
+		client := &mocks.AcrCLIClientInterface{}
+		page := createManifestsResult([]manifestTestData{
+			{digest: "sha256:old", lastUpdate: "2024-10-01T12:00:00Z", mediaType: mediaType},
+			{digest: "sha256:missing", mediaType: mediaType},
+			{digest: "sha256:young", lastUpdate: "2024-11-03T12:00:00Z", mediaType: mediaType},
+			{digest: "sha256:invalid", lastUpdate: "invalid", mediaType: mediaType},
+		})
+		client.On("GetAcrManifests", ctx, repoName, "", "").Return(page, nil).Once()
+		client.On("GetAcrManifests", ctx, repoName, "", "sha256:invalid").Return(createEmptyManifestsResult(), nil).Once()
+
+		result, err := GetUntaggedManifests(ctx, 1, client, repoName, false, nil, false, false, &cutoff, 0, 0)
+		assert.NoError(t, err)
+		var digests []string
+		for _, manifest := range result {
+			digests = append(digests, *manifest.Digest)
+		}
+		assert.Equal(t, []string{"sha256:young", "sha256:old"}, digests)
+		client.AssertExpectations(t)
+	})
+}
+
+func TestGetUntaggedManifestsWithMaxCriteria(t *testing.T) {
+	ctx := context.Background()
+	repoName := "test-repo"
+	mediaType := "application/vnd.docker.distribution.manifest.v2+json"
+
+	t.Run("Paginated recent overflow uses digest order and counts locked manifests", func(t *testing.T) {
+		first := createManifestsResult([]manifestTestData{
+			{digest: "sha256:c", lastUpdate: "2024-11-03T12:00:00Z", mediaType: mediaType},
+			{digest: "sha256:e", lastUpdate: "2024-11-02T12:00:00Z", mediaType: mediaType},
+			{digest: "sha256:a", lastUpdate: "2024-11-04T12:00:00Z", mediaType: mediaType},
+		})
+		second := createManifestsResult([]manifestTestData{
+			{digest: "sha256:f", lastUpdate: "2024-11-01T12:00:00Z", mediaType: mediaType},
+			{digest: "sha256:d", lastUpdate: "2024-11-03T12:00:00Z", mediaType: mediaType},
+			{digest: "sha256:b", lastUpdate: "2024-11-03T12:00:00Z", mediaType: mediaType},
+		})
+		*(*first.ManifestsAttributes)[1].ChangeableAttributes.DeleteEnabled = false
+		*(*first.ManifestsAttributes)[2].ChangeableAttributes.WriteEnabled = false
+
+		t.Run("Locked overflow is retained without a replacement deletion", func(t *testing.T) {
+			client := &mocks.AcrCLIClientInterface{}
+			client.On("GetAcrManifests", ctx, repoName, "", "").Return(first, nil).Once()
+			client.On("GetAcrManifests", ctx, repoName, "", "sha256:a").Return(second, nil).Once()
+			client.On("GetAcrManifests", ctx, repoName, "", "sha256:b").Return(createEmptyManifestsResult(), nil).Once()
+
+			result, err := GetUntaggedManifests(ctx, 1, client, repoName, false, nil, false, false, nil, -1, 2)
+			assert.NoError(t, err)
+			var digests []string
+			for _, manifest := range result {
+				digests = append(digests, *manifest.Digest)
+			}
+			assert.Equal(t, []string{"sha256:c", "sha256:d", "sha256:f"}, digests)
+			client.AssertNotCalled(t, "UpdateAcrManifestAttributes", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+			client.AssertNotCalled(t, "DeleteManifest", mock.Anything, mock.Anything, mock.Anything)
+			client.AssertExpectations(t)
+		})
+
+		t.Run("Include locked selects overflow but does not mutate manifests", func(t *testing.T) {
+			client := &mocks.AcrCLIClientInterface{}
+			client.On("GetAcrManifests", ctx, repoName, "", "").Return(first, nil).Once()
+			client.On("GetAcrManifests", ctx, repoName, "", "sha256:a").Return(second, nil).Once()
+			client.On("GetAcrManifests", ctx, repoName, "", "sha256:b").Return(createEmptyManifestsResult(), nil).Once()
+
+			result, err := GetUntaggedManifests(ctx, 1, client, repoName, false, nil, false, true, nil, -1, 2)
+			assert.NoError(t, err)
+			var digests []string
+			for _, manifest := range result {
+				digests = append(digests, *manifest.Digest)
+			}
+			assert.Equal(t, []string{"sha256:c", "sha256:d", "sha256:e", "sha256:f"}, digests)
+			client.AssertNotCalled(t, "UpdateAcrManifestAttributes", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+			client.AssertNotCalled(t, "DeleteManifest", mock.Anything, mock.Anything, mock.Anything)
+			client.AssertExpectations(t)
+		})
+	})
+
+	t.Run("Zero maximum retains missing and malformed timestamps and their dependencies", func(t *testing.T) {
+		for _, retainedType := range []string{mediaType, mediaTypeDockerManifestList, v1.MediaTypeImageIndex} {
+			t.Run(retainedType, func(t *testing.T) {
+				client := &mocks.AcrCLIClientInterface{}
+				page := createManifestsResult([]manifestTestData{
+					{digest: "sha256:missing", mediaType: retainedType},
+					{digest: "sha256:invalid", lastUpdate: "invalid", mediaType: retainedType},
+					{digest: "sha256:child-missing", lastUpdate: "2024-10-01T12:00:00Z", mediaType: mediaType},
+					{digest: "sha256:child-invalid", lastUpdate: "2024-10-01T12:00:00Z", mediaType: mediaType},
+					{digest: "sha256:free", lastUpdate: "2024-10-01T12:00:00Z", mediaType: mediaType},
+				})
+				client.On("GetAcrManifests", ctx, repoName, "", "").Return(page, nil).Once()
+				client.On("GetAcrManifests", ctx, repoName, "", "sha256:free").Return(createEmptyManifestsResult(), nil).Once()
+				expected := []string{"sha256:child-invalid", "sha256:child-missing", "sha256:free"}
+				if retainedType != mediaType {
+					reads := 1
+					if retainedType == v1.MediaTypeImageIndex {
+						reads = 2
+					}
+					for _, state := range []string{"missing", "invalid"} {
+						content := []byte(fmt.Sprintf(`{"manifests":[{"digest":"sha256:child-%s","mediaType":%q}]}`, state, mediaType))
+						client.On("GetManifest", ctx, repoName, "sha256:"+state).Return(content, nil).Times(reads)
+					}
+					expected = []string{"sha256:free"}
+				}
+
+				result, err := GetUntaggedManifests(ctx, 1, client, repoName, false, nil, false, false, nil, -1, 0)
+				assert.NoError(t, err)
+				var digests []string
+				for _, manifest := range result {
+					digests = append(digests, *manifest.Digest)
+				}
+				assert.Equal(t, expected, digests)
+				client.AssertExpectations(t)
+			})
+		}
+	})
+
+	t.Run("Old retained indexes protect children and referrers without replacement deletions", func(t *testing.T) {
+		for _, indexType := range []string{mediaTypeDockerManifestList, v1.MediaTypeImageIndex} {
+			t.Run(indexType, func(t *testing.T) {
+				first := createManifestsResult([]manifestTestData{
+					{digest: "sha256:child", lastUpdate: "2024-10-01T12:00:00Z", mediaType: mediaType},
+					{digest: "sha256:parent", lastUpdate: "2024-10-03T12:00:00Z", mediaType: indexType},
+				})
+				second := createManifestsResult([]manifestTestData{
+					{digest: "sha256:referrer", lastUpdate: "2024-11-03T12:00:00Z", mediaType: v1.MediaTypeImageManifest},
+					{digest: "sha256:free", lastUpdate: "2024-10-01T12:00:00Z", mediaType: mediaType},
+					{digest: "sha256:retained", lastUpdate: "2024-10-02T12:00:00Z", mediaType: mediaType},
+				})
+				*(*first.ManifestsAttributes)[1].ChangeableAttributes.DeleteEnabled = false
+				content := []byte(fmt.Sprintf(`{"manifests":[{"digest":"sha256:child","mediaType":%q}]}`, mediaType))
+				referrerContent := []byte(`{"subject":{"digest":"sha256:free"}}`)
+				parentReads := 1
+				if indexType == v1.MediaTypeImageIndex {
+					parentReads = 2
+				}
+
+				t.Run("Normal discovery counts the retained locked index", func(t *testing.T) {
+					client := &mocks.AcrCLIClientInterface{}
+					client.On("GetAcrManifests", ctx, repoName, "", "").Return(first, nil).Once()
+					client.On("GetAcrManifests", ctx, repoName, "", "sha256:parent").Return(second, nil).Once()
+					client.On("GetAcrManifests", ctx, repoName, "", "sha256:retained").Return(createEmptyManifestsResult(), nil).Once()
+					client.On("GetManifest", ctx, repoName, "sha256:parent").Return(content, nil).Times(parentReads)
+					client.On("GetManifest", ctx, repoName, "sha256:referrer").Return(referrerContent, nil).Once()
+
+					result, err := GetUntaggedManifests(ctx, 1, client, repoName, false, nil, false, false, nil, -1, 2)
+					assert.NoError(t, err)
+					if assert.Len(t, result, 1) {
+						assert.Equal(t, "sha256:free", *result[0].Digest)
+					}
+					client.AssertNotCalled(t, "DeleteManifest", mock.Anything, mock.Anything, mock.Anything)
+					client.AssertExpectations(t)
+				})
+
+				t.Run("Include locked still protects retained index children", func(t *testing.T) {
+					client := &mocks.AcrCLIClientInterface{}
+					client.On("GetAcrManifests", ctx, repoName, "", "").Return(first, nil).Once()
+					client.On("GetAcrManifests", ctx, repoName, "", "sha256:parent").Return(second, nil).Once()
+					client.On("GetAcrManifests", ctx, repoName, "", "sha256:retained").Return(createEmptyManifestsResult(), nil).Once()
+					client.On("GetManifest", ctx, repoName, "sha256:parent").Return(content, nil).Times(parentReads)
+					client.On("GetManifest", ctx, repoName, "sha256:referrer").Return(referrerContent, nil).Once()
+
+					result, err := GetUntaggedManifests(ctx, 1, client, repoName, false, nil, false, true, nil, -1, 2)
+					assert.NoError(t, err)
+					if assert.Len(t, result, 1) {
+						assert.Equal(t, "sha256:free", *result[0].Digest)
+					}
+					client.AssertNotCalled(t, "UpdateAcrManifestAttributes", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+					client.AssertNotCalled(t, "DeleteManifest", mock.Anything, mock.Anything, mock.Anything)
+					client.AssertExpectations(t)
+				})
+
+				t.Run("Dry run preserves the same dependencies and minimum count", func(t *testing.T) {
+					client := &mocks.AcrCLIClientInterface{}
+					client.On("GetAcrManifests", ctx, repoName, "", "").Return(first, nil).Once()
+					client.On("GetAcrManifests", ctx, repoName, "", "sha256:parent").Return(second, nil).Once()
+					client.On("GetAcrManifests", ctx, repoName, "", "sha256:retained").Return(createEmptyManifestsResult(), nil).Once()
+					client.On("GetManifest", ctx, repoName, "sha256:parent").Return(content, nil).Times(parentReads)
+					client.On("GetManifest", ctx, repoName, "sha256:referrer").Return(referrerContent, nil).Once()
+
+					result, err := GetUntaggedManifests(ctx, 1, client, repoName, false, nil, true, false, nil, -1, 2)
+					assert.NoError(t, err)
+					if assert.Len(t, result, 1) {
+						assert.Equal(t, "sha256:free", *result[0].Digest)
+					}
+					client.AssertNotCalled(t, "DeleteManifest", mock.Anything, mock.Anything, mock.Anything)
+					client.AssertExpectations(t)
+				})
+			})
+		}
+	})
 }

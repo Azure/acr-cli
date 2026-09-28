@@ -162,7 +162,7 @@ acr purge \
 
 #### Ago flag
 
-The `--ago` flag sets the age cutoff for deletion. It is required when deleting tags and optional with `--untagged-only`. For example, the following command purges all matching tags older than 30 days:
+The `--ago` flag sets the age cutoff for deletion. It is required when deleting tags (unless `--max-tags` is supplied) and optional with `--untagged-only`. The `--ago` flag is also required when `--min-tags` or `--min-untagged-manifests` is used. For example, the following command purges all matching tags older than 30 days:
 
 ```sh
 acr purge \
@@ -208,7 +208,7 @@ acr purge \
 
 #### Untagged-only flag
 
-To delete ONLY untagged manifests without deleting any tags, the `--untagged-only` flag should be set. The `--ago`, `--keep`, and `--filter` flags are optional in this mode. When specified, `--ago` limits deletion to untagged manifests older than the configured duration, and `--keep` preserves the specified number of most recently updated manifests among those eligible for deletion. If `--ago` is omitted, all existing untagged manifests are eligible for deletion. When `--filter` is specified, only its repository portion is used; the tag regex portion is ignored.
+To delete ONLY untagged manifests without deleting any tags, the `--untagged-only` flag should be set. The `--ago`, `--keep`, and `--filter` flags are optional in this mode. When specified, `--ago` limits deletion to untagged manifests older than the configured duration, and `--keep` preserves the specified number of most recently updated manifests among those eligible for deletion. If `--ago` is omitted, all existing untagged manifests are eligible for deletion unless `--max-untagged-manifests` is used. When `--filter` is specified, only its repository portion is used; the tag regex portion is ignored.
 
 ```sh
 # Delete untagged manifests in all repositories
@@ -237,6 +237,8 @@ Note: The `--untagged` and `--untagged-only` flags are mutually exclusive.
 
 To keep the latest x number of items that would otherwise be deleted, the `--keep` flag should be set. The count is applied per repository. By default, it preserves tags. When `--untagged` is also set, `--keep` is applied independently to tags and untagged manifests, preserving up to the specified number of each in every repository. With `--untagged-only`, it applies only to untagged manifests.
 
+`--keep` is not compatible with `--min-tags`, `--max-tags`, `--min-untagged-manifests`, or `--max-untagged-manifests`.
+
 ```sh
 acr purge \
     --registry <Registry Name> \
@@ -244,6 +246,38 @@ acr purge \
     --ago 30d \
     --keep 3
 ```
+
+#### Minimum and maximum retention
+
+| Option | Behavior per repository |
+| --- | --- |
+| `--min-tags N` | Protect the newest N matching tags from age-based deletion |
+| `--max-tags N` | Delete matching tags outside the newest N, regardless of age |
+| `--min-untagged-manifests N` | Protect the newest N dangling manifest candidates from age-based deletion |
+| `--max-untagged-manifests N` | Delete dangling manifest candidates outside the newest N, regardless of age |
+
+A minimum of N adds **AND** behavior: delete an item only when it is older than `--ago` **and** is not among the newest N items. A maximum of N adds **OR** behavior: delete an item when it is older than `--ago` **or** is not among the newest N items.
+
+```sh
+# Delete matching tags older than 3 days OR not within the newest 10.
+acr purge -r example --filter "repository:.*" --ago 3d --max-tags 10
+
+# Delete matching tags older than 3 days AND outside the newest 10.
+acr purge -r example --filter "repository:.*" --ago 3d --min-tags 10
+
+# Protect the newest 10 matching tags; delete other matching tags if older than 3 days or outside the newest 50.
+acr purge -r example --filter "repository:.*" --ago 3d --min-tags 10 --max-tags 50
+
+# Keep the newest 10 matching tags and delete the rest, regardless of age.
+acr purge -r example --filter "repository:.*" --max-tags 10
+
+# Protect the newest 20 dangling manifests; delete other dangling manifests if older than 3 days or outside the newest 100.
+acr purge -r example --filter "repository:.*" --untagged-only --ago 3d --min-untagged-manifests 20 --max-untagged-manifests 100
+```
+
+All limits must be nonnegative. Zero is meaningful: a minimum of zero protects nothing, and a maximum of zero selects all matching items. Omission means no such limit. A minimum must not exceed its corresponding maximum, and requires `--ago` even if the minimum is zero. Manifest options require `--untagged` or `--untagged-only`; tag options cannot be used with `--untagged-only`. `--keep` cannot be combined with any minimum/maximum option.
+
+Locked items are included when determining the newest N items for minimum and maximum limits, but are not deleted unless `--include-locked` is set. Locks, retained-index dependencies, or skipped deletions can prevent a maximum from being satisfied.
 
 #### Dry run flag
 
