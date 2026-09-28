@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -190,7 +191,9 @@ func GetLastTagFromResponse(resultTags *acr.RepositoryTagsType) string {
 // the manifest should also not have a tag and not have a subject manifest.
 // Param manifestToTagsCountMap is an optional map that can be used to pass the count of tags for each manifest that we know would be deleted if the command is exectued
 // under dryRun conditions. Its ignored if the dryRun flag is false.
-func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCLIClientInterface, repoName string, preserveAllOCIManifests bool, manifestToDeletedTagsCountMap map[string]int, dryRun bool, includeLocked bool, deleteCutoff *time.Time) ([]acr.ManifestAttributesBase, error) {
+// Count limits use -1 when omitted from the purge command.
+// deletionReasons optionally records count-policy selection reasons by digest; only returned manifests should be reported.
+func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCLIClientInterface, repoName string, preserveAllOCIManifests bool, manifestToDeletedTagsCountMap map[string]int, dryRun bool, includeLocked bool, deleteCutoff *time.Time, minManifests int, maxManifests int, deletionReasons map[string]string) ([]acr.ManifestAttributesBase, error) {
 	lastManifestDigest := ""
 	var manifestsToDelete []acr.ManifestAttributesBase
 	resultManifests, err := acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
@@ -237,7 +240,8 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 			// _____MANIFEST HAS DELETION AS DISALLOWED BY ATTRIBUTES_____
 			// If the manifest cannot be deleted or written to we can skip them (ACR will not allow deletion of these manifests)
 			// Unless --include-locked flag is set, in which case we will unlock them first
-			if !includeLocked && manifest.ChangeableAttributes != nil {
+			// When count limits are not set, apply lock protection during discovery.
+			if minManifests < 0 && maxManifests < 0 && !includeLocked && manifest.ChangeableAttributes != nil {
 				if manifest.ChangeableAttributes.DeleteEnabled != nil && !(*manifest.ChangeableAttributes.DeleteEnabled) {
 					continue
 				}
@@ -271,7 +275,8 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 			// _____MANIFEST IS PROTECTED BY AGE CRITERIA____
 			// Only check age criteria if not already protected by tags (optimization)
 			isProtectedByAge := false
-			if !isProtectedByTags && deleteCutoff != nil {
+			// When count limits are not set, apply age protection during discovery.
+			if minManifests < 0 && maxManifests < 0 && !isProtectedByTags && deleteCutoff != nil {
 				// Take the more conservative approach and protect manifests with no last update time
 				if manifest.LastUpdateTime == nil {
 					isProtectedByAge = true
@@ -396,7 +401,132 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 		}
 	}
 
+	if minManifests >= 0 || maxManifests >= 0 {
+		SortManifestsByTime(manifestsToDelete)
+		manifestsSelectedForDeletion := manifestsToDelete[:0]
+		var retainedIndexes []string
+		processedUntaggedManifestsCount := 0
+		for _, manifest := range manifestsToDelete {
+			processedUntaggedManifestsCount++
+			elegibleForDeletion := false
+			var eligibleByAgeAndMinimum, eligibleByMaximum bool
+			if manifest.LastUpdateTime == nil {
+				fmt.Printf("Protecting manifest %s because the last update time is unavailable\n", *manifest.Digest)
+			} else {
+				lastUpdateTime, err := time.Parse(time.RFC3339Nano, *manifest.LastUpdateTime)
+				if err != nil {
+					fmt.Printf("Warning: Protecting manifest %s@%s because the last update time cannot be read: %v\n", repoName, *manifest.Digest, err)
+				} else {
+					eligibleByAgeAndMinimum = deleteCutoff != nil && lastUpdateTime.Before(*deleteCutoff) && processedUntaggedManifestsCount > minManifests
+					eligibleByMaximum = maxManifests >= 0 && processedUntaggedManifestsCount > maxManifests
+					elegibleForDeletion = eligibleByAgeAndMinimum || eligibleByMaximum
+				}
+			}
+			if elegibleForDeletion && !includeLocked && manifest.ChangeableAttributes != nil &&
+				((manifest.ChangeableAttributes.DeleteEnabled != nil && !*manifest.ChangeableAttributes.DeleteEnabled) ||
+					(manifest.ChangeableAttributes.WriteEnabled != nil && !*manifest.ChangeableAttributes.WriteEnabled)) {
+				fmt.Printf("Warning: Retaining locked manifest %s@%s selected by retention policy\n", repoName, *manifest.Digest)
+				elegibleForDeletion = false
+			}
+			if elegibleForDeletion {
+				manifestsSelectedForDeletion = append(manifestsSelectedForDeletion, manifest)
+				if deletionReasons != nil {
+					switch {
+					case eligibleByAgeAndMinimum && eligibleByMaximum:
+						deletionReasons[*manifest.Digest] = "age and maximum count"
+					case eligibleByMaximum:
+						deletionReasons[*manifest.Digest] = "maximum count"
+					default:
+						deletionReasons[*manifest.Digest] = "age"
+					}
+				}
+			} else if manifest.MediaType != nil && (*manifest.MediaType == v1.MediaTypeImageIndex ||
+				*manifest.MediaType == mediaTypeDockerManifestList) {
+				retainedIndexes = append(retainedIndexes, *manifest.Digest)
+			}
+		}
+
+		manifestsToDelete = manifestsSelectedForDeletion
+		if len(manifestsSelectedForDeletion) > 0 && len(retainedIndexes) > 0 {
+			for _, digest := range retainedIndexes {
+				dependencies, err := findDirectDependentManifests(ctx, digest, acrClient, repoName)
+				if err != nil {
+					return nil, err
+				}
+				if err := addDependentManifestsToIgnoreList(ctx, dependencies, acrClient, repoName, &ignoreList); err != nil {
+					return nil, err
+				}
+			}
+			// Preserve children needed by retained indexes without selecting other manifests as replacement deletions.
+			manifestsToDelete = manifestsSelectedForDeletion[:0]
+			for _, manifest := range manifestsSelectedForDeletion {
+				if _, shouldBeIgnored := ignoreList.Load(*manifest.Digest); !shouldBeIgnored {
+					manifestsToDelete = append(manifestsToDelete, manifest)
+				}
+			}
+		}
+	}
 	return manifestsToDelete, nil
+}
+
+// SortManifestsByTime sorts manifests by LastUpdateTime (newest first) with consistent
+// handling of nil or unparseable timestamps and a digest-based tie-breaker for determinism.
+func SortManifestsByTime(manifests []acr.ManifestAttributesBase) {
+	sort.Slice(manifests, func(i, j int) bool {
+		mi := manifests[i]
+		mj := manifests[j]
+
+		// Extract timestamp strings; nil means invalid
+		var si, sj string
+		if mi.LastUpdateTime != nil {
+			si = *mi.LastUpdateTime
+		}
+		if mj.LastUpdateTime != nil {
+			sj = *mj.LastUpdateTime
+		}
+
+		// Parse timestamps, trying RFC3339Nano first then RFC3339
+		ti, errI := time.Parse(time.RFC3339Nano, si)
+		if errI != nil && si != "" {
+			if t, err := time.Parse(time.RFC3339, si); err == nil {
+				ti, errI = t, nil
+			}
+		}
+		tj, errJ := time.Parse(time.RFC3339Nano, sj)
+		if errJ != nil && sj != "" {
+			if t, err := time.Parse(time.RFC3339, sj); err == nil {
+				tj, errJ = t, nil
+			}
+		}
+
+		// Define validity flags
+		vi := (errI == nil)
+		vj := (errJ == nil)
+
+		// Ordering rules (total order):
+		// 1) Valid timestamps come before invalid (invalid considered oldest, so deleted first)
+		if vi != vj {
+			return vi // true if i valid and j invalid (i should be kept, j deleted)
+		}
+
+		// 2) Both valid: newest first
+		if vi && vj {
+			if ti.Equal(tj) {
+				// 3) Tie-breaker for determinism using digest
+				if mi.Digest != nil && mj.Digest != nil {
+					return *mi.Digest < *mj.Digest
+				}
+				return false
+			}
+			return ti.After(tj) // newest first
+		}
+
+		// 4) Both invalid: tie-breaker for determinism using digest
+		if mi.Digest != nil && mj.Digest != nil {
+			return *mi.Digest < *mj.Digest
+		}
+		return false
+	})
 }
 
 type dependentManifestResult struct {
