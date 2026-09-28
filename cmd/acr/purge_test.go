@@ -288,6 +288,52 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.AssertExpectations(t)
 	})
 
+	t.Run("DryRunAgeOnlyReportsAge", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(OneTagResult, nil).Once()
+		oldStdout := os.Stdout
+		reader, writer, err := os.Pipe()
+		if !assert.NoError(err) {
+			t.FailNow()
+		}
+		os.Stdout = writer
+		t.Cleanup(func() { os.Stdout = oldStdout; _ = reader.Close(); _ = writer.Close() })
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, &defaultAgoDuration, ".*", 0, -1, -1, 60, true, false)
+		assert.NoError(writer.Close())
+		os.Stdout = oldStdout
+		output, readErr := io.ReadAll(reader)
+
+		assert.NoError(readErr)
+		assert.NoError(err)
+		assert.Equal(1, deletedTags)
+		assert.Equal(fmt.Sprintf("Would delete tags for repository: %s\nWould delete: %s/%s:latest (reason: age)\n", testRepo, testLoginURL, testRepo), string(output))
+		mockClient.AssertExpectations(t)
+	})
+
+	t.Run("DryRunKeepAndAgeReportsOnlyUnkeptTags", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(FourTagsResult, nil).Once()
+		oldStdout := os.Stdout
+		reader, writer, err := os.Pipe()
+		if !assert.NoError(err) {
+			t.FailNow()
+		}
+		os.Stdout = writer
+		t.Cleanup(func() { os.Stdout = oldStdout; _ = reader.Close(); _ = writer.Close() })
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, &defaultAgoDuration, ".*", 1, -1, -1, 60, true, false)
+		assert.NoError(writer.Close())
+		os.Stdout = oldStdout
+		output, readErr := io.ReadAll(reader)
+
+		assert.NoError(readErr)
+		assert.NoError(err)
+		assert.Equal(3, deletedTags)
+		assert.Equal(fmt.Sprintf("Would delete tags for repository: %s\nWould delete: %s/%s:v2 (reason: age)\nWould delete: %s/%s:v3 (reason: age)\nWould delete: %s/%s:v4 (reason: age)\n", testRepo, testLoginURL, testRepo, testLoginURL, testRepo, testLoginURL, testRepo), string(output))
+		mockClient.AssertExpectations(t)
+	})
+
 	t.Run("MinMaxProtectsOldMinAndPrunesMiddleAcrossFilteredPages", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
@@ -578,8 +624,12 @@ func TestPurgeTags(t *testing.T) {
 			{Name: &middle, Digest: &middleDigest, LastUpdateTime: &old, ChangeableAttributes: &acr.ChangeableAttributes{WriteEnabled: &disabled}},
 			{Name: &overflow, Digest: &overflowDigest, LastUpdateTime: &old, ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &disabled}},
 		}
+		firstPage, secondPage := tags[:2], tags[2:]
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(&acr.RepositoryTagsType{
-			Response: autorest.Response{Response: &http.Response{}}, TagsAttributes: &tags,
+			Response: autorest.Response{Response: &http.Response{Header: http.Header{"Link": {"</tags?last=middle>"}}}}, TagsAttributes: &firstPage,
+		}, nil).Once()
+		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", middle).Return(&acr.RepositoryTagsType{
+			Response: autorest.Response{Response: &http.Response{}}, TagsAttributes: &secondPage,
 		}, nil).Once()
 		oldStdout := os.Stdout
 		reader, writer, err := os.Pipe()
@@ -599,7 +649,7 @@ func TestPurgeTags(t *testing.T) {
 		assert.NoError(err)
 		assert.Equal(2, deletedTags)
 		assert.Equal(map[string]int{middleDigest: 1, overflowDigest: 1}, byDigest)
-		assert.Equal(fmt.Sprintf("Would delete tags for repository: %s\nWould delete: %s/%s:middle\nWould delete: %s/%s:overflow\n", testRepo, testLoginURL, testRepo, testLoginURL, testRepo), string(output))
+		assert.Equal(fmt.Sprintf("Would delete tags for repository: %s\nWould delete: %s/%s:middle (reason: age)\nWould delete: %s/%s:overflow (reason: age and maximum count)\n", testRepo, testLoginURL, testRepo, testLoginURL, testRepo), string(output))
 		assert.False(*tags[0].ChangeableAttributes.DeleteEnabled)
 		assert.False(*tags[1].ChangeableAttributes.WriteEnabled)
 		assert.False(*tags[2].ChangeableAttributes.DeleteEnabled)
@@ -608,7 +658,7 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.AssertExpectations(t)
 	})
 
-	t.Run("MinMaxDryRunReportsRecentOverflowAndUnsatisfiedMaxForLocks", func(t *testing.T) {
+	t.Run("MinMaxDryRunReportsRecentOverflowAndRetainedLock", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		recent := time.Now().UTC().Add(-time.Hour).Format(time.RFC3339Nano)
@@ -641,13 +691,13 @@ func TestPurgeTags(t *testing.T) {
 		assert.NoError(err)
 		assert.Equal(1, deletedTags)
 		assert.Equal(map[string]int{overflowDigest: 1}, byDigest)
-		assert.Equal(fmt.Sprintf("Would delete tags for repository: %s\nWarning: Retaining locked tag %s:locked selected by retention policy\nWould delete: %s/%s:overflow\nWarning: --max-tags 1 not satisfied for %s/%s: 3 observed matching tags, 1 deleted or would be deleted, 2 remaining (1 above maximum); locked items or skipped deletions were retained\n", testRepo, testRepo, testLoginURL, testRepo, testLoginURL, testRepo), string(output))
+		assert.Equal(fmt.Sprintf("Would delete tags for repository: %s\nWarning: Retaining locked tag %s:locked selected by retention policy\nWould delete: %s/%s:overflow (reason: maximum count)\n", testRepo, testRepo, testLoginURL, testRepo), string(output))
 		mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, mock.Anything, mock.Anything)
 		mockClient.AssertNotCalled(t, "UpdateAcrTagAttributes", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 		mockClient.AssertExpectations(t)
 	})
 
-	t.Run("MinMaxWarnsForWriteLockWithoutAggregateWarningWhenAgePrunesEnough", func(t *testing.T) {
+	t.Run("MinMaxWarnsForWriteLockWhileAgePrunesUnlockedTag", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		old := time.Now().UTC().Add(-48 * time.Hour).Format(time.RFC3339Nano)
@@ -688,7 +738,7 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.AssertExpectations(t)
 	})
 
-	t.Run("MaxWarnsWhenServerRejectsSelectedTagDeletion", func(t *testing.T) {
+	t.Run("MaxReportsSkippedTagWhenServerRejectsDeletion", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		old := time.Now().UTC().Add(-48 * time.Hour).Format(time.RFC3339Nano)
@@ -721,7 +771,7 @@ func TestPurgeTags(t *testing.T) {
 		assert.NoError(err)
 		assert.Zero(deletedTags)
 		assert.Equal(map[string]int{blockedDigest: 1}, byDigest)
-		assert.Contains(string(output), fmt.Sprintf("Warning: --max-tags 1 not satisfied for %s/%s: 2 observed matching tags, 0 deleted or would be deleted, 2 remaining (1 above maximum); locked items or skipped deletions were retained\n", testLoginURL, testRepo))
+		assert.Equal(fmt.Sprintf("Deleting tags for repository: %s\nSkipped %s/%s:blocked, operation not allowed, HTTP status: 405\n", testRepo, testLoginURL, testRepo), string(output))
 		assert.NotContains(string(output), "Warning: Retaining locked tag")
 		mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, testRepo, protected)
 		mockClient.AssertExpectations(t)
@@ -1047,6 +1097,36 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient.AssertExpectations(t)
 	})
 
+	t.Run("DryRunKeepAndAgeReportsOnlyUnkeptManifests", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		now := time.Now().UTC()
+		manifests := []acr.ManifestAttributesBase{
+			createManifestWithTime("sha256:kept", now.Add(-48*time.Hour).Format(time.RFC3339Nano)),
+			createManifestWithTime("sha256:old", now.Add(-72*time.Hour).Format(time.RFC3339Nano)),
+		}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(&acr.Manifests{ManifestsAttributes: &manifests}, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:old").Return(EmptyListManifestsResult, nil).Once()
+		oldStdout := os.Stdout
+		reader, writer, err := os.Pipe()
+		if !assert.NoError(err) {
+			t.FailNow()
+		}
+		os.Stdout = writer
+		t.Cleanup(func() { os.Stdout = oldStdout; _ = reader.Close(); _ = writer.Close() })
+		agoDuration := mustParseDuration("1d")
+		deletedManifests, err := purgeDanglingManifests(testCtx, mockClient, 1, testLoginURL, testRepo, &agoDuration, 1, -1, -1, nil, true, false)
+		assert.NoError(writer.Close())
+		os.Stdout = oldStdout
+		output, readErr := io.ReadAll(reader)
+
+		assert.NoError(readErr)
+		assert.NoError(err)
+		assert.Equal(1, deletedManifests)
+		assert.Equal(fmt.Sprintf("Would delete manifests for repository: %s\nWould delete: %s/%s@sha256:old (reason: age)\n", testRepo, testLoginURL, testRepo), string(output))
+		mockClient.AssertExpectations(t)
+	})
+
 	t.Run("MinMaxProtectsOldMinAndPrunesMiddleAfterAllPages", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
@@ -1328,9 +1408,10 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("IsAbac").Return(false)
 		recent := time.Now().UTC().Add(-time.Hour).Format(time.RFC3339Nano)
+		future := time.Now().UTC().Add(time.Hour).Format(time.RFC3339Nano)
 		first, second, digest := "release-a", "release-b", "sha256:newly-dangling"
 		tags := []acr.TagAttributesBase{
-			{Name: &first, Digest: &digest, LastUpdateTime: &recent},
+			{Name: &first, Digest: &digest, LastUpdateTime: &future},
 			{Name: &second, Digest: &digest, LastUpdateTime: &recent},
 		}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(&acr.RepositoryTagsType{
@@ -1342,8 +1423,20 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(&acr.Manifests{ManifestsAttributes: &manifests}, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", digest).Return(EmptyListManifestsResult, nil).Once()
 
+		oldStdout := os.Stdout
+		reader, writer, err := os.Pipe()
+		if !assert.NoError(err) {
+			t.FailNow()
+		}
+		os.Stdout = writer
+		t.Cleanup(func() { os.Stdout = oldStdout; _ = reader.Close(); _ = writer.Close() })
 		deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 1, nil, 0, -1, 0, -1, -1, 60, true, false, map[string]string{testRepo: "^release-"}, true, false, false)
+		assert.NoError(writer.Close())
+		os.Stdout = oldStdout
+		output, readErr := io.ReadAll(reader)
 
+		assert.NoError(readErr)
+		assert.Contains(string(output), fmt.Sprintf("Would delete tags for repository: %s\nWould delete: %s/%s:release-a (reason: maximum count)\nWould delete: %s/%s:release-b (reason: maximum count)\nWould delete manifests for repository: %s\nWould delete: %s/%s@%s\n", testRepo, testLoginURL, testRepo, testLoginURL, testRepo, testRepo, testLoginURL, testRepo, digest))
 		assert.NoError(err)
 		assert.Equal(2, deletedTags)
 		assert.Equal(1, deletedManifests)
@@ -1567,7 +1660,7 @@ func TestPurgeManifests(t *testing.T) {
 		assert.NoError(readErr)
 		assert.NoError(err)
 		assert.Equal(1, deletedManifests)
-		assert.Equal(fmt.Sprintf("Would delete manifests for repository: %s\nWarning: Retaining locked manifest %s@sha256:locked selected by retention policy\nWould delete: %s/%s@sha256:overflow\n", testRepo, testRepo, testLoginURL, testRepo), string(output))
+		assert.Equal(fmt.Sprintf("Would delete manifests for repository: %s\nWarning: Retaining locked manifest %s@sha256:locked selected by retention policy\nWould delete: %s/%s@sha256:overflow (reason: maximum count)\n", testRepo, testRepo, testLoginURL, testRepo), string(output))
 		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, mock.Anything, mock.Anything)
 		mockClient.AssertNotCalled(t, "UpdateAcrManifestAttributes", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 		mockClient.AssertExpectations(t)

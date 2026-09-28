@@ -682,9 +682,22 @@ func TestPurgeDanglingManifestsWithAgoAndKeep(t *testing.T) {
 		// No UpdateAcrManifestAttributes calls expected for dry run
 
 		// Call with dry run and age filter
+		oldStdout := os.Stdout
+		reader, writer, err := os.Pipe()
+		if !assert.NoError(err) {
+			t.FailNow()
+		}
+		os.Stdout = writer
+		t.Cleanup(func() { os.Stdout = oldStdout; _ = reader.Close(); _ = writer.Close() })
 		agoDuration := mustParseDuration("300d")
 		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, &agoDuration, 0, -1, -1, nil, true, false)
+		assert.NoError(writer.Close())
+		os.Stdout = oldStdout
+		output, readErr := io.ReadAll(reader)
 
+		assert.NoError(readErr)
+		assert.Equal("Would delete manifests for repository: "+testRepo+"\n"+
+			"Would delete: "+testLoginURL+"/"+testRepo+"@sha256:old123 (reason: age)\n", string(output))
 		assert.Nil(err, "Should not return error")
 		assert.Equal(1, deletedCount, "Should report 1 manifest would be deleted")
 		mockClient.AssertExpectations(t)
@@ -879,10 +892,10 @@ func TestPurgeDanglingManifestsWithMax(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		now := time.Now().UTC()
-		newestManifest := createManifestWithTime("sha256:newest", now.Add(-time.Hour).Format(time.RFC3339Nano))
-		secondManifest := createManifestWithTime("sha256:second", now.Add(-2*time.Hour).Format(time.RFC3339Nano))
-		thirdManifest := createManifestWithTime("sha256:third", now.Add(-3*time.Hour).Format(time.RFC3339Nano))
-		oldestManifest := createManifestWithTime("sha256:oldest", now.Add(-4*time.Hour).Format(time.RFC3339Nano))
+		newestManifest := createManifestWithTime("sha256:newest", now.Add(72*time.Hour).Format(time.RFC3339Nano))
+		secondManifest := createManifestWithTime("sha256:second", now.Add(48*time.Hour).Format(time.RFC3339Nano))
+		thirdManifest := createManifestWithTime("sha256:third", now.Add(24*time.Hour).Format(time.RFC3339Nano))
+		oldestManifest := createManifestWithTime("sha256:oldest", now.Add(-48*time.Hour).Format(time.RFC3339Nano))
 
 		manifestsResult := &acr.Manifests{
 			Response:            autorest.Response{Response: &http.Response{StatusCode: http.StatusOK}},
@@ -920,7 +933,7 @@ func TestPurgeDanglingManifestsWithMax(t *testing.T) {
 
 		assert.Nil(readErr, "Should read the captured dry-run output")
 		assert.Nil(err, "Should not return error when reporting maximum overflow")
-		assert.Equal(2, deletedCount, "Should report the 2 recent manifests beyond the maximum")
+		assert.Equal(2, deletedCount, "Should report both future and old manifests beyond the maximum without an age policy")
 		var actualLines []string
 		for _, line := range strings.Split(string(output), "\n") {
 			if strings.HasPrefix(line, "Would delete:") {
@@ -928,8 +941,8 @@ func TestPurgeDanglingManifestsWithMax(t *testing.T) {
 			}
 		}
 		assert.ElementsMatch([]string{
-			"Would delete: " + testLoginURL + "/" + testRepo + "@sha256:third",
-			"Would delete: " + testLoginURL + "/" + testRepo + "@sha256:oldest",
+			"Would delete: " + testLoginURL + "/" + testRepo + "@sha256:third (reason: maximum count)",
+			"Would delete: " + testLoginURL + "/" + testRepo + "@sha256:oldest (reason: maximum count)",
 		}, actualLines, "Should report exactly the 2 oldest manifests across both pages")
 		mockClient.AssertNumberOfCalls(t, "DeleteManifest", 0)
 		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, testRepo, "sha256:newest")
@@ -1116,8 +1129,8 @@ func TestPurgeDanglingManifestsWithAgoAndMin(t *testing.T) {
 			}
 		}
 		assert.ElementsMatch([]string{
-			"Would delete: " + testLoginURL + "/" + testRepo + "@sha256:third",
-			"Would delete: " + testLoginURL + "/" + testRepo + "@sha256:oldest",
+			"Would delete: " + testLoginURL + "/" + testRepo + "@sha256:third (reason: age)",
+			"Would delete: " + testLoginURL + "/" + testRepo + "@sha256:oldest (reason: age)",
 		}, actualLines, "Should report exactly the 2 old manifests beyond the minimum")
 		mockClient.AssertNumberOfCalls(t, "DeleteManifest", 0)
 		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, testRepo, "sha256:newest")
@@ -1323,9 +1336,24 @@ func TestPurgeDanglingManifestsWithAgoMinAndMax(t *testing.T) {
 			"manifests": [{"digest": "sha256:selected-child", "mediaType": "application/vnd.docker.distribution.manifest.v2+json"}]
 		}`), nil).Once()
 
+		oldStdout := os.Stdout
+		reader, writer, err := os.Pipe()
+		if !assert.NoError(err) {
+			t.FailNow()
+		}
+		os.Stdout = writer
+		t.Cleanup(func() { os.Stdout = oldStdout; _ = reader.Close(); _ = writer.Close() })
 		agoDuration := mustParseDuration("1d")
 		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, &agoDuration, 0, 1, 2, nil, true, true)
+		assert.NoError(writer.Close())
+		os.Stdout = oldStdout
+		output, readErr := io.ReadAll(reader)
 
+		assert.NoError(readErr)
+		assert.Equal("Would delete manifests for repository: "+testRepo+"\n"+
+			"Would delete: "+testLoginURL+"/"+testRepo+"@sha256:locked (reason: age)\n"+
+			"Would delete: "+testLoginURL+"/"+testRepo+"@sha256:locked-index (reason: age and maximum count)\n"+
+			"Would delete: "+testLoginURL+"/"+testRepo+"@sha256:selected-child (reason: age and maximum count)\n", string(output))
 		assert.Nil(err, "Should not return error when previewing selected locked manifests and indexes")
 		assert.Equal(3, deletedCount, "Should report the same 3 deletions as live include-locked, excluding the retained index and its child")
 		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, mock.Anything, mock.Anything)

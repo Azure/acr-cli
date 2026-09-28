@@ -192,7 +192,8 @@ func GetLastTagFromResponse(resultTags *acr.RepositoryTagsType) string {
 // Param manifestToTagsCountMap is an optional map that can be used to pass the count of tags for each manifest that we know would be deleted if the command is exectued
 // under dryRun conditions. Its ignored if the dryRun flag is false.
 // Count limits use -1 when omitted from the purge command.
-func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCLIClientInterface, repoName string, preserveAllOCIManifests bool, manifestToDeletedTagsCountMap map[string]int, dryRun bool, includeLocked bool, deleteCutoff *time.Time, minManifests int, maxManifests int) ([]acr.ManifestAttributesBase, error) {
+// deletionReasons optionally records count-policy selection reasons by digest; only returned manifests should be reported.
+func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCLIClientInterface, repoName string, preserveAllOCIManifests bool, manifestToDeletedTagsCountMap map[string]int, dryRun bool, includeLocked bool, deleteCutoff *time.Time, minManifests int, maxManifests int, deletionReasons map[string]string) ([]acr.ManifestAttributesBase, error) {
 	lastManifestDigest := ""
 	var manifestsToDelete []acr.ManifestAttributesBase
 	resultManifests, err := acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
@@ -408,6 +409,7 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 		for _, manifest := range manifestsToDelete {
 			processedUntaggedManifestsCount++
 			elegibleForDeletion := false
+			var eligibleByAgeAndMinimum, eligibleByMaximum bool
 			if manifest.LastUpdateTime == nil {
 				fmt.Printf("Protecting manifest %s because the last update time is unavailable\n", *manifest.Digest)
 			} else {
@@ -415,8 +417,8 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 				if err != nil {
 					fmt.Printf("Warning: Protecting manifest %s@%s because the last update time cannot be read: %v\n", repoName, *manifest.Digest, err)
 				} else {
-					eligibleByAgeAndMinimum := deleteCutoff != nil && lastUpdateTime.Before(*deleteCutoff) && processedUntaggedManifestsCount > minManifests
-					eligibleByMaximum := maxManifests >= 0 && processedUntaggedManifestsCount > maxManifests
+					eligibleByAgeAndMinimum = deleteCutoff != nil && lastUpdateTime.Before(*deleteCutoff) && processedUntaggedManifestsCount > minManifests
+					eligibleByMaximum = maxManifests >= 0 && processedUntaggedManifestsCount > maxManifests
 					elegibleForDeletion = eligibleByAgeAndMinimum || eligibleByMaximum
 				}
 			}
@@ -428,6 +430,16 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 			}
 			if elegibleForDeletion {
 				manifestsSelectedForDeletion = append(manifestsSelectedForDeletion, manifest)
+				if deletionReasons != nil {
+					switch {
+					case eligibleByAgeAndMinimum && eligibleByMaximum:
+						deletionReasons[*manifest.Digest] = "age and maximum count"
+					case eligibleByMaximum:
+						deletionReasons[*manifest.Digest] = "maximum count"
+					default:
+						deletionReasons[*manifest.Digest] = "age"
+					}
+				}
 			} else if manifest.MediaType != nil && (*manifest.MediaType == v1.MediaTypeImageIndex ||
 				*manifest.MediaType == mediaTypeDockerManifestList) {
 				retainedIndexes = append(retainedIndexes, *manifest.Digest)

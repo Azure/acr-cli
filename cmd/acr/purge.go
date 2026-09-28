@@ -416,7 +416,11 @@ func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, repoPar
 	purger := worker.NewPurger(repoParallelism, acrClient, loginURL, repoName, includeLocked)
 
 	for {
-		tagsToDelete, newLastTag, newSkippedTagsCount, newProcessedMatchingTagsCount, err := getTagsToDelete(ctx, acrClient, repoName, tagRegex, timeToCompare, lastTag, keep, minTags, maxTags, skippedTagsCount, processedMatchingTagsCount, includeLocked)
+		var deletionReasons map[string]string
+		if dryRun && (minTags >= 0 || maxTags >= 0) {
+			deletionReasons = make(map[string]string)
+		}
+		tagsToDelete, newLastTag, newSkippedTagsCount, newProcessedMatchingTagsCount, err := getTagsToDelete(ctx, acrClient, repoName, tagRegex, timeToCompare, lastTag, keep, minTags, maxTags, skippedTagsCount, processedMatchingTagsCount, includeLocked, deletionReasons)
 		if err != nil {
 			return -1, manifestToTagsCountMap, err
 		}
@@ -427,7 +431,13 @@ func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, repoPar
 			for _, tag := range tagsToDelete {
 				manifestToTagsCountMap[*tag.Digest]++
 				if dryRun {
-					fmt.Printf("Would delete: %s/%s:%s\n", loginURL, repoName, *tag.Name)
+					suffix := ""
+					if deletionReasons == nil && agoDuration != nil {
+						suffix = " (reason: age)"
+					} else if reason := deletionReasons[*tag.Name]; reason != "" {
+						suffix = " (reason: " + reason + ")"
+					}
+					fmt.Printf("Would delete: %s/%s:%s%s\n", loginURL, repoName, *tag.Name, suffix)
 				}
 			}
 
@@ -450,10 +460,6 @@ func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, repoPar
 		}
 	}
 
-	if maxTags >= 0 && processedMatchingTagsCount-deletedTagsCount > maxTags {
-		fmt.Printf("Warning: --max-tags %d not satisfied for %s/%s: %d observed matching tags, %d deleted or would be deleted, %d remaining (%d above maximum); locked items or skipped deletions were retained\n",
-			maxTags, loginURL, repoName, processedMatchingTagsCount, deletedTagsCount, processedMatchingTagsCount-deletedTagsCount, processedMatchingTagsCount-deletedTagsCount-maxTags)
-	}
 	return deletedTagsCount, manifestToTagsCountMap, nil
 }
 
@@ -532,7 +538,8 @@ func getTagsToDelete(ctx context.Context,
 	maxTags int,
 	skippedTagsCount int,
 	processedMatchingTagsCount int,
-	includeLocked bool) ([]acr.TagAttributesBase, string, int, int, error) {
+	includeLocked bool,
+	deletionReasons map[string]string) ([]acr.TagAttributesBase, string, int, int, error) {
 
 	var matches bool
 	var lastUpdateTime time.Time
@@ -578,6 +585,16 @@ func getTagsToDelete(ctx context.Context,
 					continue
 				}
 				tagsEligibleForDeletion = append(tagsEligibleForDeletion, tag)
+				if deletionReasons != nil {
+					switch {
+					case elegibleByAgeAndMinimum && elegibleByMaximum:
+						deletionReasons[*tag.Name] = "age and maximum count"
+					case elegibleByMaximum:
+						deletionReasons[*tag.Name] = "maximum count"
+					default:
+						deletionReasons[*tag.Name] = "age"
+					}
+				}
 			}
 		}
 
@@ -623,7 +640,11 @@ func purgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInter
 	// Contrary to getTagsToDelete, getManifestsToDelete gets all the Manifests at once, this was done because if there is a manifest that has no
 	// tag but is referenced by a multiarch manifest that has tags then it should not be deleted. Or if a manifest has no tag, but it has subject,
 	// then it should not be deleted.
-	manifestsToDelete, err := repository.GetUntaggedManifests(ctx, repoParallelism, acrClient, repoName, false, manifestToTagsCountMap, dryRun, includeLocked, deleteCutoff, minManifests, maxManifests)
+	var deletionReasons map[string]string
+	if dryRun && (minManifests >= 0 || maxManifests >= 0) {
+		deletionReasons = make(map[string]string)
+	}
+	manifestsToDelete, err := repository.GetUntaggedManifests(ctx, repoParallelism, acrClient, repoName, false, manifestToTagsCountMap, dryRun, includeLocked, deleteCutoff, minManifests, maxManifests, deletionReasons)
 	if err != nil {
 		return -1, err
 	}
@@ -642,7 +663,13 @@ func purgeDanglingManifests(ctx context.Context, acrClient api.AcrCLIClientInter
 	// filtering first as that would influence the untagged manifests that would be deleted.
 	if dryRun {
 		for _, manifest := range manifestsToDelete {
-			fmt.Printf("Would delete: %s/%s@%s\n", loginURL, repoName, *manifest.Digest)
+			suffix := ""
+			if deletionReasons == nil && agoDuration != nil {
+				suffix = " (reason: age)"
+			} else if reason := deletionReasons[*manifest.Digest]; reason != "" {
+				suffix = " (reason: " + reason + ")"
+			}
+			fmt.Printf("Would delete: %s/%s@%s%s\n", loginURL, repoName, *manifest.Digest, suffix)
 		}
 		return len(manifestsToDelete), nil
 	}
