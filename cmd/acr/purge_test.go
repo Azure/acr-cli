@@ -1436,7 +1436,7 @@ func TestPurgeManifests(t *testing.T) {
 		output, readErr := io.ReadAll(reader)
 
 		assert.NoError(readErr)
-		assert.Contains(string(output), fmt.Sprintf("Would delete tags for repository: %s\nWould delete: %s/%s:release-a (reason: maximum count)\nWould delete: %s/%s:release-b (reason: maximum count)\nWould delete manifests for repository: %s\nWould delete: %s/%s@%s\n", testRepo, testLoginURL, testRepo, testLoginURL, testRepo, testRepo, testLoginURL, testRepo, digest))
+		assert.Contains(string(output), fmt.Sprintf("Would delete tags for repository: %s\nWould delete: %s/%s:release-a (reason: maximum count)\nWould delete: %s/%s:release-b (reason: maximum count)\nWould delete manifests for repository: %s\nWould delete: %s/%s@%s (reason: untagged)\n", testRepo, testLoginURL, testRepo, testLoginURL, testRepo, testRepo, testLoginURL, testRepo, digest))
 		assert.NoError(err)
 		assert.Equal(2, deletedTags)
 		assert.Equal(1, deletedManifests)
