@@ -572,19 +572,19 @@ func getTagsToDelete(ctx context.Context,
 			}
 			eligibleByAgeAndMinimum, eligibleByMaximum := repository.EvaluateRetention(lastUpdateTime, deleteCutoff, processedMatchingTagsCount, minTags, maxTags)
 			if eligibleByAgeAndMinimum || eligibleByMaximum {
-				if !includeLocked && tag.ChangeableAttributes != nil &&
-					((tag.ChangeableAttributes.DeleteEnabled != nil && !*tag.ChangeableAttributes.DeleteEnabled) ||
-						(tag.ChangeableAttributes.WriteEnabled != nil && !*tag.ChangeableAttributes.WriteEnabled)) {
-					if minTags >= 0 || maxTags >= 0 {
-						fmt.Printf("Warning: Retaining locked tag %s:%s selected by retention policy\n", repoName, *tag.Name)
-					}
-					continue
-				}
 				reason := repository.DeletionReasonAge
 				if eligibleByAgeAndMinimum && eligibleByMaximum {
 					reason = repository.DeletionReasonAgeAndMaximumCount
 				} else if eligibleByMaximum {
 					reason = repository.DeletionReasonMaximumCount
+				}
+				if !includeLocked && tag.ChangeableAttributes != nil &&
+					((tag.ChangeableAttributes.DeleteEnabled != nil && !*tag.ChangeableAttributes.DeleteEnabled) ||
+						(tag.ChangeableAttributes.WriteEnabled != nil && !*tag.ChangeableAttributes.WriteEnabled)) {
+					if minTags >= 0 || maxTags >= 0 {
+						fmt.Printf("Warning: Retaining locked tag %s:%s (reason: %s)\n", repoName, *tag.Name, reason.String())
+					}
+					continue
 				}
 				tagsEligibleForDeletion = append(tagsEligibleForDeletion, repository.TagToDelete{
 					TagAttributesBase: tag,

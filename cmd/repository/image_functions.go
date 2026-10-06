@@ -446,19 +446,19 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 					eligibleForDeletion = eligibleByAgeAndMinimum || eligibleByMaximum
 				}
 			}
+			reason := DeletionReasonAge
+			if eligibleByAgeAndMinimum && eligibleByMaximum {
+				reason = DeletionReasonAgeAndMaximumCount
+			} else if eligibleByMaximum {
+				reason = DeletionReasonMaximumCount
+			}
 			if eligibleForDeletion && !includeLocked && manifest.ChangeableAttributes != nil &&
 				((manifest.ChangeableAttributes.DeleteEnabled != nil && !*manifest.ChangeableAttributes.DeleteEnabled) ||
 					(manifest.ChangeableAttributes.WriteEnabled != nil && !*manifest.ChangeableAttributes.WriteEnabled)) {
-				fmt.Printf("Warning: Retaining locked manifest %s@%s selected by retention policy\n", repoName, *manifest.Digest)
+				fmt.Printf("Warning: Retaining locked manifest %s@%s (reason: %s)\n", repoName, *manifest.Digest, reason.String())
 				eligibleForDeletion = false
 			}
 			if eligibleForDeletion {
-				reason := DeletionReasonAge
-				if eligibleByAgeAndMinimum && eligibleByMaximum {
-					reason = DeletionReasonAgeAndMaximumCount
-				} else if eligibleByMaximum {
-					reason = DeletionReasonMaximumCount
-				}
 				manifest.Reason = reason
 				manifestsSelectedForDeletion = append(manifestsSelectedForDeletion, manifest)
 			} else if manifest.MediaType != nil && (*manifest.MediaType == v1.MediaTypeImageIndex ||
