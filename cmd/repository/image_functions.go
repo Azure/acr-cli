@@ -57,6 +57,17 @@ type ManifestToDelete struct {
 	Reason DeletionReason
 }
 
+// UntaggedManifestsOptions controls discovery and retention of untagged manifests.
+// A nil DeleteCutoff disables age filtering; count limits use -1 when omitted.
+type UntaggedManifestsOptions struct {
+	PreserveAllOCIManifests bool
+	DryRun                  bool
+	IncludeLocked           bool
+	DeleteCutoff            *time.Time
+	MinManifests            int
+	MaxManifests            int
+}
+
 // GetAllRepositoryNames retrieves all repository names from the registry using pagination.
 func GetAllRepositoryNames(ctx context.Context, client acrapi.BaseClientAPI, pageSize int32) ([]string, error) {
 	allRepoNames := make([]string, 0)
@@ -211,10 +222,10 @@ func GetLastTagFromResponse(resultTags *acr.RepositoryTagsType) string {
 // GetUntaggedManifests gets all the manifests for the command to be executed on. The command will be executed on this manifest if it does not
 // have any tag and does not form part of a manifest list that has tags referencing it. If the purge command is to be executed,
 // the manifest should also not have a tag and not have a subject manifest.
-// Param manifestToTagsCountMap is an optional map that can be used to pass the count of tags for each manifest that we know would be deleted if the command is exectued
-// under dryRun conditions. Its ignored if the dryRun flag is false.
-// Count limits use -1 when omitted from the purge command.
-func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCLIClientInterface, repoName string, preserveAllOCIManifests bool, manifestToDeletedTagsCountMap map[string]int, dryRun bool, includeLocked bool, deleteCutoff *time.Time, minManifests int, maxManifests int) ([]ManifestToDelete, error) {
+// options controls OCI preservation, dry-run behavior, lock handling, and retention criteria.
+// manifestToDeletedTagsCountMap optionally supplies the count of tags per manifest that would be deleted
+// under dry-run conditions. It is ignored if options.DryRun is false.
+func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCLIClientInterface, repoName string, options UntaggedManifestsOptions, manifestToDeletedTagsCountMap map[string]int) ([]ManifestToDelete, error) {
 	lastManifestDigest := ""
 	var manifestsToDelete []ManifestToDelete
 	resultManifests, err := acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
@@ -262,7 +273,7 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 			// If the manifest cannot be deleted or written to we can skip them (ACR will not allow deletion of these manifests)
 			// Unless --include-locked flag is set, in which case we will unlock them first
 			// When count limits are not set, apply lock protection during discovery.
-			if minManifests < 0 && maxManifests < 0 && !includeLocked && manifest.ChangeableAttributes != nil {
+			if options.MinManifests < 0 && options.MaxManifests < 0 && !options.IncludeLocked && manifest.ChangeableAttributes != nil {
 				if manifest.ChangeableAttributes.DeleteEnabled != nil && !(*manifest.ChangeableAttributes.DeleteEnabled) {
 					continue
 				}
@@ -278,7 +289,7 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 			// _____MANIFEST IS PROTECTED BY TAGS______
 			isProtectedByTags := false
 			if manifestHasTags {
-				if !dryRun {
+				if !options.DryRun {
 					// In production mode, any tags protect the manifest
 					isProtectedByTags = true
 				} else {
@@ -297,7 +308,7 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 			// Only check age criteria if not already protected by tags (optimization)
 			isProtectedByAge := false
 			// When count limits are not set, apply age protection during discovery.
-			if minManifests < 0 && maxManifests < 0 && !isProtectedByTags && deleteCutoff != nil {
+			if options.MinManifests < 0 && options.MaxManifests < 0 && !isProtectedByTags && options.DeleteCutoff != nil {
 				// Take the more conservative approach and protect manifests with no last update time
 				if manifest.LastUpdateTime == nil {
 					isProtectedByAge = true
@@ -308,7 +319,7 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 						isProtectedByAge = true
 						fmt.Printf("Protecting manifest %s because the last update time cannot be read\n", *manifest.Digest)
 					} else {
-						eligibleByAge, _ := EvaluateRetention(lastUpdateTime, deleteCutoff, 1, -1, -1)
+						eligibleByAge, _ := EvaluateRetention(lastUpdateTime, options.DeleteCutoff, 1, -1, -1)
 						isProtectedByAge = !eligibleByAge
 					}
 				}
@@ -352,7 +363,7 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 
 			// TODO: #468 I am a little unclear as to why this was ever an option but respecting it for now. Its not used by the purge scenarios only for
 			// the annotate command.
-			if preserveAllOCIManifests {
+			if options.PreserveAllOCIManifests {
 				if *manifest.MediaType != v1.MediaTypeImageManifest {
 					// Add the manifest to the candidates list
 					if _, ok := candidates[*manifest.Digest]; !ok {
@@ -426,7 +437,7 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 		}
 	}
 
-	if minManifests >= 0 || maxManifests >= 0 {
+	if options.MinManifests >= 0 || options.MaxManifests >= 0 {
 		SortManifestsByTime(manifestsToDelete)
 		manifestsSelectedForDeletion := manifestsToDelete[:0]
 		var retainedIndexes []string
@@ -442,7 +453,7 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 				if err != nil {
 					fmt.Printf("Warning: Protecting manifest %s@%s because the last update time cannot be read: %v\n", repoName, *manifest.Digest, err)
 				} else {
-					eligibleByAgeAndMinimum, eligibleByMaximum = EvaluateRetention(lastUpdateTime, deleteCutoff, processedUntaggedManifestsCount, minManifests, maxManifests)
+					eligibleByAgeAndMinimum, eligibleByMaximum = EvaluateRetention(lastUpdateTime, options.DeleteCutoff, processedUntaggedManifestsCount, options.MinManifests, options.MaxManifests)
 					eligibleForDeletion = eligibleByAgeAndMinimum || eligibleByMaximum
 				}
 			}
@@ -452,7 +463,7 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 			} else if eligibleByMaximum {
 				reason = DeletionReasonMaximumCount
 			}
-			if eligibleForDeletion && !includeLocked && manifest.ChangeableAttributes != nil &&
+			if eligibleForDeletion && !options.IncludeLocked && manifest.ChangeableAttributes != nil &&
 				((manifest.ChangeableAttributes.DeleteEnabled != nil && !*manifest.ChangeableAttributes.DeleteEnabled) ||
 					(manifest.ChangeableAttributes.WriteEnabled != nil && !*manifest.ChangeableAttributes.WriteEnabled)) {
 				fmt.Printf("Warning: Retaining locked manifest %s@%s (reason: %s)\n", repoName, *manifest.Digest, reason.String())

@@ -506,7 +506,15 @@ func TestGetUntaggedManifestsWithAgeCriteria(t *testing.T) {
 
 		cutoff := parseTime(t, "2024-11-01T12:00:00Z") // 30 days ago from "now"
 
-		result, err := GetUntaggedManifests(ctx, poolSize, mockClient, repoName, false, nil, false, false, &cutoff, -1, -1)
+		untaggedManifestsOptions := UntaggedManifestsOptions{
+			PreserveAllOCIManifests: false,
+			DryRun:                  false,
+			IncludeLocked:           false,
+			DeleteCutoff:            &cutoff,
+			MinManifests:            -1,
+			MaxManifests:            -1,
+		}
+		result, err := GetUntaggedManifests(ctx, poolSize, mockClient, repoName, untaggedManifestsOptions, nil)
 
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(result))
@@ -526,7 +534,15 @@ func TestGetUntaggedManifestsWithAgeCriteria(t *testing.T) {
 
 		cutoff := parseTime(t, "2024-11-01T12:00:00Z")
 
-		result, err := GetUntaggedManifests(ctx, poolSize, mockClient, repoName, false, nil, false, false, &cutoff, -1, -1)
+		untaggedManifestsOptions := UntaggedManifestsOptions{
+			PreserveAllOCIManifests: false,
+			DryRun:                  false,
+			IncludeLocked:           false,
+			DeleteCutoff:            &cutoff,
+			MinManifests:            -1,
+			MaxManifests:            -1,
+		}
+		result, err := GetUntaggedManifests(ctx, poolSize, mockClient, repoName, untaggedManifestsOptions, nil)
 
 		assert.NoError(t, err)
 		assert.Equal(t, 0, len(result), "Recent manifest should be protected")
@@ -544,7 +560,15 @@ func TestGetUntaggedManifestsWithAgeCriteria(t *testing.T) {
 		mockClient.On("GetAcrManifests", ctx, repoName, "", "sha256:cutoff").Return(createEmptyManifestsResult(), nil).Once()
 
 		cutoff := parseTime(t, timestamp)
-		result, err := GetUntaggedManifests(ctx, poolSize, mockClient, repoName, false, nil, false, false, &cutoff, -1, -1)
+		untaggedManifestsOptions := UntaggedManifestsOptions{
+			PreserveAllOCIManifests: false,
+			DryRun:                  false,
+			IncludeLocked:           false,
+			DeleteCutoff:            &cutoff,
+			MinManifests:            -1,
+			MaxManifests:            -1,
+		}
+		result, err := GetUntaggedManifests(ctx, poolSize, mockClient, repoName, untaggedManifestsOptions, nil)
 
 		assert.NoError(t, err)
 		assert.Empty(t, result, "Manifest exactly at cutoff should be protected")
@@ -563,7 +587,15 @@ func TestGetUntaggedManifestsWithAgeCriteria(t *testing.T) {
 
 		cutoff := parseTime(t, "2024-11-01T12:00:00Z")
 
-		result, err := GetUntaggedManifests(ctx, poolSize, mockClient, repoName, false, nil, false, false, &cutoff, -1, -1)
+		untaggedManifestsOptions := UntaggedManifestsOptions{
+			PreserveAllOCIManifests: false,
+			DryRun:                  false,
+			IncludeLocked:           false,
+			DeleteCutoff:            &cutoff,
+			MinManifests:            -1,
+			MaxManifests:            -1,
+		}
+		result, err := GetUntaggedManifests(ctx, poolSize, mockClient, repoName, untaggedManifestsOptions, nil)
 
 		assert.NoError(t, err)
 		assert.Equal(t, 0, len(result), "Manifest with nil timestamp should be protected")
@@ -582,7 +614,15 @@ func TestGetUntaggedManifestsWithAgeCriteria(t *testing.T) {
 
 		cutoff := parseTime(t, "2024-11-01T12:00:00Z")
 
-		result, err := GetUntaggedManifests(ctx, poolSize, mockClient, repoName, false, nil, false, false, &cutoff, -1, -1)
+		untaggedManifestsOptions := UntaggedManifestsOptions{
+			PreserveAllOCIManifests: false,
+			DryRun:                  false,
+			IncludeLocked:           false,
+			DeleteCutoff:            &cutoff,
+			MinManifests:            -1,
+			MaxManifests:            -1,
+		}
+		result, err := GetUntaggedManifests(ctx, poolSize, mockClient, repoName, untaggedManifestsOptions, nil)
 
 		assert.NoError(t, err)
 		assert.Equal(t, 0, len(result), "Tagged manifest should be protected regardless of age")
@@ -607,7 +647,15 @@ func TestGetUntaggedManifestsWithAgeCriteria(t *testing.T) {
 
 		cutoff := parseTime(t, "2024-11-01T12:00:00Z")
 
-		result, err := GetUntaggedManifests(ctx, poolSize, mockClient, repoName, false, nil, false, false, &cutoff, -1, -1)
+		untaggedManifestsOptions := UntaggedManifestsOptions{
+			PreserveAllOCIManifests: false,
+			DryRun:                  false,
+			IncludeLocked:           false,
+			DeleteCutoff:            &cutoff,
+			MinManifests:            -1,
+			MaxManifests:            -1,
+		}
+		result, err := GetUntaggedManifests(ctx, poolSize, mockClient, repoName, untaggedManifestsOptions, nil)
 
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(result))
@@ -626,7 +674,15 @@ func TestGetUntaggedManifestsWithAgeCriteria(t *testing.T) {
 		mockClient.On("GetAcrManifests", ctx, repoName, "", "").Return(manifests, nil).Once()
 		mockClient.On("GetAcrManifests", ctx, repoName, "", "sha256:recent1").Return(createEmptyManifestsResult(), nil).Once()
 
-		result, err := GetUntaggedManifests(ctx, poolSize, mockClient, repoName, false, nil, false, false, nil, -1, -1)
+		untaggedManifestsOptions := UntaggedManifestsOptions{
+			PreserveAllOCIManifests: false,
+			DryRun:                  false,
+			IncludeLocked:           false,
+			DeleteCutoff:            nil,
+			MinManifests:            -1,
+			MaxManifests:            -1,
+		}
+		result, err := GetUntaggedManifests(ctx, poolSize, mockClient, repoName, untaggedManifestsOptions, nil)
 
 		assert.NoError(t, err)
 		assert.Equal(t, 2, len(result), "All untagged manifests should be candidates when no cutoff is specified")
@@ -646,7 +702,15 @@ func TestGetUntaggedManifestsWithAgeCriteria(t *testing.T) {
 
 		cutoff := parseTime(t, "2024-11-01T12:00:00Z")
 
-		result, err := GetUntaggedManifests(ctx, poolSize, mockClient, repoName, false, nil, true, false, &cutoff, -1, -1)
+		untaggedManifestsOptions := UntaggedManifestsOptions{
+			PreserveAllOCIManifests: false,
+			DryRun:                  true,
+			IncludeLocked:           false,
+			DeleteCutoff:            &cutoff,
+			MinManifests:            -1,
+			MaxManifests:            -1,
+		}
+		result, err := GetUntaggedManifests(ctx, poolSize, mockClient, repoName, untaggedManifestsOptions, nil)
 
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(result), "Dry run should still apply age criteria")
@@ -808,7 +872,15 @@ func TestGetUntaggedManifestsWithMinAndAgeCriteria(t *testing.T) {
 			client.On("GetAcrManifests", ctx, repoName, "", "sha256:a").Return(second, nil).Once()
 			client.On("GetAcrManifests", ctx, repoName, "", "sha256:b").Return(createEmptyManifestsResult(), nil).Once()
 
-			result, err := GetUntaggedManifests(ctx, 1, client, repoName, false, nil, false, false, &cutoff, 2, -1)
+			untaggedManifestsOptions := UntaggedManifestsOptions{
+				PreserveAllOCIManifests: false,
+				DryRun:                  false,
+				IncludeLocked:           false,
+				DeleteCutoff:            &cutoff,
+				MinManifests:            2,
+				MaxManifests:            -1,
+			}
+			result, err := GetUntaggedManifests(ctx, 1, client, repoName, untaggedManifestsOptions, nil)
 			assert.NoError(t, err)
 			var digests []string
 			for _, manifest := range result {
@@ -826,7 +898,15 @@ func TestGetUntaggedManifestsWithMinAndAgeCriteria(t *testing.T) {
 			client.On("GetAcrManifests", ctx, repoName, "", "sha256:a").Return(second, nil).Once()
 			client.On("GetAcrManifests", ctx, repoName, "", "sha256:b").Return(createEmptyManifestsResult(), nil).Once()
 
-			result, err := GetUntaggedManifests(ctx, 1, client, repoName, false, nil, false, true, &cutoff, 2, -1)
+			untaggedManifestsOptions := UntaggedManifestsOptions{
+				PreserveAllOCIManifests: false,
+				DryRun:                  false,
+				IncludeLocked:           true,
+				DeleteCutoff:            &cutoff,
+				MinManifests:            2,
+				MaxManifests:            -1,
+			}
+			result, err := GetUntaggedManifests(ctx, 1, client, repoName, untaggedManifestsOptions, nil)
 			assert.NoError(t, err)
 			var digests []string
 			for _, manifest := range result {
@@ -849,7 +929,15 @@ func TestGetUntaggedManifestsWithMinAndAgeCriteria(t *testing.T) {
 		client.On("GetAcrManifests", ctx, repoName, "", "").Return(page, nil).Once()
 		client.On("GetAcrManifests", ctx, repoName, "", "sha256:cutoff").Return(createEmptyManifestsResult(), nil).Once()
 
-		result, err := GetUntaggedManifests(ctx, 1, client, repoName, false, nil, false, false, &cutoff, 1, -1)
+		untaggedManifestsOptions := UntaggedManifestsOptions{
+			PreserveAllOCIManifests: false,
+			DryRun:                  false,
+			IncludeLocked:           false,
+			DeleteCutoff:            &cutoff,
+			MinManifests:            1,
+			MaxManifests:            -1,
+		}
+		result, err := GetUntaggedManifests(ctx, 1, client, repoName, untaggedManifestsOptions, nil)
 		assert.NoError(t, err)
 		if assert.Len(t, result, 1) {
 			assert.Equal(t, "sha256:old", *result[0].Digest)
@@ -883,7 +971,15 @@ func TestGetUntaggedManifestsWithMinAndAgeCriteria(t *testing.T) {
 					expected = []string{"sha256:free"}
 				}
 
-				result, err := GetUntaggedManifests(ctx, 1, client, repoName, false, nil, false, false, &cutoff, 0, -1)
+				untaggedManifestsOptions := UntaggedManifestsOptions{
+					PreserveAllOCIManifests: false,
+					DryRun:                  false,
+					IncludeLocked:           false,
+					DeleteCutoff:            &cutoff,
+					MinManifests:            0,
+					MaxManifests:            -1,
+				}
+				result, err := GetUntaggedManifests(ctx, 1, client, repoName, untaggedManifestsOptions, nil)
 				assert.NoError(t, err)
 				var digests []string
 				for _, manifest := range result {
@@ -913,7 +1009,15 @@ func TestGetUntaggedManifestsWithMinAndAgeCriteria(t *testing.T) {
 			client.On("GetAcrManifests", ctx, repoName, "", "sha256:retained").Return(createEmptyManifestsResult(), nil).Once()
 			client.On("GetManifest", ctx, repoName, "sha256:parent").Return(content, nil).Once()
 
-			result, err := GetUntaggedManifests(ctx, 1, client, repoName, false, nil, false, false, &cutoff, 2, -1)
+			untaggedManifestsOptions := UntaggedManifestsOptions{
+				PreserveAllOCIManifests: false,
+				DryRun:                  false,
+				IncludeLocked:           false,
+				DeleteCutoff:            &cutoff,
+				MinManifests:            2,
+				MaxManifests:            -1,
+			}
+			result, err := GetUntaggedManifests(ctx, 1, client, repoName, untaggedManifestsOptions, nil)
 			assert.NoError(t, err)
 			if assert.Len(t, result, 1) {
 				assert.Equal(t, "sha256:free", *result[0].Digest)
@@ -929,7 +1033,15 @@ func TestGetUntaggedManifestsWithMinAndAgeCriteria(t *testing.T) {
 			client.On("GetAcrManifests", ctx, repoName, "", "sha256:retained").Return(createEmptyManifestsResult(), nil).Once()
 			client.On("GetManifest", ctx, repoName, "sha256:parent").Return(content, nil).Once()
 
-			result, err := GetUntaggedManifests(ctx, 1, client, repoName, false, nil, true, false, &cutoff, 2, -1)
+			untaggedManifestsOptions := UntaggedManifestsOptions{
+				PreserveAllOCIManifests: false,
+				DryRun:                  true,
+				IncludeLocked:           false,
+				DeleteCutoff:            &cutoff,
+				MinManifests:            2,
+				MaxManifests:            -1,
+			}
+			result, err := GetUntaggedManifests(ctx, 1, client, repoName, untaggedManifestsOptions, nil)
 			assert.NoError(t, err)
 			if assert.Len(t, result, 1) {
 				assert.Equal(t, "sha256:free", *result[0].Digest)
@@ -967,7 +1079,15 @@ func TestGetUntaggedManifestsWithMinMaxAndAgeCriteria(t *testing.T) {
 			client.On("GetAcrManifests", ctx, repoName, "", "sha256:a").Return(second, nil).Once()
 			client.On("GetAcrManifests", ctx, repoName, "", "sha256:c").Return(createEmptyManifestsResult(), nil).Once()
 
-			result, err := GetUntaggedManifests(ctx, 1, client, repoName, false, nil, false, false, &cutoff, 1, 3)
+			untaggedManifestsOptions := UntaggedManifestsOptions{
+				PreserveAllOCIManifests: false,
+				DryRun:                  false,
+				IncludeLocked:           false,
+				DeleteCutoff:            &cutoff,
+				MinManifests:            1,
+				MaxManifests:            3,
+			}
+			result, err := GetUntaggedManifests(ctx, 1, client, repoName, untaggedManifestsOptions, nil)
 			assert.NoError(t, err)
 			var digests []string
 			for _, manifest := range result {
@@ -987,7 +1107,15 @@ func TestGetUntaggedManifestsWithMinMaxAndAgeCriteria(t *testing.T) {
 			client.On("GetAcrManifests", ctx, repoName, "", "sha256:a").Return(second, nil).Once()
 			client.On("GetAcrManifests", ctx, repoName, "", "sha256:c").Return(createEmptyManifestsResult(), nil).Once()
 
-			result, err := GetUntaggedManifests(ctx, 1, client, repoName, false, nil, false, true, &cutoff, 1, 3)
+			untaggedManifestsOptions := UntaggedManifestsOptions{
+				PreserveAllOCIManifests: false,
+				DryRun:                  false,
+				IncludeLocked:           true,
+				DeleteCutoff:            &cutoff,
+				MinManifests:            1,
+				MaxManifests:            3,
+			}
+			result, err := GetUntaggedManifests(ctx, 1, client, repoName, untaggedManifestsOptions, nil)
 			assert.NoError(t, err)
 			var digests []string
 			for _, manifest := range result {
@@ -1014,7 +1142,15 @@ func TestGetUntaggedManifestsWithMinMaxAndAgeCriteria(t *testing.T) {
 		client.On("GetAcrManifests", ctx, repoName, "", "sha256:d").Return(second, nil).Once()
 		client.On("GetAcrManifests", ctx, repoName, "", "sha256:a").Return(createEmptyManifestsResult(), nil).Once()
 
-		result, err := GetUntaggedManifests(ctx, 1, client, repoName, false, nil, false, false, &cutoff, 1, 3)
+		untaggedManifestsOptions := UntaggedManifestsOptions{
+			PreserveAllOCIManifests: false,
+			DryRun:                  false,
+			IncludeLocked:           false,
+			DeleteCutoff:            &cutoff,
+			MinManifests:            1,
+			MaxManifests:            3,
+		}
+		result, err := GetUntaggedManifests(ctx, 1, client, repoName, untaggedManifestsOptions, nil)
 		assert.NoError(t, err)
 		var digests []string
 		for _, manifest := range result {
@@ -1033,7 +1169,15 @@ func TestGetUntaggedManifestsWithMinMaxAndAgeCriteria(t *testing.T) {
 		client.On("GetAcrManifests", ctx, repoName, "", "").Return(page, nil).Once()
 		client.On("GetAcrManifests", ctx, repoName, "", "sha256:a").Return(createEmptyManifestsResult(), nil).Once()
 
-		result, err := GetUntaggedManifests(ctx, 1, client, repoName, false, nil, false, false, &cutoff, 1, 1)
+		untaggedManifestsOptions := UntaggedManifestsOptions{
+			PreserveAllOCIManifests: false,
+			DryRun:                  false,
+			IncludeLocked:           false,
+			DeleteCutoff:            &cutoff,
+			MinManifests:            1,
+			MaxManifests:            1,
+		}
+		result, err := GetUntaggedManifests(ctx, 1, client, repoName, untaggedManifestsOptions, nil)
 		assert.NoError(t, err)
 		if assert.Len(t, result, 1) {
 			assert.Equal(t, "sha256:b", *result[0].Digest)
@@ -1052,7 +1196,15 @@ func TestGetUntaggedManifestsWithMinMaxAndAgeCriteria(t *testing.T) {
 		client.On("GetAcrManifests", ctx, repoName, "", "").Return(page, nil).Once()
 		client.On("GetAcrManifests", ctx, repoName, "", "sha256:invalid").Return(createEmptyManifestsResult(), nil).Once()
 
-		result, err := GetUntaggedManifests(ctx, 1, client, repoName, false, nil, false, false, &cutoff, 0, 0)
+		untaggedManifestsOptions := UntaggedManifestsOptions{
+			PreserveAllOCIManifests: false,
+			DryRun:                  false,
+			IncludeLocked:           false,
+			DeleteCutoff:            &cutoff,
+			MinManifests:            0,
+			MaxManifests:            0,
+		}
+		result, err := GetUntaggedManifests(ctx, 1, client, repoName, untaggedManifestsOptions, nil)
 		assert.NoError(t, err)
 		var digests []string
 		for _, manifest := range result {
@@ -1088,7 +1240,15 @@ func TestGetUntaggedManifestsWithMaxCriteria(t *testing.T) {
 			client.On("GetAcrManifests", ctx, repoName, "", "sha256:a").Return(second, nil).Once()
 			client.On("GetAcrManifests", ctx, repoName, "", "sha256:b").Return(createEmptyManifestsResult(), nil).Once()
 
-			result, err := GetUntaggedManifests(ctx, 1, client, repoName, false, nil, false, false, nil, -1, 2)
+			untaggedManifestsOptions := UntaggedManifestsOptions{
+				PreserveAllOCIManifests: false,
+				DryRun:                  false,
+				IncludeLocked:           false,
+				DeleteCutoff:            nil,
+				MinManifests:            -1,
+				MaxManifests:            2,
+			}
+			result, err := GetUntaggedManifests(ctx, 1, client, repoName, untaggedManifestsOptions, nil)
 			assert.NoError(t, err)
 			var digests []string
 			for _, manifest := range result {
@@ -1107,7 +1267,15 @@ func TestGetUntaggedManifestsWithMaxCriteria(t *testing.T) {
 			client.On("GetAcrManifests", ctx, repoName, "", "sha256:a").Return(second, nil).Once()
 			client.On("GetAcrManifests", ctx, repoName, "", "sha256:b").Return(createEmptyManifestsResult(), nil).Once()
 
-			result, err := GetUntaggedManifests(ctx, 1, client, repoName, false, nil, false, true, nil, -1, 2)
+			untaggedManifestsOptions := UntaggedManifestsOptions{
+				PreserveAllOCIManifests: false,
+				DryRun:                  false,
+				IncludeLocked:           true,
+				DeleteCutoff:            nil,
+				MinManifests:            -1,
+				MaxManifests:            2,
+			}
+			result, err := GetUntaggedManifests(ctx, 1, client, repoName, untaggedManifestsOptions, nil)
 			assert.NoError(t, err)
 			var digests []string
 			for _, manifest := range result {
@@ -1146,7 +1314,15 @@ func TestGetUntaggedManifestsWithMaxCriteria(t *testing.T) {
 					expected = []string{"sha256:free"}
 				}
 
-				result, err := GetUntaggedManifests(ctx, 1, client, repoName, false, nil, false, false, nil, -1, 0)
+				untaggedManifestsOptions := UntaggedManifestsOptions{
+					PreserveAllOCIManifests: false,
+					DryRun:                  false,
+					IncludeLocked:           false,
+					DeleteCutoff:            nil,
+					MinManifests:            -1,
+					MaxManifests:            0,
+				}
+				result, err := GetUntaggedManifests(ctx, 1, client, repoName, untaggedManifestsOptions, nil)
 				assert.NoError(t, err)
 				var digests []string
 				for _, manifest := range result {
@@ -1186,7 +1362,15 @@ func TestGetUntaggedManifestsWithMaxCriteria(t *testing.T) {
 					client.On("GetManifest", ctx, repoName, "sha256:parent").Return(content, nil).Times(parentReads)
 					client.On("GetManifest", ctx, repoName, "sha256:referrer").Return(referrerContent, nil).Once()
 
-					result, err := GetUntaggedManifests(ctx, 1, client, repoName, false, nil, false, false, nil, -1, 2)
+					untaggedManifestsOptions := UntaggedManifestsOptions{
+						PreserveAllOCIManifests: false,
+						DryRun:                  false,
+						IncludeLocked:           false,
+						DeleteCutoff:            nil,
+						MinManifests:            -1,
+						MaxManifests:            2,
+					}
+					result, err := GetUntaggedManifests(ctx, 1, client, repoName, untaggedManifestsOptions, nil)
 					assert.NoError(t, err)
 					if assert.Len(t, result, 1) {
 						assert.Equal(t, "sha256:free", *result[0].Digest)
@@ -1203,7 +1387,15 @@ func TestGetUntaggedManifestsWithMaxCriteria(t *testing.T) {
 					client.On("GetManifest", ctx, repoName, "sha256:parent").Return(content, nil).Times(parentReads)
 					client.On("GetManifest", ctx, repoName, "sha256:referrer").Return(referrerContent, nil).Once()
 
-					result, err := GetUntaggedManifests(ctx, 1, client, repoName, false, nil, false, true, nil, -1, 2)
+					untaggedManifestsOptions := UntaggedManifestsOptions{
+						PreserveAllOCIManifests: false,
+						DryRun:                  false,
+						IncludeLocked:           true,
+						DeleteCutoff:            nil,
+						MinManifests:            -1,
+						MaxManifests:            2,
+					}
+					result, err := GetUntaggedManifests(ctx, 1, client, repoName, untaggedManifestsOptions, nil)
 					assert.NoError(t, err)
 					if assert.Len(t, result, 1) {
 						assert.Equal(t, "sha256:free", *result[0].Digest)
@@ -1221,7 +1413,15 @@ func TestGetUntaggedManifestsWithMaxCriteria(t *testing.T) {
 					client.On("GetManifest", ctx, repoName, "sha256:parent").Return(content, nil).Times(parentReads)
 					client.On("GetManifest", ctx, repoName, "sha256:referrer").Return(referrerContent, nil).Once()
 
-					result, err := GetUntaggedManifests(ctx, 1, client, repoName, false, nil, true, false, nil, -1, 2)
+					untaggedManifestsOptions := UntaggedManifestsOptions{
+						PreserveAllOCIManifests: false,
+						DryRun:                  true,
+						IncludeLocked:           false,
+						DeleteCutoff:            nil,
+						MinManifests:            -1,
+						MaxManifests:            2,
+					}
+					result, err := GetUntaggedManifests(ctx, 1, client, repoName, untaggedManifestsOptions, nil)
 					assert.NoError(t, err)
 					if assert.Len(t, result, 1) {
 						assert.Equal(t, "sha256:free", *result[0].Digest)
