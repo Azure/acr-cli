@@ -261,19 +261,56 @@ A minimum of N adds **AND** behavior: delete an item only when it is older than 
 ```sh
 # Delete matching tags older than 3 days OR not within the newest 10.
 acr purge -r example --filter "repository:.*" --ago 3d --max-tags 10
+```
 
+Matching tags are ranked newest first within each repository:
+
+| Matching tag rank, newest first | Older than 3 days | Not older than 3 days |
+| --- | --- | --- |
+| 1–10 | Delete: age | Retain |
+| 11+ | Delete: age and maximum count | Delete: maximum count |
+
+```sh
 # Delete matching tags older than 3 days AND outside the newest 10.
 acr purge -r example --filter "repository:.*" --ago 3d --min-tags 10
+```
 
+| Matching tag rank, newest first | Older than 3 days | Not older than 3 days |
+| --- | --- | --- |
+| 1–10 | Retain | Retain |
+| 11+ | Delete: age | Retain |
+
+```sh
 # Protect the newest 10 matching tags; delete other matching tags if older than 3 days or outside the newest 50.
 acr purge -r example --filter "repository:.*" --ago 3d --min-tags 10 --max-tags 50
+```
 
+| Matching tag rank, newest first | Older than 3 days | Not older than 3 days |
+| --- | --- | --- |
+| 1–10 | Retain | Retain |
+| 11–50 | Delete: age | Retain |
+| 51+ | Delete: age and maximum count | Delete: maximum count |
+
+```sh
 # Keep the newest 10 matching tags and delete the rest, regardless of age.
 acr purge -r example --filter "repository:.*" --max-tags 10
+```
 
+| Matching tag rank, newest first | Deletion |
+| --- | --- |
+| 1–10 | Retain |
+| 11+ | Delete: maximum count |
+
+```sh
 # Protect the newest 20 dangling manifests; delete other dangling manifests if older than 3 days or outside the newest 100.
 acr purge -r example --filter "repository:.*" --untagged-only --ago 3d --min-untagged-manifests 20 --max-untagged-manifests 100
 ```
+
+| Dangling manifest rank, newest first | Older than 3 days | Not older than 3 days |
+| --- | --- | --- |
+| 1–20 | Retain | Retain |
+| 21–100 | Delete: age | Retain |
+| 101+ | Delete: age and maximum count | Delete: maximum count |
 
 All limits must be nonnegative. Zero is meaningful: a minimum of zero protects nothing, and a maximum of zero selects all matching items. Omission means no such limit. A minimum must not exceed its corresponding maximum, and requires `--ago` even if the minimum is zero. Manifest options require `--untagged` or `--untagged-only`; tag options cannot be used with `--untagged-only`. `--keep` cannot be combined with any minimum/maximum option.
 
@@ -282,6 +319,7 @@ Locked items are included when determining the newest N items for minimum and ma
 #### Dry run flag
 
 To know which tags and manifests would be deleted, the `--dry-run` flag can be set. Nothing will be deleted, and the output will show what would happen if the purge command were executed normally.
+Dry-run output includes the reason each tag or manifest would be deleted.
 An example of this would be:
 
 ```sh
@@ -291,6 +329,17 @@ acr purge \
     --ago 30d \
     --dry-run
 ```
+
+#### Verbose flag
+
+The `--verbose` flag shows detailed repository names during ABAC token operations. It also shows why each tag or manifest was deleted: `age`, `maximum count`, `age and maximum count`, or `untagged`. For example:
+
+```text
+Deleted example.azurecr.io/repository:old-tag (reason: age)
+Deleted example.azurecr.io/repository@sha256:... (reason: maximum count)
+```
+
+Untagged manifests selected with an explicit `--ago` report `age`; cleanup without age or count limits reports `untagged`. Skipped and failed deletions do not receive success reason suffixes. Without `--verbose`, live deletion output is unchanged. Retained-lock warnings for minimum/maximum policies continue to show reasons regardless of `--verbose`.
 
 #### Concurrency flag
 To control the number of concurrent purge tasks, the `--concurrency` flag should be set, the allowed range is [1, 32]. A default value will be used if `--concurrency` is not specified.

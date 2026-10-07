@@ -3,11 +3,8 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"io"
 	"net/http"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -79,7 +76,7 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, manifestDigest).Return(localDeletedResponse, nil).Once()
 
 		// Call purge with untaggedOnly=true
-		purgeOptions := purgeOptions{
+		opts := retentionOptions{
 			agoDuration:   nil, // no age specified; legacy cleanup includes all past manifests
 			keep:          0,   // keep is 0 for untagged-only
 			minTags:       -1,
@@ -94,7 +91,7 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 			mockClient,
 			testLoginURL,
 			defaultPoolSize,
-			purgeOptions,
+			opts,
 			60,
 			true, // removeUntaggedManifests
 			true, // untaggedOnly
@@ -141,7 +138,7 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 			tagFilters[repo] = ".*"
 		}
 
-		purgeOptions := purgeOptions{
+		opts := retentionOptions{
 			agoDuration:   nil, // no age specified; legacy cleanup includes all past manifests
 			keep:          0,   // keep is 0 for untagged-only
 			minTags:       -1,
@@ -156,7 +153,7 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 			mockClient,
 			testLoginURL,
 			defaultPoolSize,
-			purgeOptions,
+			opts,
 			60,
 			true, // removeUntaggedManifests
 			true, // untaggedOnly
@@ -220,7 +217,7 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 		}
 		mockClient.On("DeleteManifest", mock.Anything, "specific-repo", manifestDigest).Return(localDeletedResponse, nil).Once()
 
-		purgeOptions := purgeOptions{
+		opts := retentionOptions{
 			agoDuration:   nil, // no age specified; legacy cleanup includes all past manifests
 			keep:          0,   // keep is 0 for untagged-only
 			minTags:       -1,
@@ -235,7 +232,7 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 			mockClient,
 			testLoginURL,
 			defaultPoolSize,
-			purgeOptions,
+			opts,
 			60,
 			true, // removeUntaggedManifests
 			true, // untaggedOnly
@@ -294,7 +291,7 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 		// Note: GetManifest is not called for untagged manifests
 		// No DeleteManifest call expected in dry-run mode
 
-		purgeOptions := purgeOptions{
+		opts := retentionOptions{
 			agoDuration:   nil, // no age specified; legacy cleanup includes all past manifests
 			keep:          0,   // keep is 0 for untagged-only
 			minTags:       -1,
@@ -309,7 +306,7 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 			mockClient,
 			testLoginURL,
 			defaultPoolSize,
-			purgeOptions,
+			opts,
 			60,
 			true, // removeUntaggedManifests
 			true, // untaggedOnly
@@ -385,7 +382,7 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, unlockedDigest).Return(localDeletedResponse, nil).Once()
 		// No delete call for locked manifest
 
-		purgeOptions := purgeOptions{
+		opts := retentionOptions{
 			agoDuration:   nil, // no age specified; legacy cleanup includes all past manifests
 			keep:          0,   // keep is 0 for untagged-only
 			minTags:       -1,
@@ -400,7 +397,7 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 			mockClient,
 			testLoginURL,
 			defaultPoolSize,
-			purgeOptions,
+			opts,
 			60,
 			true, // removeUntaggedManifests
 			true, // untaggedOnly
@@ -473,7 +470,7 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 		}
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, lockedDigest).Return(localDeletedResponse, nil).Once()
 
-		purgeOptions := purgeOptions{
+		opts := retentionOptions{
 			agoDuration:   nil, // no age specified; legacy cleanup includes all past manifests
 			keep:          0,   // keep is 0 for untagged-only
 			minTags:       -1,
@@ -488,7 +485,7 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 			mockClient,
 			testLoginURL,
 			defaultPoolSize,
-			purgeOptions,
+			opts,
 			60,
 			true, // removeUntaggedManifests
 			true, // untaggedOnly
@@ -590,8 +587,8 @@ func TestPurgeDanglingManifestsWithAgoAndKeep(t *testing.T) {
 
 		// Call with 300 days ago (should only delete the old manifest from 2023)
 		agoDuration := mustParseDuration("300d")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
 
 		assert.Nil(err, "Should not return error")
 		assert.Equal(1, deletedCount, "Should delete only the old manifest")
@@ -636,8 +633,8 @@ func TestPurgeDanglingManifestsWithAgoAndKeep(t *testing.T) {
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:medium").Return(nil, nil).Once()
 
 		// Call with keep=2 (should preserve the 2 most recent manifests)
-		purgeOptions := purgeOptions{agoDuration: nil, keep: 2, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
+		opts := retentionOptions{agoDuration: nil, keep: 2, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
 
 		assert.Nil(err, "Should not return error")
 		assert.Equal(3, deletedCount, "Should delete 3 manifests, keeping 2 most recent")
@@ -683,8 +680,8 @@ func TestPurgeDanglingManifestsWithAgoAndKeep(t *testing.T) {
 
 		// Call with both age filter (300 days) and keep (keep 1 of the old ones)
 		agoDuration := mustParseDuration("300d")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 1, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 1, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
 
 		assert.Nil(err, "Should not return error")
 		assert.Equal(2, deletedCount, "Should delete 2 old manifests, keeping 1 old + all recent ones")
@@ -721,25 +718,16 @@ func TestPurgeDanglingManifestsWithAgoAndKeep(t *testing.T) {
 		// No UpdateAcrManifestAttributes calls expected for dry run
 
 		// Call with dry run and age filter
-		oldStdout := os.Stdout
-		reader, writer, err := os.Pipe()
-		if !assert.NoError(err) {
-			t.FailNow()
-		}
-		os.Stdout = writer
-		t.Cleanup(func() { os.Stdout = oldStdout; _ = reader.Close(); _ = writer.Close() })
 		agoDuration := mustParseDuration("300d")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: true, includeLocked: false}
-		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
-		assert.NoError(writer.Close())
-		os.Stdout = oldStdout
-		output, readErr := io.ReadAll(reader)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: true, includeLocked: false}
+		output := capturePurgeOutput(t, func() {
+			deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
+			assert.Nil(err, "Should not return error")
+			assert.Equal(1, deletedCount, "Should report 1 manifest would be deleted")
+		})
 
-		assert.NoError(readErr)
 		assert.Equal("Would delete manifests for repository: "+testRepo+"\n"+
-			"Would delete: "+testLoginURL+"/"+testRepo+"@sha256:old123 (reason: age)\n", string(output))
-		assert.Nil(err, "Should not return error")
-		assert.Equal(1, deletedCount, "Should report 1 manifest would be deleted")
+			"Would delete: "+testLoginURL+"/"+testRepo+"@sha256:old123 (reason: age)\n", output)
 		mockClient.AssertExpectations(t)
 	})
 
@@ -776,8 +764,8 @@ func TestPurgeDanglingManifestsWithAgoAndKeep(t *testing.T) {
 		// No DeleteManifest calls expected - keep exceeds manifest count
 
 		// Call with keep=10 but only 3 manifests exist - should delete nothing
-		purgeOptions := purgeOptions{agoDuration: nil, keep: 10, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
+		opts := retentionOptions{agoDuration: nil, keep: 10, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
 
 		assert.Nil(err, "Should not return error")
 		assert.Equal(0, deletedCount, "Should delete 0 manifests when keep exceeds manifest count")
@@ -817,8 +805,8 @@ func TestPurgeDanglingManifestsWithAgoAndKeep(t *testing.T) {
 		// No DeleteManifest calls expected - keep equals manifest count
 
 		// Call with keep=3 and exactly 3 manifests - should delete nothing
-		purgeOptions := purgeOptions{agoDuration: nil, keep: 3, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
+		opts := retentionOptions{agoDuration: nil, keep: 3, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
 
 		assert.Nil(err, "Should not return error")
 		assert.Equal(0, deletedCount, "Should delete 0 manifests when keep equals manifest count")
@@ -871,8 +859,8 @@ func TestPurgeDanglingManifestsWithMax(t *testing.T) {
 		}`), nil).Twice()
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:eligible").Return(nil, nil).Once()
 
-		purgeOptions := purgeOptions{agoDuration: nil, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: 1, dryRun: false, includeLocked: false}
-		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
+		opts := retentionOptions{agoDuration: nil, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: 1, dryRun: false, includeLocked: false}
+		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
 
 		assert.Nil(err, "Should not return error when a locked index follows its child on a later page")
 		assert.Equal(1, deletedCount, "Should retain the locked overflow index and its selected child without deleting the protected newest manifest")
@@ -919,8 +907,8 @@ func TestPurgeDanglingManifestsWithMax(t *testing.T) {
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:third").Return(nil, nil).Once()
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:oldest").Return(nil, nil).Once()
 
-		purgeOptions := purgeOptions{agoDuration: nil, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: 2, dryRun: false, includeLocked: false}
-		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
+		opts := retentionOptions{agoDuration: nil, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: 2, dryRun: false, includeLocked: false}
+		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
 
 		assert.Nil(err, "Should not return error when applying the maximum across pages")
 		assert.Equal(2, deletedCount, "Should delete the 2 oldest manifests, preserving the 2 newest")
@@ -963,24 +951,15 @@ func TestPurgeDanglingManifestsWithMax(t *testing.T) {
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:second").Return(secondPageResult, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:newest").Return(emptyResult, nil).Once()
 
-		oldStdout := os.Stdout
-		reader, writer, err := os.Pipe()
-		if !assert.Nil(err, "Should create a pipe to capture dry-run output") {
-			t.FailNow()
-		}
-		os.Stdout = writer
-		t.Cleanup(func() { os.Stdout = oldStdout; _ = reader.Close(); _ = writer.Close() })
-		purgeOptions := purgeOptions{agoDuration: nil, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: 2, dryRun: true, includeLocked: false}
-		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
-		assert.Nil(writer.Close(), "Should close the dry-run output writer")
-		os.Stdout = oldStdout
-		output, readErr := io.ReadAll(reader)
+		opts := retentionOptions{agoDuration: nil, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: 2, dryRun: true, includeLocked: false}
+		output := capturePurgeOutput(t, func() {
+			deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
+			assert.Nil(err, "Should not return error when reporting maximum overflow")
+			assert.Equal(2, deletedCount, "Should report both future and old manifests beyond the maximum without an age policy")
+		})
 
-		assert.Nil(readErr, "Should read the captured dry-run output")
-		assert.Nil(err, "Should not return error when reporting maximum overflow")
-		assert.Equal(2, deletedCount, "Should report both future and old manifests beyond the maximum without an age policy")
 		var actualLines []string
-		for _, line := range strings.Split(string(output), "\n") {
+		for _, line := range strings.Split(output, "\n") {
 			if strings.HasPrefix(line, "Would delete:") {
 				actualLines = append(actualLines, line)
 			}
@@ -1037,8 +1016,8 @@ func TestPurgeDanglingManifestsWithAgoAndMin(t *testing.T) {
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:eligible").Return(nil, nil).Once()
 
 		agoDuration := mustParseDuration("1d")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 2, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 2, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
 
 		assert.Nil(err, "Should not return error when the minimum retains an old index")
 		assert.Equal(1, deletedCount, "Should delete only the unreferenced old manifest, without replacing the protected child with a top-2 deletion")
@@ -1077,8 +1056,8 @@ func TestPurgeDanglingManifestsWithAgoAndMin(t *testing.T) {
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:eligible").Return(nil, nil).Once()
 
 		agoDuration := mustParseDuration("1d")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
 
 		assert.Nil(err, "Should not return error when an age-eligible manifest is write-locked")
 		assert.Equal(1, deletedCount, "Should retain the locked old manifest in addition to the minimum, deleting only unlocked old overflow")
@@ -1115,8 +1094,8 @@ func TestPurgeDanglingManifestsWithAgoAndMin(t *testing.T) {
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:oldest").Return(emptyResult, nil).Once()
 
 		agoDuration := mustParseDuration("1d")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 5, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 5, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
 
 		assert.Nil(err, "Should not return error when the minimum exceeds the manifest count")
 		assert.Equal(0, deletedCount, "Should protect all 4 old manifests when the minimum is 5")
@@ -1154,25 +1133,16 @@ func TestPurgeDanglingManifestsWithAgoAndMin(t *testing.T) {
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(manifestsResult, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:oldest").Return(emptyResult, nil).Once()
 
-		oldStdout := os.Stdout
-		reader, writer, err := os.Pipe()
-		if !assert.Nil(err, "Should create a pipe to capture dry-run output") {
-			t.FailNow()
-		}
-		os.Stdout = writer
-		t.Cleanup(func() { os.Stdout = oldStdout; _ = reader.Close(); _ = writer.Close() })
 		agoDuration := mustParseDuration("1d")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 2, maxManifests: -1, dryRun: true, includeLocked: false}
-		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
-		assert.Nil(writer.Close(), "Should close the dry-run output writer")
-		os.Stdout = oldStdout
-		output, readErr := io.ReadAll(reader)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 2, maxManifests: -1, dryRun: true, includeLocked: false}
+		output := capturePurgeOutput(t, func() {
+			deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
+			assert.Nil(err, "Should not return error when reporting old manifests beyond the minimum")
+			assert.Equal(2, deletedCount, "Should report the 2 oldest manifests, protecting the 2 newest")
+		})
 
-		assert.Nil(readErr, "Should read the captured dry-run output")
-		assert.Nil(err, "Should not return error when reporting old manifests beyond the minimum")
-		assert.Equal(2, deletedCount, "Should report the 2 oldest manifests, protecting the 2 newest")
 		var actualLines []string
-		for _, line := range strings.Split(string(output), "\n") {
+		for _, line := range strings.Split(output, "\n") {
 			if strings.HasPrefix(line, "Would delete:") {
 				actualLines = append(actualLines, line)
 			}
@@ -1230,8 +1200,8 @@ func TestPurgeDanglingManifestsWithAgoMinAndMax(t *testing.T) {
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:eligible").Return(nil, nil).Once()
 
 		agoDuration := mustParseDuration("1d")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 1, maxManifests: 3, dryRun: false, includeLocked: false}
-		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 1, maxManifests: 3, dryRun: false, includeLocked: false}
+		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
 
 		assert.Nil(err, "Should not return error when age retains an index between the minimum and maximum")
 		assert.Equal(1, deletedCount, "Should retain 4 manifests despite max=3, protecting the old child without replacement deletions")
@@ -1272,8 +1242,8 @@ func TestPurgeDanglingManifestsWithAgoMinAndMax(t *testing.T) {
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:eligible").Return(nil, nil).Once()
 
 		agoDuration := mustParseDuration("1d")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 1, maxManifests: 2, dryRun: false, includeLocked: false}
-		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 1, maxManifests: 2, dryRun: false, includeLocked: false}
+		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
 
 		assert.Nil(err, "Should not return error when old overflow is locked")
 		assert.Equal(1, deletedCount, "Should delete only unlocked old overflow, without compensating for the locked manifest")
@@ -1332,8 +1302,8 @@ func TestPurgeDanglingManifestsWithAgoMinAndMax(t *testing.T) {
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:selected-child").Return(nil, nil).Once()
 
 		agoDuration := mustParseDuration("1d")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 1, maxManifests: 2, dryRun: false, includeLocked: true}
-		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 1, maxManifests: 2, dryRun: false, includeLocked: true}
+		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
 
 		assert.Nil(err, "Should not return error when unlocking selected manifests and indexes")
 		assert.Equal(3, deletedCount, "Should delete the age-selected locked manifest, maximum-selected locked index, and its unprotected child")
@@ -1388,27 +1358,18 @@ func TestPurgeDanglingManifestsWithAgoMinAndMax(t *testing.T) {
 			"manifests": [{"digest": "sha256:selected-child", "mediaType": "application/vnd.docker.distribution.manifest.v2+json"}]
 		}`), nil).Once()
 
-		oldStdout := os.Stdout
-		reader, writer, err := os.Pipe()
-		if !assert.NoError(err) {
-			t.FailNow()
-		}
-		os.Stdout = writer
-		t.Cleanup(func() { os.Stdout = oldStdout; _ = reader.Close(); _ = writer.Close() })
 		agoDuration := mustParseDuration("1d")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 1, maxManifests: 2, dryRun: true, includeLocked: true}
-		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
-		assert.NoError(writer.Close())
-		os.Stdout = oldStdout
-		output, readErr := io.ReadAll(reader)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 1, maxManifests: 2, dryRun: true, includeLocked: true}
+		output := capturePurgeOutput(t, func() {
+			deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
+			assert.Nil(err, "Should not return error when previewing selected locked manifests and indexes")
+			assert.Equal(3, deletedCount, "Should report the same 3 deletions as live include-locked, excluding the retained index and its child")
+		})
 
-		assert.NoError(readErr)
 		assert.Equal("Would delete manifests for repository: "+testRepo+"\n"+
 			"Would delete: "+testLoginURL+"/"+testRepo+"@sha256:locked (reason: age)\n"+
 			"Would delete: "+testLoginURL+"/"+testRepo+"@sha256:locked-index (reason: age and maximum count)\n"+
-			"Would delete: "+testLoginURL+"/"+testRepo+"@sha256:selected-child (reason: age and maximum count)\n", string(output))
-		assert.Nil(err, "Should not return error when previewing selected locked manifests and indexes")
-		assert.Equal(3, deletedCount, "Should report the same 3 deletions as live include-locked, excluding the retained index and its child")
+			"Would delete: "+testLoginURL+"/"+testRepo+"@sha256:selected-child (reason: age and maximum count)\n", output)
 		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, mock.Anything, mock.Anything)
 		mockClient.AssertNotCalled(t, "UpdateAcrManifestAttributes", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 		mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, mock.Anything, mock.Anything)
@@ -1445,8 +1406,8 @@ func TestPurgeDanglingManifestsWithAgoMinAndMax(t *testing.T) {
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:oldest").Return(nil, nil).Once()
 
 		agoDuration := mustParseDuration("1d")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 1, maxManifests: 3, dryRun: false, includeLocked: false}
-		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 1, maxManifests: 3, dryRun: false, includeLocked: false}
+		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
 
 		assert.Nil(err, "Should not return error when the maximum overrides age protection")
 		assert.Equal(1, deletedCount, "Should delete only the recent manifest beyond the maximum of 3")
@@ -1496,13 +1457,8 @@ func TestPurgeAbacVerboseMode(t *testing.T) {
 			tagFilters[repo] = ".*"
 		}
 
-		// Capture stdout to verify verbose output
-		oldStdout := os.Stdout
-		r, w, _ := os.Pipe()
-		os.Stdout = w
-
 		// Call purge with verbose=true and ABAC enabled
-		purgeOptions := purgeOptions{
+		opts := retentionOptions{
 			agoDuration:   nil, // ago
 			keep:          0,   // keep
 			minTags:       -1,
@@ -1512,35 +1468,24 @@ func TestPurgeAbacVerboseMode(t *testing.T) {
 			dryRun:        false, // dryRun
 			includeLocked: false, // includeLocked
 		}
-		deletedTagsCount, deletedManifestsCount, purgeErr := purge(
-			testCtx,
-			mockClient,
-			testLoginURL,
-			defaultPoolSize,
-			purgeOptions,
-			60,   // filterTimeout
-			true, // removeUntaggedManifests
-			true, // untaggedOnly
-			tagFilters,
-			true, // verbose = true
-		)
+		output := capturePurgeOutput(t, func() {
+			deletedTagsCount, deletedManifestsCount, purgeErr := purge(
+				testCtx,
+				mockClient,
+				testLoginURL,
+				defaultPoolSize,
+				opts,
+				60,   // filterTimeout
+				true, // removeUntaggedManifests
+				true, // untaggedOnly
+				tagFilters,
+				true, // verbose = true
+			)
+			assert.Equal(0, deletedTagsCount, "No tags should be deleted")
+			assert.Equal(0, deletedManifestsCount, "No manifests deleted when none are untagged")
+			assert.Nil(purgeErr, "Error should be nil")
+		})
 
-		// Restore stdout and read captured output
-		err := w.Close()
-		if err != nil {
-			t.Fatalf("Failed to close pipe writer: %v", err)
-		}
-		os.Stdout = oldStdout
-		var buf bytes.Buffer
-		_, err = io.Copy(&buf, r)
-		if err != nil {
-			t.Fatalf("Failed to read from pipe: %v", err)
-		}
-		output := buf.String()
-
-		assert.Equal(0, deletedTagsCount, "No tags should be deleted")
-		assert.Equal(0, deletedManifestsCount, "No manifests deleted when none are untagged")
-		assert.Nil(purgeErr, "Error should be nil")
 		// Verify verbose output contains repository names
 		assert.Contains(output, "ABAC: Setting token scope for 3 repositories:", "Should output repo count")
 		assert.Contains(output, "repo1", "Should output repo1 in verbose mode")
@@ -1579,13 +1524,8 @@ func TestPurgeAbacVerboseMode(t *testing.T) {
 			tagFilters[repo] = ".*"
 		}
 
-		// Capture stdout to verify non-verbose output
-		oldStdout := os.Stdout
-		r, w, _ := os.Pipe()
-		os.Stdout = w
-
 		// Call purge with verbose=false and ABAC enabled
-		purgeOptions := purgeOptions{
+		opts := retentionOptions{
 			agoDuration:   nil, // ago
 			keep:          0,   // keep
 			minTags:       -1,
@@ -1595,35 +1535,24 @@ func TestPurgeAbacVerboseMode(t *testing.T) {
 			dryRun:        false, // dryRun
 			includeLocked: false, // includeLocked
 		}
-		deletedTagsCount, deletedManifestsCount, purgeErr := purge(
-			testCtx,
-			mockClient,
-			testLoginURL,
-			defaultPoolSize,
-			purgeOptions,
-			60,   // filterTimeout
-			true, // removeUntaggedManifests
-			true, // untaggedOnly
-			tagFilters,
-			false, // verbose = false
-		)
+		output := capturePurgeOutput(t, func() {
+			deletedTagsCount, deletedManifestsCount, purgeErr := purge(
+				testCtx,
+				mockClient,
+				testLoginURL,
+				defaultPoolSize,
+				opts,
+				60,   // filterTimeout
+				true, // removeUntaggedManifests
+				true, // untaggedOnly
+				tagFilters,
+				false, // verbose = false
+			)
+			assert.Equal(0, deletedTagsCount, "No tags should be deleted")
+			assert.Equal(0, deletedManifestsCount, "No manifests deleted when none are untagged")
+			assert.Nil(purgeErr, "Error should be nil")
+		})
 
-		// Restore stdout and read captured output
-		err := w.Close()
-		if err != nil {
-			t.Fatalf("Failed to close pipe writer: %v", err)
-		}
-		os.Stdout = oldStdout
-		var buf bytes.Buffer
-		_, err = io.Copy(&buf, r)
-		if err != nil {
-			t.Fatalf("Failed to read from pipe: %v", err)
-		}
-		output := buf.String()
-
-		assert.Equal(0, deletedTagsCount, "No tags should be deleted")
-		assert.Equal(0, deletedManifestsCount, "No manifests deleted when none are untagged")
-		assert.Nil(purgeErr, "Error should be nil")
 		// Verify non-verbose output contains count but NOT the repository list
 		assert.Contains(output, "ABAC: Setting token scope for 3 repositories", "Should output repo count")
 		// The non-verbose output should NOT contain the bracketed list of repos
@@ -1653,7 +1582,7 @@ func TestPurgeAbacVerboseMode(t *testing.T) {
 		mockClient.On("GetAcrManifests", mock.Anything, "test-repo", "", "").Return(emptyManifestsResult, nil).Once()
 
 		// Call purge with verbose=true but non-ABAC registry
-		purgeOptions := purgeOptions{
+		opts := retentionOptions{
 			agoDuration:   nil, // ago
 			keep:          0,   // keep
 			minTags:       -1,
@@ -1668,7 +1597,7 @@ func TestPurgeAbacVerboseMode(t *testing.T) {
 			mockClient,
 			testLoginURL,
 			defaultPoolSize,
-			purgeOptions,
+			opts,
 			60,   // filterTimeout
 			true, // removeUntaggedManifests
 			true, // untaggedOnly

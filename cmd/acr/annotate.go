@@ -307,7 +307,7 @@ func annotateUntaggedManifests(ctx context.Context,
 	// Contrary to getTagsToAnnotate, getManifests gets all the manifests at once.
 	// This was done because if there is a manifest that has no tag but is referenced by a multiarch manifest that has tags then it
 	// should not be annotated.
-	untaggedManifestsOptions := repository.UntaggedManifestsOptions{
+	opts := repository.UntaggedManifestsOptions{
 		PreserveAllOCIManifests: true,
 		DryRun:                  dryRun,
 		IncludeLocked:           includeLocked,
@@ -315,7 +315,7 @@ func annotateUntaggedManifests(ctx context.Context,
 		MinManifests:            -1,
 		MaxManifests:            -1,
 	}
-	manifestsToAnnotate, err := repository.GetUntaggedManifests(ctx, poolSize, acrClient, repoName, untaggedManifestsOptions, nil)
+	manifestsToAnnotate, err := repository.GetUntaggedManifests(ctx, poolSize, acrClient, repoName, opts, nil)
 	if err != nil {
 		return -1, err
 	}

@@ -45,8 +45,8 @@ func TestPurgeTags(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(TagWithLocal, nil).Once()
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, "v1-c-local.test").Return(&deletedResponse, nil).Once()
-		purgeOptions := purgeOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, ".*-?local[.].+", 60)
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*-?local[.].+", 60, false)
 		assert.Equal(1, deletedTags, "Number of deleted elements should be 1")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -59,8 +59,8 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(FourTagsWithRepoFilterMatch, nil).Once()
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, "v1-c").Return(&deletedResponse, nil).Once()
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, "v1-b").Return(&deletedResponse, nil).Once()
-		purgeOptions := purgeOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, "v1(?!-a)", 60)
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "v1(?!-a)", 60, false)
 		assert.Equal(2, deletedTags, "Number of deleted elements should be 2")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -72,8 +72,8 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(FourTagsWithRepoFilterMatch, nil).Once()
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, "v1-c").Return(&deletedResponse, nil).Once()
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, "v1-b").Return(&deletedResponse, nil).Once()
-		purgeOptions := purgeOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, "v1-*[abc]+(?<!-[a])", 60)
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "v1-*[abc]+(?<!-[a])", 60, false)
 		assert.Equal(2, deletedTags, "Number of deleted elements should be 2")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -86,8 +86,8 @@ func TestPurgeTags(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(notFoundTagResponse, errors.New("testRepo not found")).Once()
 		agoDuration := mustParseDuration("1d")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, "[\\s\\S]*", 60)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "[\\s\\S]*", 60, false)
 		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -99,8 +99,8 @@ func TestPurgeTags(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(EmptyListTagsResult, nil).Once()
 		agoDuration := mustParseDuration("1d")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, "[\\s\\S]*", 60)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "[\\s\\S]*", 60, false)
 		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -113,8 +113,8 @@ func TestPurgeTags(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(OneTagResult, nil).Once()
 		agoDuration := mustParseDuration("1d")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, "[\\s\\S]*", 60)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "[\\s\\S]*", 60, false)
 		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -126,8 +126,8 @@ func TestPurgeTags(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(OneTagResult, nil).Once()
-		purgeOptions := purgeOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, "^hello.*", 60)
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "^hello.*", 60, false)
 		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -137,8 +137,8 @@ func TestPurgeTags(t *testing.T) {
 	t.Run("InvalidRegexTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
-		purgeOptions := purgeOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, "[", 60)
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "[", 60, false)
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
 		assert.NotEqual(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -150,8 +150,8 @@ func TestPurgeTags(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(nil, errors.New("unauthorized")).Once()
 		agoDuration := mustParseDuration("1d")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, "[\\s\\S]*", 60)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "[\\s\\S]*", 60, false)
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
@@ -165,8 +165,8 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(OneTagResultWithNext, nil).Once()
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "latest").Return(nil, errors.New("unauthorized")).Once()
 		agoDuration := mustParseDuration("1d")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, "[\\s\\S]*", 60)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "[\\s\\S]*", 60, false)
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
@@ -178,8 +178,8 @@ func TestPurgeTags(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(DeleteDisabledOneTagResult, nil).Once()
-		purgeOptions := purgeOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, "^la.*", 60)
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "^la.*", 60, false)
 		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -189,8 +189,8 @@ func TestPurgeTags(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(WriteDisabledOneTagResult, nil).Once()
-		purgeOptions := purgeOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, "^la.*", 60)
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "^la.*", 60, false)
 		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -201,8 +201,8 @@ func TestPurgeTags(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(InvalidDateOneTagResult, nil).Once()
-		purgeOptions := purgeOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, "^la.*", 60)
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "^la.*", 60, false)
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
@@ -215,8 +215,8 @@ func TestPurgeTags(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(OneTagResult, nil).Once()
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, "latest").Return(&deletedResponse, nil).Once()
-		purgeOptions := purgeOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, "^la.*", 60)
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "^la.*", 60, false)
 		assert.Equal(1, deletedTags, "Number of deleted elements should be 1")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -234,8 +234,8 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, "v2").Return(&deletedResponse, nil).Once()
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, "v3").Return(&deletedResponse, nil).Once()
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, "v4").Return(&deletedResponse, nil).Once()
-		purgeOptions := purgeOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, "[\\s\\S]*", 60)
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "[\\s\\S]*", 60, false)
 		assert.Equal(5, deletedTags, "Number of deleted elements should be 5")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -247,11 +247,16 @@ func TestPurgeTags(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(OneTagResult, nil).Once()
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, "latest").Return(&notFoundResponse, errors.New("not found")).Once()
-		purgeOptions := purgeOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, "^la.*", 60)
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		output := capturePurgeOutput(t, func() {
+			deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "^la.*", 60, true)
+			assert.Equal(1, deletedTags, "Number of deleted elements should be 1")
+			assert.NoError(err)
+		})
 		// If it is not found it can be assumed deleted.
-		assert.Equal(1, deletedTags, "Number of deleted elements should be 1")
-		assert.Equal(nil, err, "Error should be nil")
+		assert.Contains(output, "Skipped ")
+		assert.NotContains(output, "(reason:")
+		assert.NotContains(output, "Deleted ")
 		mockClient.AssertExpectations(t)
 	})
 
@@ -259,12 +264,18 @@ func TestPurgeTags(t *testing.T) {
 	t.Run("DeleteErrorTest", func(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
+		deleteErr := errors.New("error during delete")
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(OneTagResult, nil).Once()
-		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, "latest").Return(nil, errors.New("error during delete")).Once()
-		purgeOptions := purgeOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, "^la.*", 60)
-		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
-		assert.NotEqual(nil, err, "Error should not be nil")
+		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, "latest").Return(nil, deleteErr).Once()
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		output := capturePurgeOutput(t, func() {
+			deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "^la.*", 60, true)
+			assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
+			assert.ErrorIs(err, deleteErr)
+		})
+		assert.Contains(output, "Failed to delete ")
+		assert.NotContains(output, "(reason:")
+		assert.NotContains(output, "Deleted ")
 		mockClient.AssertExpectations(t)
 	})
 
@@ -275,8 +286,8 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, "v2").Return(&deletedResponse, nil).Once()
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, "v3").Return(&deletedResponse, nil).Once()
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, "v4").Return(&deletedResponse, nil).Once()
-		purgeOptions := purgeOptions{agoDuration: &defaultAgoDuration, keep: 1, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, "[\\s\\S]*", 60)
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 1, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "[\\s\\S]*", 60, false)
 		assert.Equal(3, deletedTags, "Number of deleted elements should be 3")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -288,8 +299,8 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(FourTagsWithRepoFilterMatch, nil).Once()
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, "v1-c").Return(&deletedResponse, nil).Once()
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, "v1-b").Return(&deletedResponse, nil).Once()
-		purgeOptions := purgeOptions{agoDuration: &defaultAgoDuration, keep: 1, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, "v1-.*", 60)
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 1, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "v1-.*", 60, false)
 		assert.Equal(2, deletedTags, "Number of deleted elements should be 2")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -301,8 +312,8 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(FourTagsWithRepoFilterMatch, nil).Once()
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, "v1-c").Return(&deletedResponse, nil).Once()
 		agoDuration := mustParseDuration("30m")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 1, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, "v1-.*", 60)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 1, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "v1-.*", 60, false)
 		assert.Equal(1, deletedTags, "Number of deleted elements should be 1")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -312,23 +323,14 @@ func TestPurgeTags(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(OneTagResult, nil).Once()
-		oldStdout := os.Stdout
-		reader, writer, err := os.Pipe()
-		if !assert.NoError(err) {
-			t.FailNow()
-		}
-		os.Stdout = writer
-		t.Cleanup(func() { os.Stdout = oldStdout; _ = reader.Close(); _ = writer.Close() })
-		purgeOptions := purgeOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: true, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, ".*", 60)
-		assert.NoError(writer.Close())
-		os.Stdout = oldStdout
-		output, readErr := io.ReadAll(reader)
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: true, includeLocked: false}
+		output := capturePurgeOutput(t, func() {
+			deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", 60, false)
+			assert.NoError(err)
+			assert.Equal(1, deletedTags)
+		})
 
-		assert.NoError(readErr)
-		assert.NoError(err)
-		assert.Equal(1, deletedTags)
-		assert.Equal(fmt.Sprintf("Would delete tags for repository: %s\nWould delete: %s/%s:latest (reason: age)\n", testRepo, testLoginURL, testRepo), string(output))
+		assert.Equal(fmt.Sprintf("Would delete tags for repository: %s\nWould delete: %s/%s:latest (reason: age)\n", testRepo, testLoginURL, testRepo), output)
 		mockClient.AssertExpectations(t)
 	})
 
@@ -336,23 +338,14 @@ func TestPurgeTags(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(FourTagsResult, nil).Once()
-		oldStdout := os.Stdout
-		reader, writer, err := os.Pipe()
-		if !assert.NoError(err) {
-			t.FailNow()
-		}
-		os.Stdout = writer
-		t.Cleanup(func() { os.Stdout = oldStdout; _ = reader.Close(); _ = writer.Close() })
-		purgeOptions := purgeOptions{agoDuration: &defaultAgoDuration, keep: 1, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: true, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, ".*", 60)
-		assert.NoError(writer.Close())
-		os.Stdout = oldStdout
-		output, readErr := io.ReadAll(reader)
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 1, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: true, includeLocked: false}
+		output := capturePurgeOutput(t, func() {
+			deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", 60, false)
+			assert.NoError(err)
+			assert.Equal(3, deletedTags)
+		})
 
-		assert.NoError(readErr)
-		assert.NoError(err)
-		assert.Equal(3, deletedTags)
-		assert.Equal(fmt.Sprintf("Would delete tags for repository: %s\nWould delete: %s/%s:v2 (reason: age)\nWould delete: %s/%s:v3 (reason: age)\nWould delete: %s/%s:v4 (reason: age)\n", testRepo, testLoginURL, testRepo, testLoginURL, testRepo, testLoginURL, testRepo), string(output))
+		assert.Equal(fmt.Sprintf("Would delete tags for repository: %s\nWould delete: %s/%s:v2 (reason: age)\nWould delete: %s/%s:v3 (reason: age)\nWould delete: %s/%s:v4 (reason: age)\n", testRepo, testLoginURL, testRepo, testLoginURL, testRepo, testLoginURL, testRepo), output)
 		mockClient.AssertExpectations(t)
 	})
 
@@ -382,8 +375,8 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, third).Return(&deletedResponse, nil).Once()
 
 		agoDuration := mustParseDuration("1d")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: 1, maxTags: 2, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, "^release-", 60)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: 1, maxTags: 2, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "^release-", 60, false)
 
 		assert.NoError(err)
 		assert.Equal(2, deletedTags)
@@ -413,8 +406,8 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, third).Return(&deletedResponse, nil).Once()
 
 		agoDuration := mustParseDuration("1d")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: 1, maxTags: 2, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, ".*", 60)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: 1, maxTags: 2, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", 60, false)
 
 		assert.NoError(err)
 		assert.Equal(1, deletedTags)
@@ -434,8 +427,8 @@ func TestPurgeTags(t *testing.T) {
 			Response: autorest.Response{Response: &http.Response{}}, TagsAttributes: &tags,
 		}, nil).Once()
 
-		purgeOptions := purgeOptions{agoDuration: nil, keep: 0, minTags: -1, maxTags: 2, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, ".*", 60)
+		opts := retentionOptions{agoDuration: nil, keep: 0, minTags: -1, maxTags: 2, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", 60, false)
 
 		assert.NoError(err)
 		assert.Zero(deletedTags)
@@ -461,8 +454,8 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, oldName).Return(&deletedResponse, nil).Once()
 
 		agoDuration := mustParseDuration("0s")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: 0, maxTags: 2, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, ".*", 60)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: 0, maxTags: 2, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", 60, false)
 
 		assert.NoError(err)
 		assert.Equal(1, deletedTags)
@@ -483,8 +476,8 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, name).Return(&deletedResponse, nil).Once()
 
 		agoDuration := mustParseDuration("0s")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: 0, maxTags: 0, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, ".*", 60)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: 0, maxTags: 0, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", 60, false)
 
 		assert.NoError(err)
 		assert.Equal(1, deletedTags)
@@ -503,8 +496,8 @@ func TestPurgeTags(t *testing.T) {
 		}, nil).Once()
 
 		agoDuration := mustParseDuration("1d")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: 2, maxTags: 3, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, ".*", 60)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: 2, maxTags: 3, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", 60, false)
 
 		assert.NoError(err)
 		assert.Zero(deletedTags)
@@ -598,8 +591,8 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, overflow).Return(&deletedResponse, nil).Once()
 
 		agoDuration := mustParseDuration("1d")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: 1, maxTags: 1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, ".*", 60)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: 1, maxTags: 1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", 60, false)
 
 		assert.NoError(err)
 		assert.Equal(1, deletedTags)
@@ -631,8 +624,8 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, overflow).Return(&deletedResponse, nil).Once().NotBefore(unlockOverflow)
 
 		agoDuration := mustParseDuration("1d")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: 1, maxTags: 2, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: true}
-		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, ".*", 60)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: 1, maxTags: 2, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: true}
+		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", 60, false)
 
 		assert.NoError(err)
 		assert.Equal(2, deletedTags)
@@ -661,26 +654,16 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", middle).Return(&acr.RepositoryTagsType{
 			Response: autorest.Response{Response: &http.Response{}}, TagsAttributes: &secondPage,
 		}, nil).Once()
-		oldStdout := os.Stdout
-		reader, writer, err := os.Pipe()
-		if !assert.NoError(err) {
-			t.FailNow()
-		}
-		os.Stdout = writer
-		t.Cleanup(func() { os.Stdout = oldStdout; _ = reader.Close(); _ = writer.Close() })
-
 		agoDuration := mustParseDuration("1d")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: 1, maxTags: 2, minManifests: -1, maxManifests: -1, dryRun: true, includeLocked: true}
-		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, ".*", 60)
-		assert.NoError(writer.Close())
-		os.Stdout = oldStdout
-		output, readErr := io.ReadAll(reader)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: 1, maxTags: 2, minManifests: -1, maxManifests: -1, dryRun: true, includeLocked: true}
+		output := capturePurgeOutput(t, func() {
+			deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", 60, false)
+			assert.NoError(err)
+			assert.Equal(2, deletedTags)
+			assert.Equal(map[string]int{middleDigest: 1, overflowDigest: 1}, byDigest)
+		})
 
-		assert.NoError(readErr)
-		assert.NoError(err)
-		assert.Equal(2, deletedTags)
-		assert.Equal(map[string]int{middleDigest: 1, overflowDigest: 1}, byDigest)
-		assert.Equal(fmt.Sprintf("Would delete tags for repository: %s\nWould delete: %s/%s:middle (reason: age)\nWould delete: %s/%s:overflow (reason: age and maximum count)\n", testRepo, testLoginURL, testRepo, testLoginURL, testRepo), string(output))
+		assert.Equal(fmt.Sprintf("Would delete tags for repository: %s\nWould delete: %s/%s:middle (reason: age)\nWould delete: %s/%s:overflow (reason: age and maximum count)\n", testRepo, testLoginURL, testRepo, testLoginURL, testRepo), output)
 		assert.False(*tags[0].ChangeableAttributes.DeleteEnabled)
 		assert.False(*tags[1].ChangeableAttributes.WriteEnabled)
 		assert.False(*tags[2].ChangeableAttributes.DeleteEnabled)
@@ -704,26 +687,16 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(&acr.RepositoryTagsType{
 			Response: autorest.Response{Response: &http.Response{}}, TagsAttributes: &tags,
 		}, nil).Once()
-		oldStdout := os.Stdout
-		reader, writer, err := os.Pipe()
-		if !assert.NoError(err) {
-			t.FailNow()
-		}
-		os.Stdout = writer
-		t.Cleanup(func() { os.Stdout = oldStdout; _ = reader.Close(); _ = writer.Close() })
-
 		agoDuration := mustParseDuration("1d")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: 1, maxTags: 1, minManifests: -1, maxManifests: -1, dryRun: true, includeLocked: false}
-		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, ".*", 60)
-		assert.NoError(writer.Close())
-		os.Stdout = oldStdout
-		output, readErr := io.ReadAll(reader)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: 1, maxTags: 1, minManifests: -1, maxManifests: -1, dryRun: true, includeLocked: false}
+		output := capturePurgeOutput(t, func() {
+			deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", 60, false)
+			assert.NoError(err)
+			assert.Equal(1, deletedTags)
+			assert.Equal(map[string]int{overflowDigest: 1}, byDigest)
+		})
 
-		assert.NoError(readErr)
-		assert.NoError(err)
-		assert.Equal(1, deletedTags)
-		assert.Equal(map[string]int{overflowDigest: 1}, byDigest)
-		assert.Equal(fmt.Sprintf("Would delete tags for repository: %s\nWarning: Retaining locked tag %s:locked (reason: maximum count)\nWould delete: %s/%s:overflow (reason: maximum count)\n", testRepo, testRepo, testLoginURL, testRepo), string(output))
+		assert.Equal(fmt.Sprintf("Would delete tags for repository: %s\nWarning: Retaining locked tag %s:locked (reason: maximum count)\nWould delete: %s/%s:overflow (reason: maximum count)\n", testRepo, testRepo, testLoginURL, testRepo), output)
 		mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, mock.Anything, mock.Anything)
 		mockClient.AssertNotCalled(t, "UpdateAcrTagAttributes", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 		mockClient.AssertExpectations(t)
@@ -745,27 +718,17 @@ func TestPurgeTags(t *testing.T) {
 			Response: autorest.Response{Response: &http.Response{}}, TagsAttributes: &tags,
 		}, nil).Once()
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, middle).Return(&deletedResponse, nil).Once()
-		oldStdout := os.Stdout
-		reader, writer, err := os.Pipe()
-		if !assert.NoError(err) {
-			t.FailNow()
-		}
-		os.Stdout = writer
-		t.Cleanup(func() { os.Stdout = oldStdout; _ = reader.Close(); _ = writer.Close() })
-
 		agoDuration := mustParseDuration("1d")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: 1, maxTags: 2, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, 1, testLoginURL, testRepo, purgeOptions, ".*", 60)
-		assert.NoError(writer.Close())
-		os.Stdout = oldStdout
-		output, readErr := io.ReadAll(reader)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: 1, maxTags: 2, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		output := capturePurgeOutput(t, func() {
+			deletedTags, byDigest, err := purgeTags(testCtx, mockClient, 1, testLoginURL, testRepo, opts, ".*", 60, false)
+			assert.NoError(err)
+			assert.Equal(1, deletedTags)
+			assert.Equal(map[string]int{middleDigest: 1}, byDigest)
+		})
 
-		assert.NoError(readErr)
-		assert.NoError(err)
-		assert.Equal(1, deletedTags)
-		assert.Equal(map[string]int{middleDigest: 1}, byDigest)
-		assert.Contains(string(output), fmt.Sprintf("Warning: Retaining locked tag %s:locked (reason: age and maximum count)\n", testRepo))
-		assert.NotContains(string(output), "not satisfied")
+		assert.Contains(output, fmt.Sprintf("Warning: Retaining locked tag %s:locked (reason: age and maximum count)\n", testRepo))
+		assert.NotContains(output, "not satisfied")
 		mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, testRepo, locked)
 		mockClient.AssertNotCalled(t, "UpdateAcrTagAttributes", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 		mockClient.AssertExpectations(t)
@@ -787,26 +750,17 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, blocked).Return(&autorest.Response{
 			Response: &http.Response{StatusCode: http.StatusMethodNotAllowed},
 		}, errors.New("operation not allowed")).Once()
-		oldStdout := os.Stdout
-		reader, writer, err := os.Pipe()
-		if !assert.NoError(err) {
-			t.FailNow()
-		}
-		os.Stdout = writer
-		t.Cleanup(func() { os.Stdout = oldStdout; _ = reader.Close(); _ = writer.Close() })
+		opts := retentionOptions{agoDuration: nil, keep: 0, minTags: -1, maxTags: 1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		output := capturePurgeOutput(t, func() {
+			deletedTags, byDigest, err := purgeTags(testCtx, mockClient, 1, testLoginURL, testRepo, opts, ".*", 60, true)
+			assert.NoError(err)
+			assert.Zero(deletedTags)
+			assert.Equal(map[string]int{blockedDigest: 1}, byDigest)
+		})
 
-		purgeOptions := purgeOptions{agoDuration: nil, keep: 0, minTags: -1, maxTags: 1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, 1, testLoginURL, testRepo, purgeOptions, ".*", 60)
-		assert.NoError(writer.Close())
-		os.Stdout = oldStdout
-		output, readErr := io.ReadAll(reader)
-
-		assert.NoError(readErr)
-		assert.NoError(err)
-		assert.Zero(deletedTags)
-		assert.Equal(map[string]int{blockedDigest: 1}, byDigest)
-		assert.Equal(fmt.Sprintf("Deleting tags for repository: %s\nSkipped %s/%s:blocked, operation not allowed, HTTP status: 405\n", testRepo, testLoginURL, testRepo), string(output))
-		assert.NotContains(string(output), "Warning: Retaining locked tag")
+		assert.Equal(fmt.Sprintf("Deleting tags for repository: %s\nSkipped %s/%s:blocked, operation not allowed, HTTP status: 405\n", testRepo, testLoginURL, testRepo), output)
+		assert.NotContains(output, "(reason:")
+		assert.NotContains(output, "Warning: Retaining locked tag")
 		mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, testRepo, protected)
 		mockClient.AssertExpectations(t)
 	})
@@ -824,8 +778,8 @@ func TestPurgeTags(t *testing.T) {
 		listingErr := errors.New("listing failed")
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", name).Return(nil, listingErr).Once()
 
-		purgeOptions := purgeOptions{agoDuration: nil, keep: 0, minTags: -1, maxTags: 1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, ".*", 60)
+		opts := retentionOptions{agoDuration: nil, keep: 0, minTags: -1, maxTags: 1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", 60, false)
 
 		assert.ErrorIs(err, listingErr)
 		assert.Equal(-1, deletedTags)
@@ -849,8 +803,8 @@ func TestPurgeTags(t *testing.T) {
 			Response: autorest.Response{Response: &http.Response{}}, TagsAttributes: &second,
 		}, nil).Once()
 
-		purgeOptions := purgeOptions{agoDuration: nil, keep: 0, minTags: -1, maxTags: 1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, ".*", 60)
+		opts := retentionOptions{agoDuration: nil, keep: 0, minTags: -1, maxTags: 1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", 60, false)
 
 		var parseErr *time.ParseError
 		if assert.ErrorAs(err, &parseErr) {
@@ -860,6 +814,149 @@ func TestPurgeTags(t *testing.T) {
 		assert.Equal(-1, deletedTags)
 		assert.Empty(byDigest)
 		mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, mock.Anything, mock.Anything)
+		mockClient.AssertExpectations(t)
+	})
+
+	t.Run("VerboseMaximumCountDeletionIncludesReason", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		name, digest := "overflow", "sha256:overflow"
+		recent := time.Now().UTC().Add(-time.Hour).Format(time.RFC3339Nano)
+		tags := []acr.TagAttributesBase{{Name: &name, Digest: &digest, LastUpdateTime: &recent}}
+		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(&acr.RepositoryTagsType{
+			Response: autorest.Response{Response: &http.Response{}}, TagsAttributes: &tags,
+		}, nil).Once()
+		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, name).Return(&deletedResponse, nil).Once()
+		opts := retentionOptions{minTags: -1, maxTags: 0, minManifests: -1, maxManifests: -1}
+
+		output := capturePurgeOutput(t, func() {
+			deleted, _, err := purgeTags(testCtx, mockClient, 1, testLoginURL, testRepo, opts, ".*", 60, true)
+			assert.NoError(err)
+			assert.Equal(1, deleted)
+		})
+
+		assert.Equal(fmt.Sprintf("Deleting tags for repository: %s\nDeleted %s/%s:overflow (reason: maximum count)\n", testRepo, testLoginURL, testRepo), output)
+		mockClient.AssertExpectations(t)
+	})
+
+	t.Run("VerboseAgeAndMaximumCountDeletionIncludesCombinedReason", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		names := []string{"protected", "middle", "overflow"}
+		digests := []string{"sha256:protected", "sha256:middle", "sha256:overflow"}
+		old := time.Now().UTC().Add(-48 * time.Hour).Format(time.RFC3339Nano)
+		tags := make([]acr.TagAttributesBase, 0, len(names))
+		for i := range names {
+			name, digest := names[i], digests[i]
+			tags = append(tags, acr.TagAttributesBase{Name: &name, Digest: &digest, LastUpdateTime: &old})
+		}
+		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(&acr.RepositoryTagsType{
+			Response: autorest.Response{Response: &http.Response{}}, TagsAttributes: &tags,
+		}, nil).Once()
+		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, "middle").Return(&deletedResponse, nil).Once()
+		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, "overflow").Return(&deletedResponse, nil).Once()
+		agoDuration := mustParseDuration("1d")
+		opts := retentionOptions{agoDuration: &agoDuration, minTags: 1, maxTags: 2, minManifests: -1, maxManifests: -1}
+
+		output := capturePurgeOutput(t, func() {
+			deleted, _, err := purgeTags(testCtx, mockClient, 1, testLoginURL, testRepo, opts, ".*", 60, true)
+			assert.NoError(err)
+			assert.Equal(2, deleted)
+		})
+
+		assert.Contains(output, fmt.Sprintf("Deleted %s/%s:middle (reason: age)\n", testLoginURL, testRepo))
+		assert.Contains(output, fmt.Sprintf("Deleted %s/%s:overflow (reason: age and maximum count)\n", testLoginURL, testRepo))
+		mockClient.AssertExpectations(t)
+	})
+
+	t.Run("DefaultDeletionOutputOmitsReason", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		name, digest := "old", "sha256:old"
+		old := time.Now().UTC().Add(-48 * time.Hour).Format(time.RFC3339Nano)
+		tags := []acr.TagAttributesBase{{Name: &name, Digest: &digest, LastUpdateTime: &old}}
+		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(&acr.RepositoryTagsType{
+			Response: autorest.Response{Response: &http.Response{}}, TagsAttributes: &tags,
+		}, nil).Once()
+		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, name).Return(&deletedResponse, nil).Once()
+		agoDuration := mustParseDuration("1d")
+		opts := retentionOptions{agoDuration: &agoDuration, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1}
+
+		output := capturePurgeOutput(t, func() {
+			deleted, _, err := purgeTags(testCtx, mockClient, 1, testLoginURL, testRepo, opts, ".*", 60, false)
+			assert.NoError(err)
+			assert.Equal(1, deleted)
+		})
+
+		assert.Equal(fmt.Sprintf("Deleting tags for repository: %s\nDeleted %s/%s:old\n", testRepo, testLoginURL, testRepo), output)
+		mockClient.AssertExpectations(t)
+	})
+
+	t.Run("VerboseCancelledDeletionDoesNotIncludeReason", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		name, digest := "cancelled", "sha256:cancelled"
+		recent := time.Now().UTC().Add(-time.Hour).Format(time.RFC3339Nano)
+		tags := []acr.TagAttributesBase{{Name: &name, Digest: &digest, LastUpdateTime: &recent}}
+		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(&acr.RepositoryTagsType{
+			Response: autorest.Response{Response: &http.Response{}}, TagsAttributes: &tags,
+		}, nil).Once()
+		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, name).Return(nil, context.Canceled).Once()
+		opts := retentionOptions{minTags: -1, maxTags: 0, minManifests: -1, maxManifests: -1}
+
+		output := capturePurgeOutput(t, func() {
+			_, _, err := purgeTags(testCtx, mockClient, 1, testLoginURL, testRepo, opts, ".*", 60, true)
+			assert.ErrorIs(err, context.Canceled)
+		})
+
+		assert.Contains(output, "Failed to delete ")
+		assert.NotContains(output, "(reason:")
+		assert.NotContains(output, "Deleted ")
+		mockClient.AssertExpectations(t)
+	})
+
+	t.Run("VerbosePartialFailureReportsReasonsOnlyForSuccessfulDeletions", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		names := []string{"age", "both", "failed"}
+		old := time.Now().UTC().Add(-48 * time.Hour).Format(time.RFC3339Nano)
+		disabled, enabled := false, true
+		tags := make([]acr.TagAttributesBase, 0, len(names))
+		unlockAttrs := &acr.ChangeableAttributes{DeleteEnabled: &enabled, WriteEnabled: &enabled}
+		deletionErr := errors.New("deletion failed")
+		for i, value := range names {
+			name, digest := value, "sha256:"+value
+			attrs := &acr.ChangeableAttributes{DeleteEnabled: &enabled, WriteEnabled: &enabled}
+			if i == 0 {
+				attrs.DeleteEnabled = &disabled
+			}
+			tags = append(tags, acr.TagAttributesBase{Name: &name, Digest: &digest, LastUpdateTime: &old, ChangeableAttributes: attrs})
+			var err error
+			if i == 2 {
+				err = deletionErr
+			}
+			deletion := mockClient.On("DeleteAcrTag", mock.Anything, testRepo, name).Return(&deletedResponse, err).Once()
+			if i == 0 {
+				unlock := mockClient.On("UpdateAcrTagAttributes", mock.Anything, testRepo, name, unlockAttrs).Return(&deletedResponse, nil).Once()
+				deletion.NotBefore(unlock)
+			}
+		}
+		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(&acr.RepositoryTagsType{
+			Response: autorest.Response{Response: &http.Response{}}, TagsAttributes: &tags,
+		}, nil).Once()
+		agoDuration := mustParseDuration("1d")
+		opts := retentionOptions{agoDuration: &agoDuration, minTags: -1, maxTags: 1, minManifests: -1, maxManifests: -1, includeLocked: true}
+
+		output := capturePurgeOutput(t, func() {
+			_, _, err := purgeTags(testCtx, mockClient, 1, testLoginURL, testRepo, opts, ".*", 60, true)
+			assert.ErrorIs(err, deletionErr)
+		})
+
+		assert.Contains(output, fmt.Sprintf("Unlocked %s/%s:age\n", testLoginURL, testRepo))
+		assert.Contains(output, fmt.Sprintf("Deleted %s/%s:age (reason: age)\n", testLoginURL, testRepo))
+		assert.Contains(output, fmt.Sprintf("Deleted %s/%s:both (reason: age and maximum count)\n", testLoginURL, testRepo))
+		assert.Contains(output, fmt.Sprintf("Failed to delete %s/%s:failed, error: deletion failed\n", testLoginURL, testRepo))
+		assert.NotContains(output, fmt.Sprintf("Deleted %s/%s:failed", testLoginURL, testRepo))
 		mockClient.AssertExpectations(t)
 	})
 }
@@ -872,8 +969,8 @@ func TestPurgeManifests(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(notFoundManifestResponse, errors.New("testRepo not found")).Once()
-		purgeOptions := purgeOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
 		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -884,8 +981,8 @@ func TestPurgeManifests(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(nil, errors.New("unauthorized")).Once()
-		purgeOptions := purgeOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
@@ -898,8 +995,8 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleManifestV2WithTagsResult, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:2830cc0fcddc1bc2bd4aeab0ed5ee7087dab29a49e65151c77553e46a7ed5283").Return(EmptyListManifestsResult, nil).Once()
-		purgeOptions := purgeOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
 		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -923,8 +1020,8 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", digest1).Return(EmptyListManifestsResult, nil).Once()
 
 		agoDuration := mustParseDuration("1h")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
 		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
 		assert.NoError(err)
 		mockClient.AssertExpectations(t)
@@ -949,8 +1046,8 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, digest2).Return(nil, nil).Once()
 
 		agoDuration := mustParseDuration("24h")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
 		assert.Equal(1, deletedTags, "Number of deleted elements should be 1")
 		assert.NoError(err)
 		mockClient.AssertExpectations(t)
@@ -962,8 +1059,8 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleManifestV2WithTagsResult, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:2830cc0fcddc1bc2bd4aeab0ed5ee7087dab29a49e65151c77553e46a7ed5283").Return(nil, errors.New("error getting manifests")).Once()
-		purgeOptions := purgeOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
@@ -978,8 +1075,8 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient.On("GetManifest", mock.Anything, testRepo, "sha256:d88fb54ba4424dada7c928c6af332ed1c49065ad85eafefb6f26664695015119").Return(nil, errors.New("error getting manifest")).Once()
 		// Despite the failure, the GetAcrManifests method may be called again before the failure happens
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:d88fb54ba4424dada7c928c6af332ed1c49065ad85eafefb6f26664695015119").Return(nil, nil).Maybe()
-		purgeOptions := purgeOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
 		assert.NotEqual(nil, err, "Error not should be nil")
 		mockClient.AssertExpectations(t)
@@ -993,8 +1090,8 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient.On("GetManifest", mock.Anything, testRepo, "sha256:d88fb54ba4424dada7c928c6af332ed1c49065ad85eafefb6f26664695015119").Return([]byte("invalid manifest"), nil).Once()
 		// Despite the failure, the GetAcrManifests method may be called again before the failure happens
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:d88fb54ba4424dada7c928c6af332ed1c49065ad85eafefb6f26664695015119").Return(nil, nil).Maybe()
-		purgeOptions := purgeOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
 		assert.NotEqual(nil, err, "Error not should be nil")
 		mockClient.AssertExpectations(t)
@@ -1011,8 +1108,8 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696").Return(EmptyListManifestsResult, nil).Once()
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:63532043b5af6247377a472ad075a42bde35689918de1cf7f807714997e0e683").Return(nil, nil).Once()
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696").Return(nil, nil).Once()
-		purgeOptions := purgeOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
 		assert.Equal(2, deletedTags, "Number of deleted elements should be 2")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -1028,10 +1125,14 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696").Return(EmptyListManifestsResult, nil).Once()
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:63532043b5af6247377a472ad075a42bde35689918de1cf7f807714997e0e683").Return(nil, nil).Once()
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696").Return(&notFoundResponse, errors.New("manifest not found")).Once()
-		purgeOptions := purgeOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
-		assert.Equal(2, deletedTags, "Number of deleted elements should be 2")
-		assert.Equal(nil, err, "Error should be nil")
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		output := capturePurgeOutput(t, func() {
+			deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, true)
+			assert.Equal(2, deletedTags, "Number of deleted elements should be 2")
+			assert.NoError(err)
+		})
+		assert.Contains(output, "Skipped ")
+		assert.NotContains(output, "Skipped "+testLoginURL+"/"+testRepo+"@sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696 (reason:")
 		mockClient.AssertExpectations(t)
 	})
 
@@ -1044,10 +1145,14 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696").Return(EmptyListManifestsResult, nil).Once()
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:63532043b5af6247377a472ad075a42bde35689918de1cf7f807714997e0e683").Return(nil, errors.New("error deleting manifest")).Once()
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696").Return(nil, nil).Maybe()
-		purgeOptions := purgeOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
-		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
-		assert.NotEqual(nil, err, "Error should not be nil")
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		output := capturePurgeOutput(t, func() {
+			deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, true)
+			assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
+			assert.Error(err)
+		})
+		assert.Contains(output, "Failed to delete ")
+		assert.NotContains(output, "Failed to delete "+testLoginURL+"/"+testRepo+"@sha256:63532043b5af6247377a472ad075a42bde35689918de1cf7f807714997e0e683 (reason:")
 		mockClient.AssertExpectations(t)
 	})
 
@@ -1061,8 +1166,8 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696").Return(EmptyListManifestsResult, nil).Once()
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:63532043b5af6247377a472ad075a42bde35689918de1cf7f807714997e0e683").Return(nil, nil).Maybe()
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696").Return(nil, errors.New("error deleting manifest")).Once()
-		purgeOptions := purgeOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
@@ -1079,8 +1184,8 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:d88fb54ba4424dada7c928c6af332ed1c49065ad85eafefb6f26664695015119").Return(doubleManifestV2WithoutTagsResult, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696").Return(EmptyListManifestsResult, nil).Once()
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696").Return(nil, nil).Once()
-		purgeOptions := purgeOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
 		assert.Equal(1, deletedTags, "Number of deleted elements should be 1")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -1101,8 +1206,8 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:d88fb54ba4424dada7c928c6af332ed1c49065ad85eafefb6f26664695015119").Return(doubleOCIWithoutTagsResult, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696").Return(EmptyListManifestsResult, nil).Once()
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:6305e31b9b0081d2532397a1e08823f843f329a7af2ac98cb1d7f0355a3e3696").Return(nil, nil).Once()
-		purgeOptions := purgeOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
 		assert.Equal(1, deletedTags, "Number of deleted elements should be 1")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -1115,8 +1220,8 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(deleteDisabledOneManifestResult, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", digest).Return(EmptyListManifestsResult, nil).Once()
-		purgeOptions := purgeOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
 		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -1129,8 +1234,8 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(writeDisabledOneManifestResult, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", digest).Return(EmptyListManifestsResult, nil).Once()
-		purgeOptions := purgeOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
 		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -1143,8 +1248,8 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(singleManifestWithSubjectWithoutTagResult, nil).Once()
 		mockClient.On("GetManifest", mock.Anything, testRepo, "sha256:118811b833e6ca4f3c65559654ca6359410730e97c719f5090d0bfe4db0ab588").Return(manifestWithSubjectOCIArtificate, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:118811b833e6ca4f3c65559654ca6359410730e97c719f5090d0bfe4db0ab588").Return(EmptyListManifestsResult, nil).Once()
-		purgeOptions := purgeOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
 		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -1160,24 +1265,15 @@ func TestPurgeManifests(t *testing.T) {
 		}
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(&acr.Manifests{ManifestsAttributes: &manifests}, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:old").Return(EmptyListManifestsResult, nil).Once()
-		oldStdout := os.Stdout
-		reader, writer, err := os.Pipe()
-		if !assert.NoError(err) {
-			t.FailNow()
-		}
-		os.Stdout = writer
-		t.Cleanup(func() { os.Stdout = oldStdout; _ = reader.Close(); _ = writer.Close() })
 		agoDuration := mustParseDuration("1d")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 1, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: true, includeLocked: false}
-		deletedManifests, err := purgeDanglingManifests(testCtx, mockClient, 1, testLoginURL, testRepo, purgeOptions, nil)
-		assert.NoError(writer.Close())
-		os.Stdout = oldStdout
-		output, readErr := io.ReadAll(reader)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 1, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: true, includeLocked: false}
+		output := capturePurgeOutput(t, func() {
+			deletedManifests, err := purgeDanglingManifests(testCtx, mockClient, 1, testLoginURL, testRepo, opts, nil, false)
+			assert.NoError(err)
+			assert.Equal(1, deletedManifests)
+		})
 
-		assert.NoError(readErr)
-		assert.NoError(err)
-		assert.Equal(1, deletedManifests)
-		assert.Equal(fmt.Sprintf("Would delete manifests for repository: %s\nWould delete: %s/%s@sha256:old (reason: age)\n", testRepo, testLoginURL, testRepo), string(output))
+		assert.Equal(fmt.Sprintf("Would delete manifests for repository: %s\nWould delete: %s/%s@sha256:old (reason: age)\n", testRepo, testLoginURL, testRepo), output)
 		mockClient.AssertExpectations(t)
 	})
 
@@ -1197,8 +1293,8 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, *oldest.Digest).Return(&deletedResponse, nil).Once().NotBefore(discovered)
 
 		agoDuration := mustParseDuration("1d")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 1, maxManifests: 2, dryRun: false, includeLocked: false}
-		deletedManifests, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 1, maxManifests: 2, dryRun: false, includeLocked: false}
+		deletedManifests, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
 
 		assert.NoError(err)
 		assert.Equal(2, deletedManifests)
@@ -1215,8 +1311,8 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(&acr.Manifests{ManifestsAttributes: &manifests}, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", *old.Digest).Return(EmptyListManifestsResult, nil).Once()
 
-		purgeOptions := purgeOptions{agoDuration: nil, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: 2, dryRun: false, includeLocked: false}
-		deletedManifests, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
+		opts := retentionOptions{agoDuration: nil, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: 2, dryRun: false, includeLocked: false}
+		deletedManifests, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
 
 		assert.NoError(err)
 		assert.Zero(deletedManifests)
@@ -1236,8 +1332,8 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, *old.Digest).Return(&deletedResponse, nil).Once()
 
 		agoDuration := mustParseDuration("0s")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 0, maxManifests: 2, dryRun: false, includeLocked: false}
-		deletedManifests, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 0, maxManifests: 2, dryRun: false, includeLocked: false}
+		deletedManifests, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
 
 		assert.NoError(err)
 		assert.Equal(1, deletedManifests)
@@ -1255,8 +1351,8 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, *future.Digest).Return(&deletedResponse, nil).Once()
 
 		agoDuration := mustParseDuration("0s")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 0, maxManifests: 0, dryRun: false, includeLocked: false}
-		deletedManifests, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 0, maxManifests: 0, dryRun: false, includeLocked: false}
+		deletedManifests, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
 
 		assert.NoError(err)
 		assert.Equal(1, deletedManifests)
@@ -1282,8 +1378,8 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, *other.Digest).Return(&deletedResponse, nil).Once().NotBefore(discovered)
 
 		agoDuration := mustParseDuration("1d")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 1, maxManifests: 2, dryRun: false, includeLocked: false}
-		deletedManifests, err := purgeDanglingManifests(testCtx, mockClient, 1, testLoginURL, testRepo, purgeOptions, nil)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 1, maxManifests: 2, dryRun: false, includeLocked: false}
+		deletedManifests, err := purgeDanglingManifests(testCtx, mockClient, 1, testLoginURL, testRepo, opts, nil, false)
 
 		assert.NoError(err)
 		assert.Equal(1, deletedManifests)
@@ -1308,8 +1404,8 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient.On("GetManifest", mock.Anything, testRepo, *parent.Digest).Return(nil, inspectionErr).Once()
 
 		agoDuration := mustParseDuration("1d")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 1, maxManifests: 1, dryRun: false, includeLocked: false}
-		deletedManifests, err := purgeDanglingManifests(testCtx, mockClient, 1, testLoginURL, testRepo, purgeOptions, nil)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 1, maxManifests: 1, dryRun: false, includeLocked: false}
+		deletedManifests, err := purgeDanglingManifests(testCtx, mockClient, 1, testLoginURL, testRepo, opts, nil, false)
 
 		assert.ErrorIs(err, inspectionErr)
 		assert.Equal(-1, deletedManifests)
@@ -1332,8 +1428,8 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient.On("GetManifest", mock.Anything, testRepo, *nested.Digest).Return(nil, inspectionErr).Once()
 
 		agoDuration := mustParseDuration("1d")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 1, maxManifests: 1, dryRun: true, includeLocked: false}
-		deletedManifests, err := purgeDanglingManifests(testCtx, mockClient, 1, testLoginURL, testRepo, purgeOptions, nil)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 1, maxManifests: 1, dryRun: true, includeLocked: false}
+		deletedManifests, err := purgeDanglingManifests(testCtx, mockClient, 1, testLoginURL, testRepo, opts, nil, false)
 
 		assert.ErrorIs(err, inspectionErr)
 		assert.Equal(-1, deletedManifests)
@@ -1378,8 +1474,8 @@ func TestPurgeManifests(t *testing.T) {
 		}
 
 		agoDuration := mustParseDuration("1d")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: 1, maxTags: 1, minManifests: 1, maxManifests: 1, dryRun: false, includeLocked: false}
-		deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 1, purgeOptions, 60, true, false, repos, false)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: 1, maxTags: 1, minManifests: 1, maxManifests: 1, dryRun: false, includeLocked: false}
+		deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 1, opts, 60, true, false, repos, false)
 
 		assert.NoError(err)
 		assert.Equal(4, deletedTags)
@@ -1424,8 +1520,8 @@ func TestPurgeManifests(t *testing.T) {
 		}
 
 		agoDuration := mustParseDuration("1d")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: 1, maxTags: 1, minManifests: 1, maxManifests: 1, dryRun: true, includeLocked: false}
-		deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 1, purgeOptions, 60, true, false, repos, false)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: 1, maxTags: 1, minManifests: 1, maxManifests: 1, dryRun: true, includeLocked: false}
+		deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 1, opts, 60, true, false, repos, false)
 
 		assert.NoError(err)
 		assert.Equal(4, deletedTags)
@@ -1458,8 +1554,8 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", digest).Return(EmptyListManifestsResult, nil).Once()
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, digest).Return(&deletedResponse, nil).Once()
 
-		purgeOptions := purgeOptions{agoDuration: nil, keep: 0, minTags: -1, maxTags: 0, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 1, purgeOptions, 60, true, false, map[string]string{testRepo: "^release-"}, false)
+		opts := retentionOptions{agoDuration: nil, keep: 0, minTags: -1, maxTags: 0, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 1, opts, 60, true, false, map[string]string{testRepo: "^release-"}, false)
 
 		assert.NoError(err)
 		assert.Equal(2, deletedTags)
@@ -1487,24 +1583,15 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(&acr.Manifests{ManifestsAttributes: &manifests}, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", digest).Return(EmptyListManifestsResult, nil).Once()
 
-		oldStdout := os.Stdout
-		reader, writer, err := os.Pipe()
-		if !assert.NoError(err) {
-			t.FailNow()
-		}
-		os.Stdout = writer
-		t.Cleanup(func() { os.Stdout = oldStdout; _ = reader.Close(); _ = writer.Close() })
-		purgeOptions := purgeOptions{agoDuration: nil, keep: 0, minTags: -1, maxTags: 0, minManifests: -1, maxManifests: -1, dryRun: true, includeLocked: false}
-		deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 1, purgeOptions, 60, true, false, map[string]string{testRepo: "^release-"}, false)
-		assert.NoError(writer.Close())
-		os.Stdout = oldStdout
-		output, readErr := io.ReadAll(reader)
+		opts := retentionOptions{agoDuration: nil, keep: 0, minTags: -1, maxTags: 0, minManifests: -1, maxManifests: -1, dryRun: true, includeLocked: false}
+		output := capturePurgeOutput(t, func() {
+			deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 1, opts, 60, true, false, map[string]string{testRepo: "^release-"}, false)
+			assert.NoError(err)
+			assert.Equal(2, deletedTags)
+			assert.Equal(1, deletedManifests)
+		})
 
-		assert.NoError(readErr)
-		assert.Contains(string(output), fmt.Sprintf("Would delete tags for repository: %s\nWould delete: %s/%s:release-a (reason: maximum count)\nWould delete: %s/%s:release-b (reason: maximum count)\nWould delete manifests for repository: %s\nWould delete: %s/%s@%s (reason: untagged)\n", testRepo, testLoginURL, testRepo, testLoginURL, testRepo, testRepo, testLoginURL, testRepo, digest))
-		assert.NoError(err)
-		assert.Equal(2, deletedTags)
-		assert.Equal(1, deletedManifests)
+		assert.Contains(output, fmt.Sprintf("Would delete tags for repository: %s\nWould delete: %s/%s:release-a (reason: maximum count)\nWould delete: %s/%s:release-b (reason: maximum count)\nWould delete manifests for repository: %s\nWould delete: %s/%s@%s (reason: untagged)\n", testRepo, testLoginURL, testRepo, testLoginURL, testRepo, testRepo, testLoginURL, testRepo, digest))
 		mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, mock.Anything, mock.Anything)
 		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, mock.Anything, mock.Anything)
 		mockClient.AssertNotCalled(t, "UpdateAcrTagAttributes", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
@@ -1532,8 +1619,8 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(&acr.Manifests{ManifestsAttributes: &manifests}, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", digest).Return(EmptyListManifestsResult, nil).Once()
 
-		purgeOptions := purgeOptions{agoDuration: nil, keep: 0, minTags: -1, maxTags: 0, minManifests: -1, maxManifests: 0, dryRun: true, includeLocked: false}
-		deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 1, purgeOptions, 60, true, false, map[string]string{testRepo: "^release-"}, false)
+		opts := retentionOptions{agoDuration: nil, keep: 0, minTags: -1, maxTags: 0, minManifests: -1, maxManifests: 0, dryRun: true, includeLocked: false}
+		deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 1, opts, 60, true, false, map[string]string{testRepo: "^release-"}, false)
 
 		assert.NoError(err)
 		assert.Equal(2, deletedTags)
@@ -1564,8 +1651,8 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", digest).Return(EmptyListManifestsResult, nil).Once()
 
 		agoDuration := mustParseDuration("0s")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: 0, maxTags: 0, minManifests: 0, maxManifests: 0, dryRun: true, includeLocked: false}
-		deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 1, purgeOptions, 60, true, false, map[string]string{testRepo: ".*"}, false)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: 0, maxTags: 0, minManifests: 0, maxManifests: 0, dryRun: true, includeLocked: false}
+		deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 1, opts, 60, true, false, map[string]string{testRepo: ".*"}, false)
 
 		assert.NoError(err)
 		assert.Equal(1, deletedTags)
@@ -1600,8 +1687,8 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", digest).Return(EmptyListManifestsResult, nil).Once()
 
 		agoDuration := mustParseDuration("0s")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: 0, maxTags: 0, minManifests: 0, maxManifests: 0, dryRun: false, includeLocked: false}
-		deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 1, purgeOptions, 60, true, false, map[string]string{testRepo: ".*"}, false)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: 0, maxTags: 0, minManifests: 0, maxManifests: 0, dryRun: false, includeLocked: false}
+		deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 1, opts, 60, true, false, map[string]string{testRepo: ".*"}, false)
 
 		assert.NoError(err)
 		assert.Equal(1, deletedTags)
@@ -1636,8 +1723,8 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, *dangling.Digest).Return(&deletedResponse, nil).Once()
 
 		agoDuration := mustParseDuration("3d")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: 1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 1, purgeOptions, 60, true, false, map[string]string{testRepo: ".*"}, false)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: 1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 1, opts, 60, true, false, map[string]string{testRepo: ".*"}, false)
 
 		assert.NoError(err)
 		assert.Equal(1, deletedTags)
@@ -1672,8 +1759,8 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", *dangling.Digest).Return(EmptyListManifestsResult, nil).Once()
 
 		agoDuration := mustParseDuration("3d")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: 1, dryRun: true, includeLocked: false}
-		deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 1, purgeOptions, 60, true, false, map[string]string{testRepo: ".*"}, false)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: 1, dryRun: true, includeLocked: false}
+		deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 1, opts, 60, true, false, map[string]string{testRepo: ".*"}, false)
 
 		assert.NoError(err)
 		assert.Equal(1, deletedTags)
@@ -1692,8 +1779,8 @@ func TestPurgeManifests(t *testing.T) {
 		listingErr := errors.New("listing failed")
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", *old.Digest).Return(nil, listingErr).Once()
 
-		purgeOptions := purgeOptions{agoDuration: nil, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: 0, dryRun: false, includeLocked: false}
-		deletedManifests, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
+		opts := retentionOptions{agoDuration: nil, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: 0, dryRun: false, includeLocked: false}
+		deletedManifests, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, true)
 
 		assert.ErrorIs(err, listingErr)
 		assert.Equal(-1, deletedManifests)
@@ -1714,25 +1801,16 @@ func TestPurgeManifests(t *testing.T) {
 		manifests := []acr.ManifestAttributesBase{protected, locked, overflow}
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(&acr.Manifests{ManifestsAttributes: &manifests}, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", *overflow.Digest).Return(EmptyListManifestsResult, nil).Once()
-		oldStdout := os.Stdout
-		reader, writer, err := os.Pipe()
-		if !assert.NoError(err) {
-			t.FailNow()
-		}
-		os.Stdout = writer
-		t.Cleanup(func() { os.Stdout = oldStdout; _ = reader.Close(); _ = writer.Close() })
 
 		agoDuration := mustParseDuration("1d")
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 1, maxManifests: 1, dryRun: true, includeLocked: false}
-		deletedManifests, err := purgeDanglingManifests(testCtx, mockClient, 1, testLoginURL, testRepo, purgeOptions, nil)
-		assert.NoError(writer.Close())
-		os.Stdout = oldStdout
-		output, readErr := io.ReadAll(reader)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 1, maxManifests: 1, dryRun: true, includeLocked: false}
+		output := capturePurgeOutput(t, func() {
+			deletedManifests, err := purgeDanglingManifests(testCtx, mockClient, 1, testLoginURL, testRepo, opts, nil, false)
+			assert.NoError(err)
+			assert.Equal(1, deletedManifests)
+		})
 
-		assert.NoError(readErr)
-		assert.NoError(err)
-		assert.Equal(1, deletedManifests)
-		assert.Equal(fmt.Sprintf("Would delete manifests for repository: %s\nWarning: Retaining locked manifest %s@sha256:locked (reason: maximum count)\nWould delete: %s/%s@sha256:overflow (reason: maximum count)\n", testRepo, testRepo, testLoginURL, testRepo), string(output))
+		assert.Equal(fmt.Sprintf("Would delete manifests for repository: %s\nWarning: Retaining locked manifest %s@sha256:locked (reason: maximum count)\nWould delete: %s/%s@sha256:overflow (reason: maximum count)\n", testRepo, testRepo, testLoginURL, testRepo), output)
 		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, mock.Anything, mock.Anything)
 		mockClient.AssertNotCalled(t, "UpdateAcrManifestAttributes", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 		mockClient.AssertExpectations(t)
@@ -1748,24 +1826,188 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, *old.Digest).Return(&autorest.Response{
 			Response: &http.Response{StatusCode: http.StatusMethodNotAllowed},
 		}, errors.New("operation not allowed")).Once()
-		oldStdout := os.Stdout
-		reader, writer, err := os.Pipe()
-		if !assert.NoError(err) {
-			t.FailNow()
+
+		opts := retentionOptions{agoDuration: nil, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: 0, dryRun: false, includeLocked: false}
+		output := capturePurgeOutput(t, func() {
+			deletedManifests, err := purgeDanglingManifests(testCtx, mockClient, 1, testLoginURL, testRepo, opts, nil, false)
+			assert.NoError(err)
+			assert.Zero(deletedManifests)
+		})
+
+		assert.NotContains(output, "not satisfied")
+		assert.NotContains(output, "(reason:")
+		mockClient.AssertExpectations(t)
+	})
+
+	t.Run("VerboseAgeDeletionIncludesReason", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		digest := "sha256:old"
+		old := createManifestWithTime(digest, time.Now().UTC().Add(-48*time.Hour).Format(time.RFC3339Nano))
+		manifests := []acr.ManifestAttributesBase{old}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(&acr.Manifests{ManifestsAttributes: &manifests}, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", digest).Return(EmptyListManifestsResult, nil).Once()
+		mockClient.On("DeleteManifest", mock.Anything, testRepo, digest).Return(&deletedResponse, nil).Once()
+		agoDuration := mustParseDuration("1d")
+		opts := retentionOptions{agoDuration: &agoDuration, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1}
+
+		output := capturePurgeOutput(t, func() {
+			deleted, err := purgeDanglingManifests(testCtx, mockClient, 1, testLoginURL, testRepo, opts, nil, true)
+			assert.NoError(err)
+			assert.Equal(1, deleted)
+		})
+
+		assert.Equal(fmt.Sprintf("Deleting manifests for repository: %s\nDeleted %s/%s@%s (reason: age)\n", testRepo, testLoginURL, testRepo, digest), output)
+		mockClient.AssertExpectations(t)
+	})
+
+	t.Run("VerboseMaximumCountDeletionIncludesReason", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		digest := "sha256:overflow"
+		recent := createManifestWithTime(digest, time.Now().UTC().Add(-time.Hour).Format(time.RFC3339Nano))
+		manifests := []acr.ManifestAttributesBase{recent}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(&acr.Manifests{ManifestsAttributes: &manifests}, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", digest).Return(EmptyListManifestsResult, nil).Once()
+		mockClient.On("DeleteManifest", mock.Anything, testRepo, digest).Return(&deletedResponse, nil).Once()
+		opts := retentionOptions{minTags: -1, maxTags: -1, minManifests: -1, maxManifests: 0}
+
+		output := capturePurgeOutput(t, func() {
+			deleted, err := purgeDanglingManifests(testCtx, mockClient, 1, testLoginURL, testRepo, opts, nil, true)
+			assert.NoError(err)
+			assert.Equal(1, deleted)
+		})
+
+		assert.Equal(fmt.Sprintf("Deleting manifests for repository: %s\nDeleted %s/%s@%s (reason: maximum count)\n", testRepo, testLoginURL, testRepo, digest), output)
+		mockClient.AssertExpectations(t)
+	})
+
+	t.Run("VerboseAgeAndMaximumCountDeletionIncludesCombinedReason", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		digest := "sha256:old"
+		old := createManifestWithTime(digest, time.Now().UTC().Add(-48*time.Hour).Format(time.RFC3339Nano))
+		manifests := []acr.ManifestAttributesBase{old}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(&acr.Manifests{ManifestsAttributes: &manifests}, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", digest).Return(EmptyListManifestsResult, nil).Once()
+		mockClient.On("DeleteManifest", mock.Anything, testRepo, digest).Return(&deletedResponse, nil).Once()
+		agoDuration := mustParseDuration("1d")
+		opts := retentionOptions{agoDuration: &agoDuration, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: 0}
+
+		output := capturePurgeOutput(t, func() {
+			deleted, err := purgeDanglingManifests(testCtx, mockClient, 1, testLoginURL, testRepo, opts, nil, true)
+			assert.NoError(err)
+			assert.Equal(1, deleted)
+		})
+
+		assert.Equal(fmt.Sprintf("Deleting manifests for repository: %s\nDeleted %s/%s@%s (reason: age and maximum count)\n", testRepo, testLoginURL, testRepo, digest), output)
+		mockClient.AssertExpectations(t)
+	})
+
+	t.Run("VerboseUntaggedDeletionIncludesReason", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		digest := "sha256:untagged"
+		manifest := createManifestWithTime(digest, time.Now().UTC().Add(-time.Hour).Format(time.RFC3339Nano))
+		manifests := []acr.ManifestAttributesBase{manifest}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(&acr.Manifests{ManifestsAttributes: &manifests}, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", digest).Return(EmptyListManifestsResult, nil).Once()
+		mockClient.On("DeleteManifest", mock.Anything, testRepo, digest).Return(&deletedResponse, nil).Once()
+		opts := retentionOptions{minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1}
+
+		output := capturePurgeOutput(t, func() {
+			deleted, err := purgeDanglingManifests(testCtx, mockClient, 1, testLoginURL, testRepo, opts, nil, true)
+			assert.NoError(err)
+			assert.Equal(1, deleted)
+		})
+
+		assert.Equal(fmt.Sprintf("Deleting manifests for repository: %s\nDeleted %s/%s@%s (reason: untagged)\n", testRepo, testLoginURL, testRepo, digest), output)
+		mockClient.AssertExpectations(t)
+	})
+
+	t.Run("DefaultDeletionOutputOmitsReason", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		digest := "sha256:old"
+		old := createManifestWithTime(digest, time.Now().UTC().Add(-48*time.Hour).Format(time.RFC3339Nano))
+		manifests := []acr.ManifestAttributesBase{old}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(&acr.Manifests{ManifestsAttributes: &manifests}, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", digest).Return(EmptyListManifestsResult, nil).Once()
+		mockClient.On("DeleteManifest", mock.Anything, testRepo, digest).Return(&deletedResponse, nil).Once()
+		agoDuration := mustParseDuration("1d")
+		opts := retentionOptions{agoDuration: &agoDuration, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1}
+
+		output := capturePurgeOutput(t, func() {
+			deleted, err := purgeDanglingManifests(testCtx, mockClient, 1, testLoginURL, testRepo, opts, nil, false)
+			assert.NoError(err)
+			assert.Equal(1, deleted)
+		})
+
+		assert.Equal(fmt.Sprintf("Deleting manifests for repository: %s\nDeleted %s/%s@%s\n", testRepo, testLoginURL, testRepo, digest), output)
+		mockClient.AssertExpectations(t)
+	})
+
+	t.Run("VerboseCancelledDeletionDoesNotIncludeReason", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		digest := "sha256:cancelled"
+		recent := createManifestWithTime(digest, time.Now().UTC().Add(-time.Hour).Format(time.RFC3339Nano))
+		manifests := []acr.ManifestAttributesBase{recent}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(&acr.Manifests{ManifestsAttributes: &manifests}, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", digest).Return(EmptyListManifestsResult, nil).Once()
+		mockClient.On("DeleteManifest", mock.Anything, testRepo, digest).Return(nil, context.Canceled).Once()
+		opts := retentionOptions{minTags: -1, maxTags: -1, minManifests: -1, maxManifests: 0}
+
+		output := capturePurgeOutput(t, func() {
+			_, err := purgeDanglingManifests(testCtx, mockClient, 1, testLoginURL, testRepo, opts, nil, true)
+			assert.ErrorIs(err, context.Canceled)
+		})
+
+		assert.Contains(output, "Failed to delete ")
+		assert.NotContains(output, "(reason:")
+		assert.NotContains(output, "Deleted ")
+		mockClient.AssertExpectations(t)
+	})
+
+	t.Run("VerbosePartialFailureReportsReasonsOnlyForSuccessfulDeletions", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		agoDuration := mustParseDuration("1d")
+		opts := retentionOptions{agoDuration: &agoDuration, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: 1, includeLocked: true}
+		deletionErr := errors.New("deletion failed")
+		var manifests []acr.ManifestAttributesBase
+		enabled, disabled := true, false
+		unlockAttrs := &acr.ChangeableAttributes{DeleteEnabled: &enabled, WriteEnabled: &enabled}
+		for i, value := range []string{"age", "both", "failed"} {
+			digest := "sha256:" + value
+			manifest := createManifestWithTime(digest, time.Now().UTC().Add(-time.Duration(48+i)*time.Hour).Format(time.RFC3339Nano))
+			if i == 0 {
+				manifest.ChangeableAttributes.DeleteEnabled = &disabled
+			}
+			manifests = append(manifests, manifest)
+			var err error
+			if i == 2 {
+				err = deletionErr
+			}
+			deletion := mockClient.On("DeleteManifest", mock.Anything, testRepo, digest).Return(&deletedResponse, err).Once()
+			if i == 0 {
+				unlock := mockClient.On("UpdateAcrManifestAttributes", mock.Anything, testRepo, digest, unlockAttrs).Return(&deletedResponse, nil).Once()
+				deletion.NotBefore(unlock)
+			}
 		}
-		os.Stdout = writer
-		t.Cleanup(func() { os.Stdout = oldStdout; _ = reader.Close(); _ = writer.Close() })
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(&acr.Manifests{ManifestsAttributes: &manifests}, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:failed").Return(EmptyListManifestsResult, nil).Once()
 
-		purgeOptions := purgeOptions{agoDuration: nil, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: 0, dryRun: false, includeLocked: false}
-		deletedManifests, err := purgeDanglingManifests(testCtx, mockClient, 1, testLoginURL, testRepo, purgeOptions, nil)
-		assert.NoError(writer.Close())
-		os.Stdout = oldStdout
-		output, readErr := io.ReadAll(reader)
+		output := capturePurgeOutput(t, func() {
+			_, err := purgeDanglingManifests(testCtx, mockClient, 1, testLoginURL, testRepo, opts, nil, true)
+			assert.ErrorIs(err, deletionErr)
+		})
 
-		assert.NoError(readErr)
-		assert.NoError(err)
-		assert.Zero(deletedManifests)
-		assert.NotContains(string(output), "not satisfied")
+		assert.Contains(output, fmt.Sprintf("Unlocked %s/%s@sha256:age\n", testLoginURL, testRepo))
+		assert.Contains(output, fmt.Sprintf("Deleted %s/%s@sha256:age (reason: age)\n", testLoginURL, testRepo))
+		assert.Contains(output, fmt.Sprintf("Deleted %s/%s@sha256:both (reason: age and maximum count)\n", testLoginURL, testRepo))
+		assert.Contains(output, fmt.Sprintf("Failed to delete %s/%s@sha256:failed, error: deletion failed\n", testLoginURL, testRepo))
+		assert.NotContains(output, fmt.Sprintf("Deleted %s/%s@sha256:failed", testLoginURL, testRepo))
 		mockClient.AssertExpectations(t)
 	})
 }
@@ -1783,8 +2025,8 @@ func TestDryRun(t *testing.T) {
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(notFoundManifestResponse, errors.New("testRepo not found")).Once()
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(notFoundTagResponse, errors.New("testRepo not found")).Once()
 		agoDuration := -24 * time.Hour
-		purgeOptions := purgeOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: true, includeLocked: false}
-		deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 60, purgeOptions, 1, true, false, map[string]string{testRepo: "[\\s\\S]*"}, false)
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: true, includeLocked: false}
+		deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 60, opts, 1, true, false, map[string]string{testRepo: "[\\s\\S]*"}, false)
 		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
 		assert.Equal(0, deletedManifests, "Number of deleted elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
@@ -2673,8 +2915,8 @@ func TestIncludeLockedFlag(t *testing.T) {
 			return attrs.DeleteEnabled != nil && *attrs.DeleteEnabled && attrs.WriteEnabled != nil && *attrs.WriteEnabled
 		})).Return(&deletedResponse, nil).Once()
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, tagName).Return(&deletedResponse, nil).Once()
-		purgeOptions := purgeOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: true}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, ".*", 60)
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: true}
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", 60, false)
 		assert.Equal(1, deletedTags, "Number of deleted elements should be 1")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -2689,8 +2931,8 @@ func TestIncludeLockedFlag(t *testing.T) {
 			return attrs.DeleteEnabled != nil && *attrs.DeleteEnabled && attrs.WriteEnabled != nil && *attrs.WriteEnabled
 		})).Return(&deletedResponse, nil).Once()
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, tagName).Return(&deletedResponse, nil).Once()
-		purgeOptions := purgeOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: true}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, ".*", 60)
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: true}
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", 60, false)
 		assert.Equal(1, deletedTags, "Number of deleted elements should be 1")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -2718,8 +2960,8 @@ func TestIncludeLockedFlag(t *testing.T) {
 			return attrs.DeleteEnabled != nil && *attrs.DeleteEnabled && attrs.WriteEnabled != nil && *attrs.WriteEnabled
 		})).Return(&deletedResponse, nil).Once()
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, digest).Return(&deletedResponse, nil).Once()
-		purgeOptions := purgeOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: true}
-		deletedManifests, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: true}
+		deletedManifests, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
 		assert.Equal(1, deletedManifests, "Number of deleted manifests should be 1")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -2730,8 +2972,8 @@ func TestIncludeLockedFlag(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(DeleteDisabledOneTagResult, nil).Once()
-		purgeOptions := purgeOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, ".*", 60)
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", 60, false)
 		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -2745,8 +2987,8 @@ func TestIncludeLockedFlag(t *testing.T) {
 		mockClient.On("UpdateAcrTagAttributes", mock.Anything, testRepo, tagName, mock.Anything).Return(nil, errors.New("unlock failed")).Once()
 		// Even though unlock fails, we still attempt deletion
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, tagName).Return(&deletedResponse, nil).Once()
-		purgeOptions := purgeOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: true}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, ".*", 60)
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: true}
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", 60, false)
 		assert.Equal(1, deletedTags, "Number of deleted elements should be 1 as deletion succeeded despite unlock failure")
 		assert.Nil(err, "Error should be nil as deletion succeeded")
 		mockClient.AssertExpectations(t)
@@ -2761,8 +3003,8 @@ func TestDryRunWithIncludeLocked(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(DeleteDisabledOneTagResult, nil).Once()
 		// No unlock or delete calls should be made in dry-run mode
-		purgeOptions := purgeOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: true, includeLocked: true}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, ".*", 60)
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: true, includeLocked: true}
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", 60, false)
 		assert.Equal(1, deletedTags, "Number of tags to be deleted should be 1")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -2787,8 +3029,8 @@ func TestDryRunWithIncludeLocked(t *testing.T) {
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(deleteDisabledDanglingManifest, nil).Once()
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", digest).Return(EmptyListManifestsResult, nil).Once()
 		// No unlock or delete calls should be made in dry-run mode
-		purgeOptions := purgeOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: true, includeLocked: true}
-		deletedManifests, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, nil)
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: true, includeLocked: true}
+		deletedManifests, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
 		assert.Equal(1, deletedManifests, "Number of manifests to be deleted should be 1")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -2799,8 +3041,8 @@ func TestDryRunWithIncludeLocked(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(DeleteDisabledOneTagResult, nil).Once()
-		purgeOptions := purgeOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: true, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, ".*", 60)
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: true, includeLocked: false}
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", 60, false)
 		assert.Equal(0, deletedTags, "Number of tags to be deleted should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -2835,10 +3077,31 @@ func TestDryRunWithIncludeLocked(t *testing.T) {
 			},
 		}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(mixedTagsResult, nil).Once()
-		purgeOptions := purgeOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: true, includeLocked: true}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, purgeOptions, ".*", 60)
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: true, includeLocked: true}
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", 60, false)
 		assert.Equal(2, deletedTags, "Number of tags to be deleted should be 2 with include-locked")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
 	})
+}
+
+func capturePurgeOutput(t *testing.T, run func()) string {
+	t.Helper()
+	oldStdout := os.Stdout
+	reader, writer, err := os.Pipe()
+	if !assert.NoError(t, err) {
+		t.FailNow()
+	}
+	os.Stdout = writer
+	t.Cleanup(func() {
+		os.Stdout = oldStdout
+		_ = reader.Close()
+		_ = writer.Close()
+	})
+	run()
+	assert.NoError(t, writer.Close())
+	os.Stdout = oldStdout
+	output, err := io.ReadAll(reader)
+	assert.NoError(t, err)
+	return string(output)
 }

@@ -35,14 +35,26 @@ const (
 	mediaTypeArtifactManifest                             = "application/vnd.oci.artifact.manifest.v1+json"
 )
 
-// DeletionReason describes the reason why an item is selected for deletion.
+// DeletionReason describes why an item was selected for deletion, or indicates that it was not selected.
 type DeletionReason uint8
 
+// These values identify the purge criterion for a selected item, or indicate that no criterion selected it.
 const (
-	DeletionReasonUntagged DeletionReason = iota
+	DeletionReasonNone DeletionReason = iota
+	DeletionReasonUntagged
 	DeletionReasonAge
 	DeletionReasonMaximumCount
 	DeletionReasonAgeAndMaximumCount
+)
+
+// RetentionDecision describes the result of applying retention policies and lock state to an item.
+type RetentionDecision uint8
+
+// These values indicate whether an item is retained, selected for deletion, or skipped because it is locked.
+const (
+	RetentionDecisionRetain RetentionDecision = iota
+	RetentionDecisionDelete
+	RetentionDecisionBlockedByLock
 )
 
 // TagToDelete carries the selected tag attributes and the reason why it was selected for deletion.
@@ -222,10 +234,10 @@ func GetLastTagFromResponse(resultTags *acr.RepositoryTagsType) string {
 // GetUntaggedManifests gets all the manifests for the command to be executed on. The command will be executed on this manifest if it does not
 // have any tag and does not form part of a manifest list that has tags referencing it. If the purge command is to be executed,
 // the manifest should also not have a tag and not have a subject manifest.
-// options controls OCI preservation, dry-run behavior, lock handling, and retention criteria.
+// opts controls OCI preservation, dry-run behavior, lock handling, and retention criteria.
 // manifestToDeletedTagsCountMap optionally supplies the count of tags per manifest that would be deleted
-// under dry-run conditions. It is ignored if options.DryRun is false.
-func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCLIClientInterface, repoName string, options UntaggedManifestsOptions, manifestToDeletedTagsCountMap map[string]int) ([]ManifestToDelete, error) {
+// under dry-run conditions. It is ignored if opts.DryRun is false.
+func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCLIClientInterface, repoName string, opts UntaggedManifestsOptions, manifestToDeletedTagsCountMap map[string]int) ([]ManifestToDelete, error) {
 	lastManifestDigest := ""
 	var manifestsToDelete []ManifestToDelete
 	resultManifests, err := acrClient.GetAcrManifests(ctx, repoName, "", lastManifestDigest)
@@ -273,11 +285,8 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 			// If the manifest cannot be deleted or written to we can skip them (ACR will not allow deletion of these manifests)
 			// Unless --include-locked flag is set, in which case we will unlock them first
 			// When count limits are not set, apply lock protection during discovery.
-			if options.MinManifests < 0 && options.MaxManifests < 0 && !options.IncludeLocked && manifest.ChangeableAttributes != nil {
-				if manifest.ChangeableAttributes.DeleteEnabled != nil && !(*manifest.ChangeableAttributes.DeleteEnabled) {
-					continue
-				}
-				if manifest.ChangeableAttributes.WriteEnabled != nil && !(*manifest.ChangeableAttributes.WriteEnabled) {
+			if opts.MinManifests < 0 && opts.MaxManifests < 0 && !opts.IncludeLocked && manifest.ChangeableAttributes != nil {
+				if isLockedForDeletion(manifest.ChangeableAttributes) {
 					continue
 				}
 			}
@@ -289,7 +298,7 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 			// _____MANIFEST IS PROTECTED BY TAGS______
 			isProtectedByTags := false
 			if manifestHasTags {
-				if !options.DryRun {
+				if !opts.DryRun {
 					// In production mode, any tags protect the manifest
 					isProtectedByTags = true
 				} else {
@@ -308,7 +317,7 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 			// Only check age criteria if not already protected by tags (optimization)
 			isProtectedByAge := false
 			// When count limits are not set, apply age protection during discovery.
-			if options.MinManifests < 0 && options.MaxManifests < 0 && !isProtectedByTags && options.DeleteCutoff != nil {
+			if opts.MinManifests < 0 && opts.MaxManifests < 0 && !isProtectedByTags && opts.DeleteCutoff != nil {
 				// Take the more conservative approach and protect manifests with no last update time
 				if manifest.LastUpdateTime == nil {
 					isProtectedByAge = true
@@ -319,8 +328,8 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 						isProtectedByAge = true
 						fmt.Printf("Protecting manifest %s because the last update time cannot be read\n", *manifest.Digest)
 					} else {
-						eligibleByAge, _ := EvaluateRetention(lastUpdateTime, options.DeleteCutoff, 1, -1, -1)
-						isProtectedByAge = !eligibleByAge
+						decision, _ := EvaluateRetention(lastUpdateTime, opts.DeleteCutoff, 1, -1, -1, manifest.ChangeableAttributes, opts.IncludeLocked)
+						isProtectedByAge = decision != RetentionDecisionDelete
 					}
 				}
 			}
@@ -363,7 +372,7 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 
 			// TODO: #468 I am a little unclear as to why this was ever an option but respecting it for now. Its not used by the purge scenarios only for
 			// the annotate command.
-			if options.PreserveAllOCIManifests {
+			if opts.PreserveAllOCIManifests {
 				if *manifest.MediaType != v1.MediaTypeImageManifest {
 					// Add the manifest to the candidates list
 					if _, ok := candidates[*manifest.Digest]; !ok {
@@ -437,15 +446,15 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 		}
 	}
 
-	if options.MinManifests >= 0 || options.MaxManifests >= 0 {
+	if opts.MinManifests >= 0 || opts.MaxManifests >= 0 {
 		SortManifestsByTime(manifestsToDelete)
 		manifestsSelectedForDeletion := manifestsToDelete[:0]
 		var retainedIndexes []string
 		processedUntaggedManifestsCount := 0
 		for _, manifest := range manifestsToDelete {
 			processedUntaggedManifestsCount++
-			eligibleForDeletion := false
-			var eligibleByAgeAndMinimum, eligibleByMaximum bool
+			var decision RetentionDecision
+			var reason DeletionReason
 			if manifest.LastUpdateTime == nil {
 				fmt.Printf("Protecting manifest %s because the last update time is unavailable\n", *manifest.Digest)
 			} else {
@@ -453,23 +462,13 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 				if err != nil {
 					fmt.Printf("Warning: Protecting manifest %s@%s because the last update time cannot be read: %v\n", repoName, *manifest.Digest, err)
 				} else {
-					eligibleByAgeAndMinimum, eligibleByMaximum = EvaluateRetention(lastUpdateTime, options.DeleteCutoff, processedUntaggedManifestsCount, options.MinManifests, options.MaxManifests)
-					eligibleForDeletion = eligibleByAgeAndMinimum || eligibleByMaximum
+					decision, reason = EvaluateRetention(lastUpdateTime, opts.DeleteCutoff, processedUntaggedManifestsCount, opts.MinManifests, opts.MaxManifests, manifest.ChangeableAttributes, opts.IncludeLocked)
 				}
 			}
-			reason := DeletionReasonAge
-			if eligibleByAgeAndMinimum && eligibleByMaximum {
-				reason = DeletionReasonAgeAndMaximumCount
-			} else if eligibleByMaximum {
-				reason = DeletionReasonMaximumCount
-			}
-			if eligibleForDeletion && !options.IncludeLocked && manifest.ChangeableAttributes != nil &&
-				((manifest.ChangeableAttributes.DeleteEnabled != nil && !*manifest.ChangeableAttributes.DeleteEnabled) ||
-					(manifest.ChangeableAttributes.WriteEnabled != nil && !*manifest.ChangeableAttributes.WriteEnabled)) {
+			if decision == RetentionDecisionBlockedByLock {
 				fmt.Printf("Warning: Retaining locked manifest %s@%s (reason: %s)\n", repoName, *manifest.Digest, reason.String())
-				eligibleForDeletion = false
 			}
-			if eligibleForDeletion {
+			if decision == RetentionDecisionDelete {
 				manifest.Reason = reason
 				manifestsSelectedForDeletion = append(manifestsSelectedForDeletion, manifest)
 			} else if manifest.MediaType != nil && (*manifest.MediaType == v1.MediaTypeImageIndex ||
@@ -517,12 +516,31 @@ func (r DeletionReason) String() string {
 	}
 }
 
-// EvaluateRetention returns age and maximum-count retention decisions.
+func isLockedForDeletion(changeableAttributes *acr.ChangeableAttributes) bool {
+	return changeableAttributes != nil &&
+		((changeableAttributes.DeleteEnabled != nil && !*changeableAttributes.DeleteEnabled) ||
+			(changeableAttributes.WriteEnabled != nil && !*changeableAttributes.WriteEnabled))
+}
+
+// EvaluateRetention applies age, count, and lock policies to an item and returns its decision and deletion reason.
 // Age requires a timestamp strictly before a non-nil cutoff and a rank above minimum; maximum selects ranks above its limit regardless of age.
-func EvaluateRetention(lastUpdateTime time.Time, deleteCutoff *time.Time, retentionRank int, minimum int, maximum int) (eligibleByAge bool, eligibleByMaximum bool) {
-	eligibleByAge = deleteCutoff != nil && lastUpdateTime.Before(*deleteCutoff) && retentionRank > minimum
-	eligibleByMaximum = maximum >= 0 && retentionRank > maximum
-	return
+func EvaluateRetention(lastUpdateTime time.Time, deleteCutoff *time.Time, retentionRank int, minimum int, maximum int, changeableAttributes *acr.ChangeableAttributes, includeLocked bool) (RetentionDecision, DeletionReason) {
+	eligibleByAge := deleteCutoff != nil && lastUpdateTime.Before(*deleteCutoff) && retentionRank > minimum
+	eligibleByMaximum := maximum >= 0 && retentionRank > maximum
+	if !eligibleByAge && !eligibleByMaximum {
+		return RetentionDecisionRetain, DeletionReasonNone
+	}
+
+	reason := DeletionReasonAge
+	if eligibleByAge && eligibleByMaximum {
+		reason = DeletionReasonAgeAndMaximumCount
+	} else if eligibleByMaximum {
+		reason = DeletionReasonMaximumCount
+	}
+	if isLockedForDeletion(changeableAttributes) && !includeLocked {
+		return RetentionDecisionBlockedByLock, reason
+	}
+	return RetentionDecisionDelete, reason
 }
 
 // SortManifestsByTime sorts manifests by LastUpdateTime (newest first) with consistent

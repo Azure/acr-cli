@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 
 	"github.com/Azure/acr-cli/acr"
+	"github.com/Azure/acr-cli/cmd/repository"
 	"github.com/Azure/acr-cli/internal/api"
 	"github.com/alitto/pond/v2"
 )
@@ -19,10 +20,11 @@ type Purger struct {
 	Executer
 	acrClient     api.AcrCLIClientInterface
 	includeLocked bool
+	verbose       bool
 }
 
 // NewPurger creates a new Purger. Purgers are currently repository specific
-func NewPurger(repoParallelism int, acrClient api.AcrCLIClientInterface, loginURL string, repoName string, includeLocked bool) *Purger {
+func NewPurger(repoParallelism int, acrClient api.AcrCLIClientInterface, loginURL string, repoName string, includeLocked bool, verbose bool) *Purger {
 	executeBase := Executer{
 		// Use a queue size 3x the pool size to buffer enough tasks and keep workers busy and avoiding
 		// slowdown due to task scheduling blocking.
@@ -34,11 +36,12 @@ func NewPurger(repoParallelism int, acrClient api.AcrCLIClientInterface, loginUR
 		Executer:      executeBase,
 		acrClient:     acrClient,
 		includeLocked: includeLocked,
+		verbose:       verbose,
 	}
 }
 
 // PurgeTags purges a list of tags concurrently, and returns a count of deleted tags and the first error occurred.
-func (p *Purger) PurgeTags(ctx context.Context, tags []acr.TagAttributesBase) (int, error) {
+func (p *Purger) PurgeTags(ctx context.Context, tags []repository.TagToDelete) (int, error) {
 	var deletedTags atomic.Int64 // Count of successfully deleted tags
 	group := p.pool.NewGroup()
 	for _, tag := range tags {
@@ -66,7 +69,7 @@ func (p *Purger) PurgeTags(ctx context.Context, tags []acr.TagAttributesBase) (i
 
 			resp, err := p.acrClient.DeleteAcrTag(ctx, p.repoName, *tag.Name)
 			if err == nil {
-				fmt.Printf("Deleted %s/%s:%s\n", p.loginURL, p.repoName, *tag.Name)
+				p.reportDeletion(fmt.Sprintf("%s/%s:%s", p.loginURL, p.repoName, *tag.Name), tag.Reason)
 				// Increment the count of successfully deleted tags atomically
 				deletedTags.Add(1)
 				return nil
@@ -95,7 +98,7 @@ func (p *Purger) PurgeTags(ctx context.Context, tags []acr.TagAttributesBase) (i
 }
 
 // PurgeManifests purges a list of manifests concurrently, and returns a count of deleted manifests and the first error occurred.
-func (p *Purger) PurgeManifests(ctx context.Context, manifests []acr.ManifestAttributesBase) (int, error) {
+func (p *Purger) PurgeManifests(ctx context.Context, manifests []repository.ManifestToDelete) (int, error) {
 	var deletedManifests atomic.Int64 // Count of successfully deleted tags
 	group := p.pool.NewGroup()
 	for _, manifest := range manifests {
@@ -123,7 +126,7 @@ func (p *Purger) PurgeManifests(ctx context.Context, manifests []acr.ManifestAtt
 
 			resp, err := p.acrClient.DeleteManifest(ctx, p.repoName, *manifest.Digest)
 			if err == nil {
-				fmt.Printf("Deleted %s/%s@%s\n", p.loginURL, p.repoName, *manifest.Digest)
+				p.reportDeletion(fmt.Sprintf("%s/%s@%s", p.loginURL, p.repoName, *manifest.Digest), manifest.Reason)
 				// Increment the count of successfully deleted tags atomically
 				deletedManifests.Add(1)
 				return nil
@@ -150,4 +153,12 @@ func (p *Purger) PurgeManifests(ctx context.Context, manifests []acr.ManifestAtt
 	}
 	err := group.Wait()
 	return int(deletedManifests.Load()), err
+}
+
+func (p *Purger) reportDeletion(reference string, reason repository.DeletionReason) {
+	if reasonText := reason.String(); p.verbose && reasonText != "" {
+		fmt.Printf("Deleted %s (reason: %s)\n", reference, reasonText)
+	} else {
+		fmt.Printf("Deleted %s\n", reference)
+	}
 }
