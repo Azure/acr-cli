@@ -69,7 +69,7 @@ func (p *Purger) PurgeTags(ctx context.Context, tags []repository.TagToDelete) (
 
 			resp, err := p.acrClient.DeleteAcrTag(ctx, p.repoName, *tag.Name)
 			if err == nil {
-				p.reportDeletion(fmt.Sprintf("%s/%s:%s", p.loginURL, p.repoName, *tag.Name), tag.Reason)
+				p.reportDeletion(fmt.Sprintf("%s/%s:%s", p.loginURL, p.repoName, *tag.Name), tag.Decision)
 				// Increment the count of successfully deleted tags atomically
 				deletedTags.Add(1)
 				return nil
@@ -126,7 +126,7 @@ func (p *Purger) PurgeManifests(ctx context.Context, manifests []repository.Mani
 
 			resp, err := p.acrClient.DeleteManifest(ctx, p.repoName, *manifest.Digest)
 			if err == nil {
-				p.reportDeletion(fmt.Sprintf("%s/%s@%s", p.loginURL, p.repoName, *manifest.Digest), manifest.Reason)
+				p.reportDeletion(fmt.Sprintf("%s/%s@%s", p.loginURL, p.repoName, *manifest.Digest), manifest.Decision)
 				// Increment the count of successfully deleted tags atomically
 				deletedManifests.Add(1)
 				return nil
@@ -155,8 +155,8 @@ func (p *Purger) PurgeManifests(ctx context.Context, manifests []repository.Mani
 	return int(deletedManifests.Load()), err
 }
 
-func (p *Purger) reportDeletion(reference string, reason repository.DeletionReason) {
-	if reasonText := reason.String(); p.verbose && reasonText != "" {
+func (p *Purger) reportDeletion(reference string, decision repository.RetentionDecision) {
+	if reasonText := decision.String(); p.verbose && reasonText != "" {
 		fmt.Printf("Deleted %s (reason: %s)\n", reference, reasonText)
 	} else {
 		fmt.Printf("Deleted %s\n", reference)

@@ -35,47 +35,42 @@ const (
 	mediaTypeArtifactManifest                             = "application/vnd.oci.artifact.manifest.v1+json"
 )
 
-// DeletionReason describes why an item was selected for deletion, or indicates that it was not selected.
-type DeletionReason uint8
-
-// These values identify the purge criterion for a selected item, or indicate that no criterion selected it.
-const (
-	DeletionReasonNone DeletionReason = iota
-	DeletionReasonUntagged
-	DeletionReasonAge
-	DeletionReasonMaximumCount
-	DeletionReasonAgeAndMaximumCount
-)
-
-// RetentionDecision describes the result of applying retention policies and lock state to an item.
+// RetentionDecision describes whether an item is retained, selected for deletion, or blocked by a lock, and why.
 type RetentionDecision uint8
 
-// These values indicate whether an item is retained, selected for deletion, or skipped because it is locked.
+// These values distinguish deletion reasons and lock-blocked outcomes, or indicate that an item is retained.
 const (
 	RetentionDecisionRetain RetentionDecision = iota
-	RetentionDecisionDelete
-	RetentionDecisionBlockedByLock
+	RetentionDecisionDeleteUntagged
+	RetentionDecisionDeleteByAge
+	RetentionDecisionDeleteByMaximumCount
+	RetentionDecisionDeleteByAgeAndMaximumCount
+	RetentionDecisionBlockedByLockForAge
+	RetentionDecisionBlockedByLockForMaximumCount
+	RetentionDecisionBlockedByLockForAgeAndMaximumCount
 )
 
 // TagToDelete carries the selected tag attributes and the reason why it was selected for deletion.
 type TagToDelete struct {
 	acr.TagAttributesBase
-	Reason DeletionReason
+	Decision RetentionDecision
 }
 
 // ManifestToDelete carries the selected manifest attributes and the reason why it was selected for deletion.
 type ManifestToDelete struct {
 	acr.ManifestAttributesBase
-	Reason DeletionReason
+	Decision RetentionDecision
 }
 
 // UntaggedManifestsOptions controls discovery and retention of untagged manifests.
 // A nil DeleteCutoff disables age filtering; count limits use -1 when omitted.
+// AgeSpecified is used to report the correct deletion reason.
 type UntaggedManifestsOptions struct {
 	PreserveAllOCIManifests bool
 	DryRun                  bool
 	IncludeLocked           bool
 	DeleteCutoff            *time.Time
+	AgeSpecified            bool
 	MinManifests            int
 	MaxManifests            int
 }
@@ -328,8 +323,8 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 						isProtectedByAge = true
 						fmt.Printf("Protecting manifest %s because the last update time cannot be read\n", *manifest.Digest)
 					} else {
-						decision, _ := EvaluateRetention(lastUpdateTime, opts.DeleteCutoff, 1, -1, -1, manifest.ChangeableAttributes, opts.IncludeLocked)
-						isProtectedByAge = decision != RetentionDecisionDelete
+						decision := EvaluateRetention(lastUpdateTime, opts.DeleteCutoff, 1, -1, -1, manifest.ChangeableAttributes, opts.IncludeLocked)
+						isProtectedByAge = decision == RetentionDecisionRetain
 					}
 				}
 			}
@@ -435,13 +430,18 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 		return nil, err
 	}
 
+	// Report age as the deletion reason only when age was explicitly specified.
+	deletionDecision := RetentionDecisionDeleteUntagged
+	if opts.AgeSpecified {
+		deletionDecision = RetentionDecisionDeleteByAge
+	}
 	for _, manifest := range candidates {
 		// If the manifest is not in the ignore list, it should be deleted
 		if _, shouldBeIgnored := ignoreList.Load(*manifest.Digest); !shouldBeIgnored {
 			// Add the manifest to the list of manifests to delete
 			manifestsToDelete = append(manifestsToDelete, ManifestToDelete{
 				ManifestAttributesBase: manifest,
-				Reason:                 DeletionReasonUntagged,
+				Decision:               deletionDecision,
 			})
 		}
 	}
@@ -454,7 +454,6 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 		for _, manifest := range manifestsToDelete {
 			processedUntaggedManifestsCount++
 			var decision RetentionDecision
-			var reason DeletionReason
 			if manifest.LastUpdateTime == nil {
 				fmt.Printf("Protecting manifest %s because the last update time is unavailable\n", *manifest.Digest)
 			} else {
@@ -462,14 +461,14 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 				if err != nil {
 					fmt.Printf("Warning: Protecting manifest %s@%s because the last update time cannot be read: %v\n", repoName, *manifest.Digest, err)
 				} else {
-					decision, reason = EvaluateRetention(lastUpdateTime, opts.DeleteCutoff, processedUntaggedManifestsCount, opts.MinManifests, opts.MaxManifests, manifest.ChangeableAttributes, opts.IncludeLocked)
+					decision = EvaluateRetention(lastUpdateTime, opts.DeleteCutoff, processedUntaggedManifestsCount, opts.MinManifests, opts.MaxManifests, manifest.ChangeableAttributes, opts.IncludeLocked)
 				}
 			}
-			if decision == RetentionDecisionBlockedByLock {
-				fmt.Printf("Warning: Retaining locked manifest %s@%s (reason: %s)\n", repoName, *manifest.Digest, reason.String())
+			if decision.IsBlockedByLock() {
+				fmt.Printf("Warning: Retaining locked manifest %s@%s (reason: %s)\n", repoName, *manifest.Digest, decision.String())
 			}
-			if decision == RetentionDecisionDelete {
-				manifest.Reason = reason
+			if decision.ShouldDelete() {
+				manifest.Decision = decision
 				manifestsSelectedForDeletion = append(manifestsSelectedForDeletion, manifest)
 			} else if manifest.MediaType != nil && (*manifest.MediaType == v1.MediaTypeImageIndex ||
 				*manifest.MediaType == mediaTypeDockerManifestList) {
@@ -500,16 +499,36 @@ func GetUntaggedManifests(ctx context.Context, poolSize int, acrClient api.AcrCL
 	return manifestsToDelete, nil
 }
 
-// String formats a deletion reason for purge dry-run output.
-func (r DeletionReason) String() string {
-	switch r {
-	case DeletionReasonUntagged:
+// ShouldDelete reports whether the decision selects the item for deletion.
+func (d RetentionDecision) ShouldDelete() bool {
+	switch d {
+	case RetentionDecisionDeleteUntagged, RetentionDecisionDeleteByAge, RetentionDecisionDeleteByMaximumCount, RetentionDecisionDeleteByAgeAndMaximumCount:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsBlockedByLock reports whether a lock prevents a selected deletion.
+func (d RetentionDecision) IsBlockedByLock() bool {
+	switch d {
+	case RetentionDecisionBlockedByLockForAge, RetentionDecisionBlockedByLockForMaximumCount, RetentionDecisionBlockedByLockForAgeAndMaximumCount:
+		return true
+	default:
+		return false
+	}
+}
+
+// String formats the policy cause for purge output, including deletions blocked by locks.
+func (d RetentionDecision) String() string {
+	switch d {
+	case RetentionDecisionDeleteUntagged:
 		return "untagged"
-	case DeletionReasonAge:
+	case RetentionDecisionDeleteByAge, RetentionDecisionBlockedByLockForAge:
 		return "age"
-	case DeletionReasonMaximumCount:
+	case RetentionDecisionDeleteByMaximumCount, RetentionDecisionBlockedByLockForMaximumCount:
 		return "maximum count"
-	case DeletionReasonAgeAndMaximumCount:
+	case RetentionDecisionDeleteByAgeAndMaximumCount, RetentionDecisionBlockedByLockForAgeAndMaximumCount:
 		return "age and maximum count"
 	default:
 		return ""
@@ -522,25 +541,32 @@ func isLockedForDeletion(changeableAttributes *acr.ChangeableAttributes) bool {
 			(changeableAttributes.WriteEnabled != nil && !*changeableAttributes.WriteEnabled))
 }
 
-// EvaluateRetention applies age, count, and lock policies to an item and returns its decision and deletion reason.
+// EvaluateRetention applies age, count, and lock policies to an item and returns its decision.
 // Age requires a timestamp strictly before a non-nil cutoff and a rank above minimum; maximum selects ranks above its limit regardless of age.
-func EvaluateRetention(lastUpdateTime time.Time, deleteCutoff *time.Time, retentionRank int, minimum int, maximum int, changeableAttributes *acr.ChangeableAttributes, includeLocked bool) (RetentionDecision, DeletionReason) {
+func EvaluateRetention(lastUpdateTime time.Time, deleteCutoff *time.Time, retentionRank int, minimum int, maximum int, changeableAttributes *acr.ChangeableAttributes, includeLocked bool) RetentionDecision {
 	eligibleByAge := deleteCutoff != nil && lastUpdateTime.Before(*deleteCutoff) && retentionRank > minimum
 	eligibleByMaximum := maximum >= 0 && retentionRank > maximum
 	if !eligibleByAge && !eligibleByMaximum {
-		return RetentionDecisionRetain, DeletionReasonNone
+		return RetentionDecisionRetain
 	}
 
-	reason := DeletionReasonAge
+	decision := RetentionDecisionDeleteByAge
 	if eligibleByAge && eligibleByMaximum {
-		reason = DeletionReasonAgeAndMaximumCount
+		decision = RetentionDecisionDeleteByAgeAndMaximumCount
 	} else if eligibleByMaximum {
-		reason = DeletionReasonMaximumCount
+		decision = RetentionDecisionDeleteByMaximumCount
 	}
 	if isLockedForDeletion(changeableAttributes) && !includeLocked {
-		return RetentionDecisionBlockedByLock, reason
+		switch decision {
+		case RetentionDecisionDeleteByAge:
+			return RetentionDecisionBlockedByLockForAge
+		case RetentionDecisionDeleteByMaximumCount:
+			return RetentionDecisionBlockedByLockForMaximumCount
+		case RetentionDecisionDeleteByAgeAndMaximumCount:
+			return RetentionDecisionBlockedByLockForAgeAndMaximumCount
+		}
 	}
-	return RetentionDecisionDelete, reason
+	return decision
 }
 
 // SortManifestsByTime sorts manifests by LastUpdateTime (newest first) with consistent

@@ -90,54 +90,46 @@ func TestEvaluateRetention(t *testing.T) {
 	recent := cutoff.Add(time.Hour)
 
 	t.Run("Nil cutoff disables age but not maximum", func(t *testing.T) {
-		decision, reason := EvaluateRetention(old, nil, 3, -1, 2, nil, false)
-		assert.Equal(t, RetentionDecisionDelete, decision)
-		assert.Equal(t, DeletionReasonMaximumCount, reason)
+		decision := EvaluateRetention(old, nil, 3, -1, 2, nil, false)
+		assert.Equal(t, RetentionDecisionDeleteByMaximumCount, decision)
 
-		decision, _ = EvaluateRetention(old, nil, 2, -1, 2, nil, false)
+		decision = EvaluateRetention(old, nil, 2, -1, 2, nil, false)
 		assert.Equal(t, RetentionDecisionRetain, decision)
 
-		decision, reason = EvaluateRetention(old, nil, 3, 0, -1, nil, false)
+		decision = EvaluateRetention(old, nil, 3, 0, -1, nil, false)
 		assert.Equal(t, RetentionDecisionRetain, decision)
-		assert.Equal(t, DeletionReasonNone, reason)
 	})
 
 	t.Run("Minimum protects old items at its boundary", func(t *testing.T) {
-		decision, _ := EvaluateRetention(old, &cutoff, 2, 2, -1, nil, false)
+		decision := EvaluateRetention(old, &cutoff, 2, 2, -1, nil, false)
 		assert.Equal(t, RetentionDecisionRetain, decision)
 
-		decision, reason := EvaluateRetention(old, &cutoff, 3, 2, -1, nil, false)
-		assert.Equal(t, RetentionDecisionDelete, decision)
-		assert.Equal(t, DeletionReasonAge, reason)
+		decision = EvaluateRetention(old, &cutoff, 3, 2, -1, nil, false)
+		assert.Equal(t, RetentionDecisionDeleteByAge, decision)
 	})
 
 	t.Run("Combined policy reports independent causes", func(t *testing.T) {
-		decision, reason := EvaluateRetention(old, &cutoff, 2, 1, 3, nil, false)
-		assert.Equal(t, RetentionDecisionDelete, decision)
-		assert.Equal(t, DeletionReasonAge, reason)
+		decision := EvaluateRetention(old, &cutoff, 2, 1, 3, nil, false)
+		assert.Equal(t, RetentionDecisionDeleteByAge, decision)
 
-		decision, reason = EvaluateRetention(recent, &cutoff, 4, 1, 3, nil, false)
-		assert.Equal(t, RetentionDecisionDelete, decision)
-		assert.Equal(t, DeletionReasonMaximumCount, reason)
+		decision = EvaluateRetention(recent, &cutoff, 4, 1, 3, nil, false)
+		assert.Equal(t, RetentionDecisionDeleteByMaximumCount, decision)
 
-		decision, reason = EvaluateRetention(old, &cutoff, 4, 1, 3, nil, false)
-		assert.Equal(t, RetentionDecisionDelete, decision)
-		assert.Equal(t, DeletionReasonAgeAndMaximumCount, reason)
+		decision = EvaluateRetention(old, &cutoff, 4, 1, 3, nil, false)
+		assert.Equal(t, RetentionDecisionDeleteByAgeAndMaximumCount, decision)
 	})
 
 	t.Run("Cutoff equality is not older and zero limits are active", func(t *testing.T) {
-		decision, _ := EvaluateRetention(cutoff, &cutoff, 1, 0, -1, nil, false)
+		decision := EvaluateRetention(cutoff, &cutoff, 1, 0, -1, nil, false)
 		assert.Equal(t, RetentionDecisionRetain, decision)
 
-		decision, reason := EvaluateRetention(old, &cutoff, 1, 0, 0, nil, false)
-		assert.Equal(t, RetentionDecisionDelete, decision)
-		assert.Equal(t, DeletionReasonAgeAndMaximumCount, reason)
+		decision = EvaluateRetention(old, &cutoff, 1, 0, 0, nil, false)
+		assert.Equal(t, RetentionDecisionDeleteByAgeAndMaximumCount, decision)
 	})
 
 	t.Run("Unset counts preserve age-only selection", func(t *testing.T) {
-		decision, reason := EvaluateRetention(old, &cutoff, 1, -1, -1, nil, false)
-		assert.Equal(t, RetentionDecisionDelete, decision)
-		assert.Equal(t, DeletionReasonAge, reason)
+		decision := EvaluateRetention(old, &cutoff, 1, -1, -1, nil, false)
+		assert.Equal(t, RetentionDecisionDeleteByAge, decision)
 	})
 
 	t.Run("Lock retains selected item unless includeLocked is set", func(t *testing.T) {
@@ -158,25 +150,32 @@ func TestEvaluateRetention(t *testing.T) {
 
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
-				decision, reason := EvaluateRetention(old, &cutoff, 4, 1, 3, tc.attributes, false)
-				assert.Equal(t, RetentionDecisionBlockedByLock, decision)
-				assert.Equal(t, DeletionReasonAgeAndMaximumCount, reason)
+				decision := EvaluateRetention(old, &cutoff, 4, 1, 3, tc.attributes, false)
+				assert.Equal(t, RetentionDecisionBlockedByLockForAgeAndMaximumCount, decision)
 
-				decision, reason = EvaluateRetention(old, &cutoff, 4, 1, 3, tc.attributes, true)
-				assert.Equal(t, RetentionDecisionDelete, decision)
-				assert.Equal(t, DeletionReasonAgeAndMaximumCount, reason)
+				decision = EvaluateRetention(old, &cutoff, 4, 1, 3, tc.attributes, true)
+				assert.Equal(t, RetentionDecisionDeleteByAgeAndMaximumCount, decision)
 
-				decision, reason = EvaluateRetention(old, &cutoff, 1, 1, 3, tc.attributes, false)
+				decision = EvaluateRetention(old, &cutoff, 3, 1, 3, tc.attributes, false)
+				assert.Equal(t, RetentionDecisionBlockedByLockForAge, decision)
+
+				decision = EvaluateRetention(old, &cutoff, 3, 1, 3, tc.attributes, true)
+				assert.Equal(t, RetentionDecisionDeleteByAge, decision)
+
+				decision = EvaluateRetention(recent, nil, 4, -1, 3, tc.attributes, false)
+				assert.Equal(t, RetentionDecisionBlockedByLockForMaximumCount, decision)
+
+				decision = EvaluateRetention(recent, nil, 4, -1, 3, tc.attributes, true)
+				assert.Equal(t, RetentionDecisionDeleteByMaximumCount, decision)
+
+				decision = EvaluateRetention(old, &cutoff, 1, 1, 3, tc.attributes, false)
 				assert.Equal(t, RetentionDecisionRetain, decision)
-				assert.Equal(t, DeletionReasonNone, reason)
 
-				decision, reason = EvaluateRetention(recent, &cutoff, 1, -1, -1, tc.attributes, false)
+				decision = EvaluateRetention(recent, &cutoff, 1, -1, -1, tc.attributes, false)
 				assert.Equal(t, RetentionDecisionRetain, decision)
-				assert.Equal(t, DeletionReasonNone, reason)
 
-				decision, reason = EvaluateRetention(old, nil, 1, -1, 3, tc.attributes, false)
+				decision = EvaluateRetention(old, nil, 1, -1, 3, tc.attributes, false)
 				assert.Equal(t, RetentionDecisionRetain, decision)
-				assert.Equal(t, DeletionReasonNone, reason)
 			})
 		}
 	})
@@ -228,71 +227,156 @@ func TestEvaluateRetention(t *testing.T) {
 
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
-				decision, reason := EvaluateRetention(time.Time{}, nil, 1, -1, -1, tc.attributes, tc.includeLocked)
+				decision := EvaluateRetention(time.Time{}, nil, 1, -1, -1, tc.attributes, tc.includeLocked)
 				assert.Equal(t, RetentionDecisionRetain, decision)
-				assert.Equal(t, DeletionReasonNone, reason)
 			})
 		}
 	})
 }
 
-func TestDeletionReasonString(t *testing.T) {
+func TestRetentionDecisionClassification(t *testing.T) {
+	testCases := []struct {
+		name          string
+		decision      RetentionDecision
+		shouldDelete  bool
+		blockedByLock bool
+	}{
+		{
+			name:          "Retain",
+			decision:      RetentionDecisionRetain,
+			shouldDelete:  false,
+			blockedByLock: false,
+		},
+		{
+			name:          "Untagged",
+			decision:      RetentionDecisionDeleteUntagged,
+			shouldDelete:  true,
+			blockedByLock: false,
+		},
+		{
+			name:          "Age",
+			decision:      RetentionDecisionDeleteByAge,
+			shouldDelete:  true,
+			blockedByLock: false,
+		},
+		{
+			name:          "Maximum count",
+			decision:      RetentionDecisionDeleteByMaximumCount,
+			shouldDelete:  true,
+			blockedByLock: false,
+		},
+		{
+			name:          "Age and maximum count",
+			decision:      RetentionDecisionDeleteByAgeAndMaximumCount,
+			shouldDelete:  true,
+			blockedByLock: false,
+		},
+		{
+			name:          "Blocked by lock for age",
+			decision:      RetentionDecisionBlockedByLockForAge,
+			shouldDelete:  false,
+			blockedByLock: true,
+		},
+		{
+			name:          "Blocked by lock for maximum count",
+			decision:      RetentionDecisionBlockedByLockForMaximumCount,
+			shouldDelete:  false,
+			blockedByLock: true,
+		},
+		{
+			name:          "Blocked by lock for age and maximum count",
+			decision:      RetentionDecisionBlockedByLockForAgeAndMaximumCount,
+			shouldDelete:  false,
+			blockedByLock: true,
+		},
+		{
+			name:          "Unknown decision",
+			decision:      RetentionDecision(255),
+			shouldDelete:  false,
+			blockedByLock: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.shouldDelete, tc.decision.ShouldDelete())
+			assert.Equal(t, tc.blockedByLock, tc.decision.IsBlockedByLock())
+		})
+	}
+}
+
+func TestRetentionDecisionString(t *testing.T) {
 	testCases := []struct {
 		name     string
-		reason   DeletionReason
+		decision RetentionDecision
 		expected string
 	}{
 		{
 			name:     "No deletion reason",
-			reason:   DeletionReasonNone,
+			decision: RetentionDecisionRetain,
 			expected: "",
 		},
 		{
 			name:     "Untagged",
-			reason:   DeletionReasonUntagged,
+			decision: RetentionDecisionDeleteUntagged,
 			expected: "untagged",
 		},
 		{
 			name:     "Age",
-			reason:   DeletionReasonAge,
+			decision: RetentionDecisionDeleteByAge,
 			expected: "age",
 		},
 		{
 			name:     "Maximum count",
-			reason:   DeletionReasonMaximumCount,
+			decision: RetentionDecisionDeleteByMaximumCount,
 			expected: "maximum count",
 		},
 		{
 			name:     "Age and maximum count",
-			reason:   DeletionReasonAgeAndMaximumCount,
+			decision: RetentionDecisionDeleteByAgeAndMaximumCount,
+			expected: "age and maximum count",
+		},
+		{
+			name:     "Blocked by lock for age",
+			decision: RetentionDecisionBlockedByLockForAge,
+			expected: "age",
+		},
+		{
+			name:     "Blocked by lock for maximum count",
+			decision: RetentionDecisionBlockedByLockForMaximumCount,
+			expected: "maximum count",
+		},
+		{
+			name:     "Blocked by lock for age and maximum count",
+			decision: RetentionDecisionBlockedByLockForAgeAndMaximumCount,
 			expected: "age and maximum count",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.expected, tc.reason.String())
+			assert.Equal(t, tc.expected, tc.decision.String())
 		})
 	}
 }
 
-func TestSortManifestsByTimePreservesReasons(t *testing.T) {
+func TestSortManifestsByTimePreservesDecisions(t *testing.T) {
 	oldTime, recentTime := "2024-10-01T12:00:00Z", "2024-11-01T12:00:00Z"
 	oldDigest, firstDigest, secondDigest := "sha256:old", "sha256:a", "sha256:b"
 	manifests := []ManifestToDelete{
-		{ManifestAttributesBase: acr.ManifestAttributesBase{Digest: &oldDigest, LastUpdateTime: &oldTime}, Reason: DeletionReasonAge},
-		{ManifestAttributesBase: acr.ManifestAttributesBase{Digest: &secondDigest, LastUpdateTime: &recentTime}, Reason: DeletionReasonAgeAndMaximumCount},
-		{ManifestAttributesBase: acr.ManifestAttributesBase{Digest: &firstDigest, LastUpdateTime: &recentTime}, Reason: DeletionReasonMaximumCount},
+		{ManifestAttributesBase: acr.ManifestAttributesBase{Digest: &oldDigest, LastUpdateTime: &oldTime}, Decision: RetentionDecisionDeleteByAge},
+		{ManifestAttributesBase: acr.ManifestAttributesBase{Digest: &secondDigest, LastUpdateTime: &recentTime}, Decision: RetentionDecisionDeleteByAgeAndMaximumCount},
+		{ManifestAttributesBase: acr.ManifestAttributesBase{Digest: &firstDigest, LastUpdateTime: &recentTime}, Decision: RetentionDecisionDeleteByMaximumCount},
 	}
 
 	SortManifestsByTime(manifests)
 
 	assert.Equal(t, firstDigest, *manifests[0].Digest)
-	assert.Equal(t, DeletionReasonMaximumCount, manifests[0].Reason)
+	assert.Equal(t, RetentionDecisionDeleteByMaximumCount, manifests[0].Decision)
 	assert.Equal(t, secondDigest, *manifests[1].Digest)
-	assert.Equal(t, DeletionReasonAgeAndMaximumCount, manifests[1].Reason)
+	assert.Equal(t, RetentionDecisionDeleteByAgeAndMaximumCount, manifests[1].Decision)
 	assert.Equal(t, oldDigest, *manifests[2].Digest)
-	assert.Equal(t, DeletionReasonAge, manifests[2].Reason)
+	assert.Equal(t, RetentionDecisionDeleteByAge, manifests[2].Decision)
 }
 
 func TestFindDirectDependentManifests(t *testing.T) {
@@ -678,31 +762,53 @@ func TestGetUntaggedManifestsWithAgeCriteria(t *testing.T) {
 	recentTimestamp := "2024-11-03T12:00:00Z" // Less than 30 days old
 
 	t.Run("Untagged manifest older than cutoff is deleted", func(t *testing.T) {
-		mockClient := &mocks.AcrCLIClientInterface{}
-
-		manifests := createManifestsResult([]manifestTestData{
-			{digest: "sha256:old1", tags: nil, lastUpdate: oldTimestamp, mediaType: "application/vnd.docker.distribution.manifest.v2+json"},
-		})
-
-		mockClient.On("GetAcrManifests", ctx, repoName, "", "").Return(manifests, nil).Once()
-		mockClient.On("GetAcrManifests", ctx, repoName, "", "sha256:old1").Return(createEmptyManifestsResult(), nil).Once()
-
 		cutoff := parseTime(t, "2024-11-01T12:00:00Z") // 30 days ago from "now"
-
-		opts := UntaggedManifestsOptions{
-			PreserveAllOCIManifests: false,
-			DryRun:                  false,
-			IncludeLocked:           false,
-			DeleteCutoff:            &cutoff,
-			MinManifests:            -1,
-			MaxManifests:            -1,
+		testCases := []struct {
+			name             string
+			ageSpecified     bool
+			expectedDecision RetentionDecision
+		}{
+			{
+				name:             "Legacy cleanup reports untagged",
+				ageSpecified:     false,
+				expectedDecision: RetentionDecisionDeleteUntagged,
+			},
+			{
+				name:             "Explicit age policy reports age",
+				ageSpecified:     true,
+				expectedDecision: RetentionDecisionDeleteByAge,
+			},
 		}
-		result, err := GetUntaggedManifests(ctx, poolSize, mockClient, repoName, opts, nil)
 
-		assert.NoError(t, err)
-		assert.Equal(t, 1, len(result))
-		assert.Equal(t, "sha256:old1", *result[0].Digest)
-		mockClient.AssertExpectations(t)
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				mockClient := &mocks.AcrCLIClientInterface{}
+				manifests := createManifestsResult([]manifestTestData{
+					{digest: "sha256:old1", tags: nil, lastUpdate: oldTimestamp, mediaType: "application/vnd.docker.distribution.manifest.v2+json"},
+				})
+
+				mockClient.On("GetAcrManifests", ctx, repoName, "", "").Return(manifests, nil).Once()
+				mockClient.On("GetAcrManifests", ctx, repoName, "", "sha256:old1").Return(createEmptyManifestsResult(), nil).Once()
+
+				opts := UntaggedManifestsOptions{
+					PreserveAllOCIManifests: false,
+					DryRun:                  false,
+					IncludeLocked:           false,
+					DeleteCutoff:            &cutoff,
+					AgeSpecified:            tc.ageSpecified,
+					MinManifests:            -1,
+					MaxManifests:            -1,
+				}
+				result, err := GetUntaggedManifests(ctx, poolSize, mockClient, repoName, opts, nil)
+
+				assert.NoError(t, err)
+				if assert.Len(t, result, 1) {
+					assert.Equal(t, "sha256:old1", *result[0].Digest)
+					assert.Equal(t, tc.expectedDecision, result[0].Decision)
+				}
+				mockClient.AssertExpectations(t)
+			})
+		}
 	})
 
 	t.Run("Untagged manifest newer than cutoff is protected", func(t *testing.T) {
@@ -1232,7 +1338,7 @@ func TestGetUntaggedManifestsWithMinAndAgeCriteria(t *testing.T) {
 			assert.NoError(t, err)
 			if assert.Len(t, result, 1) {
 				assert.Equal(t, "sha256:free", *result[0].Digest)
-				assert.Equal(t, DeletionReasonAge, result[0].Reason)
+				assert.Equal(t, RetentionDecisionDeleteByAge, result[0].Decision)
 			}
 			client.AssertNotCalled(t, "DeleteManifest", mock.Anything, mock.Anything, mock.Anything)
 			client.AssertExpectations(t)
@@ -1281,8 +1387,8 @@ func TestGetUntaggedManifestsWithMinMaxAndAgeCriteria(t *testing.T) {
 				digests = append(digests, *manifest.Digest)
 			}
 			assert.Equal(t, []string{"sha256:d", "sha256:f"}, digests)
-			assert.Equal(t, DeletionReasonMaximumCount, result[0].Reason)
-			assert.Equal(t, DeletionReasonAgeAndMaximumCount, result[1].Reason)
+			assert.Equal(t, RetentionDecisionDeleteByMaximumCount, result[0].Decision)
+			assert.Equal(t, RetentionDecisionDeleteByAgeAndMaximumCount, result[1].Decision)
 			client.AssertNotCalled(t, "UpdateAcrManifestAttributes", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 			client.AssertNotCalled(t, "DeleteManifest", mock.Anything, mock.Anything, mock.Anything)
 			client.AssertExpectations(t)
@@ -1440,7 +1546,7 @@ func TestGetUntaggedManifestsWithMaxCriteria(t *testing.T) {
 			var digests []string
 			for _, manifest := range result {
 				digests = append(digests, *manifest.Digest)
-				assert.Equal(t, DeletionReasonMaximumCount, manifest.Reason)
+				assert.Equal(t, RetentionDecisionDeleteByMaximumCount, manifest.Decision)
 			}
 			assert.Equal(t, []string{"sha256:c", "sha256:d", "sha256:f"}, digests)
 			client.AssertNotCalled(t, "UpdateAcrManifestAttributes", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
