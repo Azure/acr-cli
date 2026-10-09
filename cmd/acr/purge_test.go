@@ -956,7 +956,11 @@ func TestParseDuration(t *testing.T) {
 	for _, table := range tables {
 		durationResult, errorResult := parseDuration(table.durationString)
 		assert.Equal(table.duration, durationResult)
-		assert.Equal(table.err, errorResult)
+		if table.err == nil {
+			assert.NoError(errorResult)
+		} else {
+			assert.EqualError(errorResult, table.err.Error())
+		}
 	}
 }
 
