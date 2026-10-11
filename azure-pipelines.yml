@@ -37,5 +37,6 @@ steps:
 - task: Docker@2
   inputs:
     command: build
-    Dockerfile: '**/Dockerfile'
+    Dockerfile: '$(ModulePath)/Dockerfile'
+    buildContext: '$(ModulePath)'
   displayName: 'Build container image'
