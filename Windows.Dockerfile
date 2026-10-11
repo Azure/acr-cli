@@ -18,9 +18,12 @@ RUN $newPath = ('{0}\bin;C:\go\bin;{1}' -f $env:GOPATH, $env:PATH); \
 # ideally we should be able to use FROM golang:windowsservercore-1803. This is not done due to two reasons
 # 1. The go lang for 1803 tag is not available.
 
-ENV GOLANG_VERSION 1.25.0
+ENV GOLANG_VERSION 1.26
 
-RUN $url = ('https://golang.org/dl/go{0}.windows-amd64.zip' -f $env:GOLANG_VERSION); \
+RUN $releases = Invoke-RestMethod -Uri 'https://go.dev/dl/?mode=json&include=all'; \
+	$release = $releases | Where-Object { $_.stable -and $_.version -like ('go{0}.*' -f $env:GOLANG_VERSION) } | Select-Object -First 1; \
+	if (-not $release) { throw ('Unable to find a stable Go {0} release' -f $env:GOLANG_VERSION); } \
+	$url = ('https://go.dev/dl/{0}.windows-amd64.zip' -f $release.version); \
 	Write-Host ('Downloading {0} ...' -f $url); \
 	Invoke-WebRequest -Uri $url -OutFile 'go.zip'; \
 	\

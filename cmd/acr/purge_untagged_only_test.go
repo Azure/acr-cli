@@ -3,12 +3,11 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"io"
 	"net/http"
-	"os"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/Azure/acr-cli/acr"
 	"github.com/Azure/acr-cli/cmd/mocks"
@@ -77,19 +76,26 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, manifestDigest).Return(localDeletedResponse, nil).Once()
 
 		// Call purge with untaggedOnly=true
+		opts := retentionOptions{
+			agoDuration:   nil, // no age specified; legacy cleanup includes all past manifests
+			keep:          0,   // keep is 0 for untagged-only
+			minTags:       -1,
+			maxTags:       -1,
+			minManifests:  -1,
+			maxManifests:  -1,
+			dryRun:        false, // dryRun
+			includeLocked: false, // includeLocked
+		}
 		deletedTagsCount, deletedManifestsCount, err := purge(
 			testCtx,
 			mockClient,
 			testLoginURL,
 			defaultPoolSize,
-			0, // ago is 0 for untagged-only (meaning all past manifests are eligible)
-			0, // keep is 0 for untagged-only
+			opts,
 			60,
 			true, // removeUntaggedManifests
 			true, // untaggedOnly
 			map[string]string{testRepo: ".*"},
-			false, // dryRun
-			false, // includeLocked
 			false, // verbose
 		)
 
@@ -132,19 +138,26 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 			tagFilters[repo] = ".*"
 		}
 
+		opts := retentionOptions{
+			agoDuration:   nil, // no age specified; legacy cleanup includes all past manifests
+			keep:          0,   // keep is 0 for untagged-only
+			minTags:       -1,
+			maxTags:       -1,
+			minManifests:  -1,
+			maxManifests:  -1,
+			dryRun:        false, // dryRun
+			includeLocked: false, // includeLocked
+		}
 		deletedTagsCount, deletedManifestsCount, err := purge(
 			testCtx,
 			mockClient,
 			testLoginURL,
 			defaultPoolSize,
-			0, // ago is 0 for untagged-only (meaning all past manifests are eligible)
-			0, // keep is 0 for untagged-only
+			opts,
 			60,
 			true, // removeUntaggedManifests
 			true, // untaggedOnly
 			tagFilters,
-			false, // dryRun
-			false, // includeLocked
 			false, // verbose
 		)
 
@@ -204,19 +217,26 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 		}
 		mockClient.On("DeleteManifest", mock.Anything, "specific-repo", manifestDigest).Return(localDeletedResponse, nil).Once()
 
+		opts := retentionOptions{
+			agoDuration:   nil, // no age specified; legacy cleanup includes all past manifests
+			keep:          0,   // keep is 0 for untagged-only
+			minTags:       -1,
+			maxTags:       -1,
+			minManifests:  -1,
+			maxManifests:  -1,
+			dryRun:        false, // dryRun
+			includeLocked: false, // includeLocked
+		}
 		deletedTagsCount, deletedManifestsCount, err := purge(
 			testCtx,
 			mockClient,
 			testLoginURL,
 			defaultPoolSize,
-			0, // ago is 0 for untagged-only (meaning all past manifests are eligible)
-			0, // keep is 0 for untagged-only
+			opts,
 			60,
 			true, // removeUntaggedManifests
 			true, // untaggedOnly
 			map[string]string{"specific-repo": ".*"},
-			false, // dryRun
-			false, // includeLocked
 			false, // verbose
 		)
 
@@ -271,19 +291,26 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 		// Note: GetManifest is not called for untagged manifests
 		// No DeleteManifest call expected in dry-run mode
 
+		opts := retentionOptions{
+			agoDuration:   nil, // no age specified; legacy cleanup includes all past manifests
+			keep:          0,   // keep is 0 for untagged-only
+			minTags:       -1,
+			maxTags:       -1,
+			minManifests:  -1,
+			maxManifests:  -1,
+			dryRun:        true,  // dryRun
+			includeLocked: false, // includeLocked
+		}
 		deletedTagsCount, deletedManifestsCount, err := purge(
 			testCtx,
 			mockClient,
 			testLoginURL,
 			defaultPoolSize,
-			0, // ago is 0 for untagged-only (meaning all past manifests are eligible)
-			0, // keep is 0 for untagged-only
+			opts,
 			60,
 			true, // removeUntaggedManifests
 			true, // untaggedOnly
 			map[string]string{testRepo: ".*"},
-			true,  // dryRun
-			false, // includeLocked
 			false, // verbose
 		)
 
@@ -355,19 +382,26 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, unlockedDigest).Return(localDeletedResponse, nil).Once()
 		// No delete call for locked manifest
 
+		opts := retentionOptions{
+			agoDuration:   nil, // no age specified; legacy cleanup includes all past manifests
+			keep:          0,   // keep is 0 for untagged-only
+			minTags:       -1,
+			maxTags:       -1,
+			minManifests:  -1,
+			maxManifests:  -1,
+			dryRun:        false, // dryRun
+			includeLocked: false, // includeLocked = false
+		}
 		deletedTagsCount, deletedManifestsCount, err := purge(
 			testCtx,
 			mockClient,
 			testLoginURL,
 			defaultPoolSize,
-			0, // ago is 0 for untagged-only (meaning all past manifests are eligible)
-			0, // keep is 0 for untagged-only
+			opts,
 			60,
 			true, // removeUntaggedManifests
 			true, // untaggedOnly
 			map[string]string{testRepo: ".*"},
-			false, // dryRun
-			false, // includeLocked = false
 			false, // verbose
 		)
 
@@ -436,19 +470,26 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 		}
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, lockedDigest).Return(localDeletedResponse, nil).Once()
 
+		opts := retentionOptions{
+			agoDuration:   nil, // no age specified; legacy cleanup includes all past manifests
+			keep:          0,   // keep is 0 for untagged-only
+			minTags:       -1,
+			maxTags:       -1,
+			minManifests:  -1,
+			maxManifests:  -1,
+			dryRun:        false, // dryRun
+			includeLocked: true,  // includeLocked = true
+		}
 		deletedTagsCount, deletedManifestsCount, err := purge(
 			testCtx,
 			mockClient,
 			testLoginURL,
 			defaultPoolSize,
-			0, // ago is 0 for untagged-only (meaning all past manifests are eligible)
-			0, // keep is 0 for untagged-only
+			opts,
 			60,
 			true, // removeUntaggedManifests
 			true, // untaggedOnly
 			map[string]string{testRepo: ".*"},
-			false, // dryRun
-			true,  // includeLocked = true
 			false, // verbose
 		)
 
@@ -513,18 +554,6 @@ func TestPurgeDanglingManifestsWithAgoAndKeep(t *testing.T) {
 	testRepo := "test-repo"
 	defaultPoolSize := 1
 
-	// Helper function to create manifest with specific timestamp
-	createManifestWithTime := func(digest, timestamp string) acr.ManifestAttributesBase {
-		mediaType := "application/vnd.docker.distribution.manifest.v2+json"
-		return acr.ManifestAttributesBase{
-			Digest:               &digest,
-			Tags:                 &[]string{}, // Empty tags array
-			LastUpdateTime:       &timestamp,
-			MediaType:            &mediaType,
-			ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &[]bool{true}[0], WriteEnabled: &[]bool{true}[0]},
-		}
-	}
-
 	// Test 1: Age filtering - only delete old manifests
 	t.Run("AgeFilteringDeletesOnlyOldManifests", func(t *testing.T) {
 		assert := assert.New(t)
@@ -557,7 +586,9 @@ func TestPurgeDanglingManifestsWithAgoAndKeep(t *testing.T) {
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:old123").Return(nil, nil).Once()
 
 		// Call with 300 days ago (should only delete the old manifest from 2023)
-		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, mustParseDuration("300d"), 0, nil, false, false)
+		agoDuration := mustParseDuration("300d")
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
 
 		assert.Nil(err, "Should not return error")
 		assert.Equal(1, deletedCount, "Should delete only the old manifest")
@@ -602,7 +633,8 @@ func TestPurgeDanglingManifestsWithAgoAndKeep(t *testing.T) {
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:medium").Return(nil, nil).Once()
 
 		// Call with keep=2 (should preserve the 2 most recent manifests)
-		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, 0, 2, nil, false, false)
+		opts := retentionOptions{agoDuration: nil, keep: 2, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
 
 		assert.Nil(err, "Should not return error")
 		assert.Equal(3, deletedCount, "Should delete 3 manifests, keeping 2 most recent")
@@ -647,7 +679,9 @@ func TestPurgeDanglingManifestsWithAgoAndKeep(t *testing.T) {
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:veryold2").Return(nil, nil).Once()
 
 		// Call with both age filter (300 days) and keep (keep 1 of the old ones)
-		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, mustParseDuration("300d"), 1, nil, false, false)
+		agoDuration := mustParseDuration("300d")
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 1, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
 
 		assert.Nil(err, "Should not return error")
 		assert.Equal(2, deletedCount, "Should delete 2 old manifests, keeping 1 old + all recent ones")
@@ -684,10 +718,16 @@ func TestPurgeDanglingManifestsWithAgoAndKeep(t *testing.T) {
 		// No UpdateAcrManifestAttributes calls expected for dry run
 
 		// Call with dry run and age filter
-		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, mustParseDuration("300d"), 0, nil, true, false)
+		agoDuration := mustParseDuration("300d")
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: true, includeLocked: false}
+		output := capturePurgeOutput(t, func() {
+			deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
+			assert.Nil(err, "Should not return error")
+			assert.Equal(1, deletedCount, "Should report 1 manifest would be deleted")
+		})
 
-		assert.Nil(err, "Should not return error")
-		assert.Equal(1, deletedCount, "Should report 1 manifest would be deleted")
+		assert.Equal("Would delete manifests for repository: "+testRepo+"\n"+
+			"Would delete: "+testLoginURL+"/"+testRepo+"@sha256:old123 (reason: age)\n", output)
 		mockClient.AssertExpectations(t)
 	})
 
@@ -724,7 +764,8 @@ func TestPurgeDanglingManifestsWithAgoAndKeep(t *testing.T) {
 		// No DeleteManifest calls expected - keep exceeds manifest count
 
 		// Call with keep=10 but only 3 manifests exist - should delete nothing
-		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, 0, 10, nil, false, false)
+		opts := retentionOptions{agoDuration: nil, keep: 10, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
 
 		assert.Nil(err, "Should not return error")
 		assert.Equal(0, deletedCount, "Should delete 0 manifests when keep exceeds manifest count")
@@ -764,12 +805,621 @@ func TestPurgeDanglingManifestsWithAgoAndKeep(t *testing.T) {
 		// No DeleteManifest calls expected - keep equals manifest count
 
 		// Call with keep=3 and exactly 3 manifests - should delete nothing
-		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, 0, 3, nil, false, false)
+		opts := retentionOptions{agoDuration: nil, keep: 3, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
 
 		assert.Nil(err, "Should not return error")
 		assert.Equal(0, deletedCount, "Should delete 0 manifests when keep equals manifest count")
 		mockClient.AssertExpectations(t)
 	})
+}
+
+func TestPurgeDanglingManifestsWithMax(t *testing.T) {
+	testCtx := context.Background()
+	testLoginURL := "registry.azurecr.io"
+	testRepo := "test-repo"
+	defaultPoolSize := 1
+
+	t.Run("LockedOCIIndexBeyondMaximumProtectsChildOnEarlierPage", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		now := time.Now().UTC()
+		retainedManifest := createManifestWithTime("sha256:retained", now.Add(-time.Hour).Format(time.RFC3339Nano))
+		child := createManifestWithTime("sha256:child", now.Add(-2*time.Hour).Format(time.RFC3339Nano))
+		lockedIndex := createManifestWithTime("sha256:locked-index", now.Add(-3*time.Hour).Format(time.RFC3339Nano))
+		mediaType := "application/vnd.oci.image.index.v1+json"
+		lockedIndex.MediaType = &mediaType
+		lockedIndex.ChangeableAttributes.DeleteEnabled = &[]bool{false}[0]
+		eligibleManifest := createManifestWithTime("sha256:eligible", now.Add(-4*time.Hour).Format(time.RFC3339Nano))
+
+		manifestsResult := &acr.Manifests{
+			Response:            autorest.Response{Response: &http.Response{StatusCode: http.StatusOK}},
+			Registry:            &testLoginURL,
+			ImageName:           &testRepo,
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{child, retainedManifest},
+		}
+		secondPageResult := &acr.Manifests{
+			Response:            manifestsResult.Response,
+			Registry:            &testLoginURL,
+			ImageName:           &testRepo,
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{lockedIndex, eligibleManifest},
+		}
+		emptyResult := &acr.Manifests{
+			Response:            manifestsResult.Response,
+			Registry:            &testLoginURL,
+			ImageName:           &testRepo,
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{},
+		}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(manifestsResult, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:retained").Return(secondPageResult, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:eligible").Return(emptyResult, nil).Once()
+		// OCI discovery checks for a subject before lock retention traverses the index.
+		mockClient.On("GetManifest", mock.Anything, testRepo, "sha256:locked-index").Return([]byte(`{
+			"manifests": [{"digest": "sha256:child", "mediaType": "application/vnd.docker.distribution.manifest.v2+json"}]
+		}`), nil).Twice()
+		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:eligible").Return(nil, nil).Once()
+
+		opts := retentionOptions{agoDuration: nil, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: 1, dryRun: false, includeLocked: false}
+		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
+
+		assert.Nil(err, "Should not return error when a locked index follows its child on a later page")
+		assert.Equal(1, deletedCount, "Should retain the locked overflow index and its selected child without deleting the protected newest manifest")
+		mockClient.AssertNumberOfCalls(t, "DeleteManifest", 1)
+		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, testRepo, "sha256:retained")
+		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, testRepo, "sha256:locked-index")
+		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, testRepo, "sha256:child")
+		mockClient.AssertNotCalled(t, "UpdateAcrManifestAttributes", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+		mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, mock.Anything, mock.Anything)
+		mockClient.AssertExpectations(t)
+	})
+
+	t.Run("PreservesNewestWhenAllOld", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		now := time.Now().UTC()
+		newestManifest := createManifestWithTime("sha256:newest", now.Add(-48*time.Hour).Format(time.RFC3339Nano))
+		secondManifest := createManifestWithTime("sha256:second", now.Add(-72*time.Hour).Format(time.RFC3339Nano))
+		thirdManifest := createManifestWithTime("sha256:third", now.Add(-96*time.Hour).Format(time.RFC3339Nano))
+		oldestManifest := createManifestWithTime("sha256:oldest", now.Add(-120*time.Hour).Format(time.RFC3339Nano))
+
+		// The newest manifest arrives on the second page; limits apply after global sorting.
+		manifestsResult := &acr.Manifests{
+			Response:            autorest.Response{Response: &http.Response{StatusCode: http.StatusOK}},
+			Registry:            &testLoginURL,
+			ImageName:           &testRepo,
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{oldestManifest, secondManifest},
+		}
+		secondPageResult := &acr.Manifests{
+			Response:            manifestsResult.Response,
+			Registry:            &testLoginURL,
+			ImageName:           &testRepo,
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{thirdManifest, newestManifest},
+		}
+		emptyResult := &acr.Manifests{
+			Response:            manifestsResult.Response,
+			Registry:            &testLoginURL,
+			ImageName:           &testRepo,
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{},
+		}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(manifestsResult, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:second").Return(secondPageResult, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:newest").Return(emptyResult, nil).Once()
+		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:third").Return(nil, nil).Once()
+		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:oldest").Return(nil, nil).Once()
+
+		opts := retentionOptions{agoDuration: nil, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: 2, dryRun: false, includeLocked: false}
+		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
+
+		assert.Nil(err, "Should not return error when applying the maximum across pages")
+		assert.Equal(2, deletedCount, "Should delete the 2 oldest manifests, preserving the 2 newest")
+		mockClient.AssertNumberOfCalls(t, "DeleteManifest", 2)
+		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, testRepo, "sha256:newest")
+		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, testRepo, "sha256:second")
+		mockClient.AssertNotCalled(t, "UpdateAcrManifestAttributes", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+		mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, mock.Anything, mock.Anything)
+		mockClient.AssertExpectations(t)
+	})
+
+	t.Run("DryRunReportsOverflow", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		now := time.Now().UTC()
+		newestManifest := createManifestWithTime("sha256:newest", now.Add(72*time.Hour).Format(time.RFC3339Nano))
+		secondManifest := createManifestWithTime("sha256:second", now.Add(48*time.Hour).Format(time.RFC3339Nano))
+		thirdManifest := createManifestWithTime("sha256:third", now.Add(24*time.Hour).Format(time.RFC3339Nano))
+		oldestManifest := createManifestWithTime("sha256:oldest", now.Add(-48*time.Hour).Format(time.RFC3339Nano))
+
+		manifestsResult := &acr.Manifests{
+			Response:            autorest.Response{Response: &http.Response{StatusCode: http.StatusOK}},
+			Registry:            &testLoginURL,
+			ImageName:           &testRepo,
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{oldestManifest, secondManifest},
+		}
+		secondPageResult := &acr.Manifests{
+			Response:            manifestsResult.Response,
+			Registry:            &testLoginURL,
+			ImageName:           &testRepo,
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{thirdManifest, newestManifest},
+		}
+		emptyResult := &acr.Manifests{
+			Response:            manifestsResult.Response,
+			Registry:            &testLoginURL,
+			ImageName:           &testRepo,
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{},
+		}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(manifestsResult, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:second").Return(secondPageResult, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:newest").Return(emptyResult, nil).Once()
+
+		opts := retentionOptions{agoDuration: nil, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: 2, dryRun: true, includeLocked: false}
+		output := capturePurgeOutput(t, func() {
+			deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
+			assert.Nil(err, "Should not return error when reporting maximum overflow")
+			assert.Equal(2, deletedCount, "Should report both future and old manifests beyond the maximum without an age policy")
+		})
+
+		var actualLines []string
+		for _, line := range strings.Split(output, "\n") {
+			if strings.HasPrefix(line, "Would delete:") {
+				actualLines = append(actualLines, line)
+			}
+		}
+		assert.ElementsMatch([]string{
+			"Would delete: " + testLoginURL + "/" + testRepo + "@sha256:third (reason: maximum count)",
+			"Would delete: " + testLoginURL + "/" + testRepo + "@sha256:oldest (reason: maximum count)",
+		}, actualLines, "Should report exactly the 2 oldest manifests across both pages")
+		mockClient.AssertNumberOfCalls(t, "DeleteManifest", 0)
+		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, testRepo, "sha256:newest")
+		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, testRepo, "sha256:second")
+		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, testRepo, "sha256:third")
+		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, testRepo, "sha256:oldest")
+		mockClient.AssertNotCalled(t, "UpdateAcrManifestAttributes", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+		mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, mock.Anything, mock.Anything)
+		mockClient.AssertExpectations(t)
+	})
+}
+
+func TestPurgeDanglingManifestsWithAgoAndMin(t *testing.T) {
+	testCtx := context.Background()
+	testLoginURL := "registry.azurecr.io"
+	testRepo := "test-repo"
+	defaultPoolSize := 1
+
+	t.Run("MinimumRetainsOldOCIIndexAndProtectsChild", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		now := time.Now().UTC()
+		index := createManifestWithTime("sha256:index", now.Add(-48*time.Hour).Format(time.RFC3339Nano))
+		mediaType := "application/vnd.oci.image.index.v1+json"
+		index.MediaType = &mediaType
+		retainedManifest := createManifestWithTime("sha256:retained", now.Add(-72*time.Hour).Format(time.RFC3339Nano))
+		child := createManifestWithTime("sha256:child", now.Add(-96*time.Hour).Format(time.RFC3339Nano))
+		eligibleManifest := createManifestWithTime("sha256:eligible", now.Add(-120*time.Hour).Format(time.RFC3339Nano))
+
+		manifestsResult := &acr.Manifests{
+			Response:            autorest.Response{Response: &http.Response{StatusCode: http.StatusOK}},
+			Registry:            &testLoginURL,
+			ImageName:           &testRepo,
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{child, index, retainedManifest, eligibleManifest},
+		}
+		emptyResult := &acr.Manifests{
+			Response:            manifestsResult.Response,
+			Registry:            &testLoginURL,
+			ImageName:           &testRepo,
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{},
+		}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(manifestsResult, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:eligible").Return(emptyResult, nil).Once()
+		mockClient.On("GetManifest", mock.Anything, testRepo, "sha256:index").Return([]byte(`{
+			"manifests": [{"digest": "sha256:child", "mediaType": "application/vnd.docker.distribution.manifest.v2+json"}]
+		}`), nil).Twice()
+		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:eligible").Return(nil, nil).Once()
+
+		agoDuration := mustParseDuration("1d")
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 2, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
+
+		assert.Nil(err, "Should not return error when the minimum retains an old index")
+		assert.Equal(1, deletedCount, "Should delete only the unreferenced old manifest, without replacing the protected child with a top-2 deletion")
+		mockClient.AssertNumberOfCalls(t, "DeleteManifest", 1)
+		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, testRepo, "sha256:index")
+		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, testRepo, "sha256:retained")
+		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, testRepo, "sha256:child")
+		mockClient.AssertNotCalled(t, "UpdateAcrManifestAttributes", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+		mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, mock.Anything, mock.Anything)
+		mockClient.AssertExpectations(t)
+	})
+
+	t.Run("WriteLockedOldManifestBeyondMinimumIsRetained", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		now := time.Now().UTC()
+		retainedManifest := createManifestWithTime("sha256:retained", now.Add(-48*time.Hour).Format(time.RFC3339Nano))
+		lockedManifest := createManifestWithTime("sha256:locked", now.Add(-72*time.Hour).Format(time.RFC3339Nano))
+		lockedManifest.ChangeableAttributes.WriteEnabled = &[]bool{false}[0]
+		eligibleManifest := createManifestWithTime("sha256:eligible", now.Add(-96*time.Hour).Format(time.RFC3339Nano))
+
+		manifestsResult := &acr.Manifests{
+			Response:            autorest.Response{Response: &http.Response{StatusCode: http.StatusOK}},
+			Registry:            &testLoginURL,
+			ImageName:           &testRepo,
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{retainedManifest, lockedManifest, eligibleManifest},
+		}
+		emptyResult := &acr.Manifests{
+			Response:            manifestsResult.Response,
+			Registry:            &testLoginURL,
+			ImageName:           &testRepo,
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{},
+		}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(manifestsResult, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:eligible").Return(emptyResult, nil).Once()
+		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:eligible").Return(nil, nil).Once()
+
+		agoDuration := mustParseDuration("1d")
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 1, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
+
+		assert.Nil(err, "Should not return error when an age-eligible manifest is write-locked")
+		assert.Equal(1, deletedCount, "Should retain the locked old manifest in addition to the minimum, deleting only unlocked old overflow")
+		mockClient.AssertNumberOfCalls(t, "DeleteManifest", 1)
+		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, testRepo, "sha256:retained")
+		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, testRepo, "sha256:locked")
+		mockClient.AssertNotCalled(t, "UpdateAcrManifestAttributes", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+		mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, mock.Anything, mock.Anything)
+		mockClient.AssertExpectations(t)
+	})
+
+	t.Run("AbovePopulationProtectsAll", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		now := time.Now().UTC()
+		newestManifest := createManifestWithTime("sha256:newest", now.Add(-48*time.Hour).Format(time.RFC3339Nano))
+		secondManifest := createManifestWithTime("sha256:second", now.Add(-72*time.Hour).Format(time.RFC3339Nano))
+		thirdManifest := createManifestWithTime("sha256:third", now.Add(-96*time.Hour).Format(time.RFC3339Nano))
+		oldestManifest := createManifestWithTime("sha256:oldest", now.Add(-120*time.Hour).Format(time.RFC3339Nano))
+
+		manifestsResult := &acr.Manifests{
+			Response:            autorest.Response{Response: &http.Response{StatusCode: http.StatusOK}},
+			Registry:            &testLoginURL,
+			ImageName:           &testRepo,
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{newestManifest, secondManifest, thirdManifest, oldestManifest},
+		}
+		emptyResult := &acr.Manifests{
+			Response:            manifestsResult.Response,
+			Registry:            &testLoginURL,
+			ImageName:           &testRepo,
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{},
+		}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(manifestsResult, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:oldest").Return(emptyResult, nil).Once()
+
+		agoDuration := mustParseDuration("1d")
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 5, maxManifests: -1, dryRun: false, includeLocked: false}
+		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
+
+		assert.Nil(err, "Should not return error when the minimum exceeds the manifest count")
+		assert.Equal(0, deletedCount, "Should protect all 4 old manifests when the minimum is 5")
+		mockClient.AssertNumberOfCalls(t, "DeleteManifest", 0)
+		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, testRepo, "sha256:newest")
+		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, testRepo, "sha256:second")
+		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, testRepo, "sha256:third")
+		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, testRepo, "sha256:oldest")
+		mockClient.AssertNotCalled(t, "UpdateAcrManifestAttributes", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+		mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, mock.Anything, mock.Anything)
+		mockClient.AssertExpectations(t)
+	})
+
+	t.Run("DryRunReportsOldOverflow", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		now := time.Now().UTC()
+		newestManifest := createManifestWithTime("sha256:newest", now.Add(-48*time.Hour).Format(time.RFC3339Nano))
+		secondManifest := createManifestWithTime("sha256:second", now.Add(-72*time.Hour).Format(time.RFC3339Nano))
+		thirdManifest := createManifestWithTime("sha256:third", now.Add(-96*time.Hour).Format(time.RFC3339Nano))
+		oldestManifest := createManifestWithTime("sha256:oldest", now.Add(-120*time.Hour).Format(time.RFC3339Nano))
+
+		manifestsResult := &acr.Manifests{
+			Response:            autorest.Response{Response: &http.Response{StatusCode: http.StatusOK}},
+			Registry:            &testLoginURL,
+			ImageName:           &testRepo,
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{newestManifest, secondManifest, thirdManifest, oldestManifest},
+		}
+		emptyResult := &acr.Manifests{
+			Response:            manifestsResult.Response,
+			Registry:            &testLoginURL,
+			ImageName:           &testRepo,
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{},
+		}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(manifestsResult, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:oldest").Return(emptyResult, nil).Once()
+
+		agoDuration := mustParseDuration("1d")
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 2, maxManifests: -1, dryRun: true, includeLocked: false}
+		output := capturePurgeOutput(t, func() {
+			deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
+			assert.Nil(err, "Should not return error when reporting old manifests beyond the minimum")
+			assert.Equal(2, deletedCount, "Should report the 2 oldest manifests, protecting the 2 newest")
+		})
+
+		var actualLines []string
+		for _, line := range strings.Split(output, "\n") {
+			if strings.HasPrefix(line, "Would delete:") {
+				actualLines = append(actualLines, line)
+			}
+		}
+		assert.ElementsMatch([]string{
+			"Would delete: " + testLoginURL + "/" + testRepo + "@sha256:third (reason: age)",
+			"Would delete: " + testLoginURL + "/" + testRepo + "@sha256:oldest (reason: age)",
+		}, actualLines, "Should report exactly the 2 old manifests beyond the minimum")
+		mockClient.AssertNumberOfCalls(t, "DeleteManifest", 0)
+		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, testRepo, "sha256:newest")
+		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, testRepo, "sha256:second")
+		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, testRepo, "sha256:third")
+		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, testRepo, "sha256:oldest")
+		mockClient.AssertNotCalled(t, "UpdateAcrManifestAttributes", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+		mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, mock.Anything, mock.Anything)
+		mockClient.AssertExpectations(t)
+	})
+}
+
+func TestPurgeDanglingManifestsWithAgoMinAndMax(t *testing.T) {
+	testCtx := context.Background()
+	testLoginURL := "registry.azurecr.io"
+	testRepo := "test-repo"
+	defaultPoolSize := 1
+
+	t.Run("AgeRetainedOCIIndexProtectsChildBeyondMaximum", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		now := time.Now().UTC()
+		newestManifest := createManifestWithTime("sha256:newest", now.Add(-time.Hour).Format(time.RFC3339Nano))
+		index := createManifestWithTime("sha256:index", now.Add(-2*time.Hour).Format(time.RFC3339Nano))
+		mediaType := "application/vnd.oci.image.index.v1+json"
+		index.MediaType = &mediaType
+		recentManifest := createManifestWithTime("sha256:recent", now.Add(-3*time.Hour).Format(time.RFC3339Nano))
+		child := createManifestWithTime("sha256:child", now.Add(-48*time.Hour).Format(time.RFC3339Nano))
+		eligibleManifest := createManifestWithTime("sha256:eligible", now.Add(-72*time.Hour).Format(time.RFC3339Nano))
+
+		manifestsResult := &acr.Manifests{
+			Response:            autorest.Response{Response: &http.Response{StatusCode: http.StatusOK}},
+			Registry:            &testLoginURL,
+			ImageName:           &testRepo,
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{child, newestManifest, index, recentManifest, eligibleManifest},
+		}
+		emptyResult := &acr.Manifests{
+			Response:            manifestsResult.Response,
+			Registry:            &testLoginURL,
+			ImageName:           &testRepo,
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{},
+		}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(manifestsResult, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:eligible").Return(emptyResult, nil).Once()
+		mockClient.On("GetManifest", mock.Anything, testRepo, "sha256:index").Return([]byte(`{
+			"manifests": [{"digest": "sha256:child", "mediaType": "application/vnd.docker.distribution.manifest.v2+json"}]
+		}`), nil).Twice()
+		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:eligible").Return(nil, nil).Once()
+
+		agoDuration := mustParseDuration("1d")
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 1, maxManifests: 3, dryRun: false, includeLocked: false}
+		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
+
+		assert.Nil(err, "Should not return error when age retains an index between the minimum and maximum")
+		assert.Equal(1, deletedCount, "Should retain 4 manifests despite max=3, protecting the old child without replacement deletions")
+		mockClient.AssertNumberOfCalls(t, "DeleteManifest", 1)
+		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, testRepo, "sha256:newest")
+		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, testRepo, "sha256:index")
+		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, testRepo, "sha256:recent")
+		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, testRepo, "sha256:child")
+		mockClient.AssertNotCalled(t, "UpdateAcrManifestAttributes", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+		mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, mock.Anything, mock.Anything)
+		mockClient.AssertExpectations(t)
+	})
+
+	t.Run("LockedOldOverflowDoesNotReplaceAgeOrMinimumProtectedManifests", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		now := time.Now().UTC()
+		newestManifest := createManifestWithTime("sha256:newest", now.Add(-time.Hour).Format(time.RFC3339Nano))
+		recentManifest := createManifestWithTime("sha256:recent", now.Add(-2*time.Hour).Format(time.RFC3339Nano))
+		lockedManifest := createManifestWithTime("sha256:locked", now.Add(-48*time.Hour).Format(time.RFC3339Nano))
+		lockedManifest.ChangeableAttributes.DeleteEnabled = &[]bool{false}[0]
+		eligibleManifest := createManifestWithTime("sha256:eligible", now.Add(-72*time.Hour).Format(time.RFC3339Nano))
+
+		manifestsResult := &acr.Manifests{
+			Response:            autorest.Response{Response: &http.Response{StatusCode: http.StatusOK}},
+			Registry:            &testLoginURL,
+			ImageName:           &testRepo,
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{newestManifest, recentManifest, lockedManifest, eligibleManifest},
+		}
+		emptyResult := &acr.Manifests{
+			Response:            manifestsResult.Response,
+			Registry:            &testLoginURL,
+			ImageName:           &testRepo,
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{},
+		}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(manifestsResult, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:eligible").Return(emptyResult, nil).Once()
+		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:eligible").Return(nil, nil).Once()
+
+		agoDuration := mustParseDuration("1d")
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 1, maxManifests: 2, dryRun: false, includeLocked: false}
+		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
+
+		assert.Nil(err, "Should not return error when old overflow is locked")
+		assert.Equal(1, deletedCount, "Should delete only unlocked old overflow, without compensating for the locked manifest")
+		mockClient.AssertNumberOfCalls(t, "DeleteManifest", 1)
+		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, testRepo, "sha256:newest")
+		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, testRepo, "sha256:recent")
+		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, testRepo, "sha256:locked")
+		mockClient.AssertNotCalled(t, "UpdateAcrManifestAttributes", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+		mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, mock.Anything, mock.Anything)
+		mockClient.AssertExpectations(t)
+	})
+
+	t.Run("IncludeLockedUnlocksOnlySelectedManifestsAndIndexes", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		now := time.Now().UTC()
+		retainedIndex := createManifestWithTime("sha256:retained-index", now.Add(-48*time.Hour).Format(time.RFC3339Nano))
+		ociIndexMediaType := "application/vnd.oci.image.index.v1+json"
+		retainedIndex.MediaType = &ociIndexMediaType
+		retainedIndex.ChangeableAttributes.DeleteEnabled = &[]bool{false}[0]
+		lockedManifest := createManifestWithTime("sha256:locked", now.Add(-72*time.Hour).Format(time.RFC3339Nano))
+		lockedManifest.ChangeableAttributes.WriteEnabled = &[]bool{false}[0]
+		lockedIndex := createManifestWithTime("sha256:locked-index", now.Add(-96*time.Hour).Format(time.RFC3339Nano))
+		lockedIndex.MediaType = &ociIndexMediaType
+		lockedIndex.ChangeableAttributes.DeleteEnabled = &[]bool{false}[0]
+		protectedChild := createManifestWithTime("sha256:protected-child", now.Add(-120*time.Hour).Format(time.RFC3339Nano))
+		protectedChild.ChangeableAttributes.DeleteEnabled = &[]bool{false}[0]
+		selectedChild := createManifestWithTime("sha256:selected-child", now.Add(-144*time.Hour).Format(time.RFC3339Nano))
+
+		manifestsResult := &acr.Manifests{
+			Response:            autorest.Response{Response: &http.Response{StatusCode: http.StatusOK}},
+			Registry:            &testLoginURL,
+			ImageName:           &testRepo,
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{protectedChild, selectedChild, retainedIndex, lockedManifest, lockedIndex},
+		}
+		emptyResult := &acr.Manifests{
+			Response:            manifestsResult.Response,
+			Registry:            &testLoginURL,
+			ImageName:           &testRepo,
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{},
+		}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(manifestsResult, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:locked-index").Return(emptyResult, nil).Once()
+		mockClient.On("GetManifest", mock.Anything, testRepo, "sha256:retained-index").Return([]byte(`{
+			"manifests": [{"digest": "sha256:protected-child", "mediaType": "application/vnd.docker.distribution.manifest.v2+json"}]
+		}`), nil).Twice()
+		mockClient.On("GetManifest", mock.Anything, testRepo, "sha256:locked-index").Return([]byte(`{
+			"manifests": [{"digest": "sha256:selected-child", "mediaType": "application/vnd.docker.distribution.manifest.v2+json"}]
+		}`), nil).Once()
+		unlockAttrs := &acr.ChangeableAttributes{DeleteEnabled: &[]bool{true}[0], WriteEnabled: &[]bool{true}[0]}
+		updateResponse := &autorest.Response{Response: &http.Response{StatusCode: http.StatusOK}}
+		unlockManifestCall := mockClient.On("UpdateAcrManifestAttributes", mock.Anything, testRepo, "sha256:locked", unlockAttrs).Return(updateResponse, nil).Once()
+		unlockIndexCall := mockClient.On("UpdateAcrManifestAttributes", mock.Anything, testRepo, "sha256:locked-index", unlockAttrs).Return(updateResponse, nil).Once()
+		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:locked").Return(nil, nil).Once().NotBefore(unlockManifestCall)
+		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:locked-index").Return(nil, nil).Once().NotBefore(unlockIndexCall)
+		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:selected-child").Return(nil, nil).Once()
+
+		agoDuration := mustParseDuration("1d")
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 1, maxManifests: 2, dryRun: false, includeLocked: true}
+		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
+
+		assert.Nil(err, "Should not return error when unlocking selected manifests and indexes")
+		assert.Equal(3, deletedCount, "Should delete the age-selected locked manifest, maximum-selected locked index, and its unprotected child")
+		mockClient.AssertNumberOfCalls(t, "DeleteManifest", 3)
+		mockClient.AssertNumberOfCalls(t, "UpdateAcrManifestAttributes", 2)
+		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, testRepo, "sha256:retained-index")
+		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, testRepo, "sha256:protected-child")
+		mockClient.AssertNotCalled(t, "UpdateAcrManifestAttributes", mock.Anything, testRepo, "sha256:retained-index", mock.Anything)
+		mockClient.AssertNotCalled(t, "UpdateAcrManifestAttributes", mock.Anything, testRepo, "sha256:protected-child", mock.Anything)
+		mockClient.AssertNotCalled(t, "UpdateAcrManifestAttributes", mock.Anything, testRepo, "sha256:selected-child", mock.Anything)
+		mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, mock.Anything, mock.Anything)
+		assert.False(*retainedIndex.ChangeableAttributes.DeleteEnabled, "Minimum-protected index should remain locked")
+		assert.False(*protectedChild.ChangeableAttributes.DeleteEnabled, "Child of the retained index should remain locked")
+		mockClient.AssertExpectations(t)
+	})
+
+	t.Run("DryRunIncludeLockedReportsSelectionWithoutMutations", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		now := time.Now().UTC()
+		retainedIndex := createManifestWithTime("sha256:retained-index", now.Add(-48*time.Hour).Format(time.RFC3339Nano))
+		ociIndexMediaType := "application/vnd.oci.image.index.v1+json"
+		retainedIndex.MediaType = &ociIndexMediaType
+		retainedIndex.ChangeableAttributes.DeleteEnabled = &[]bool{false}[0]
+		lockedManifest := createManifestWithTime("sha256:locked", now.Add(-72*time.Hour).Format(time.RFC3339Nano))
+		lockedManifest.ChangeableAttributes.WriteEnabled = &[]bool{false}[0]
+		lockedIndex := createManifestWithTime("sha256:locked-index", now.Add(-96*time.Hour).Format(time.RFC3339Nano))
+		lockedIndex.MediaType = &ociIndexMediaType
+		lockedIndex.ChangeableAttributes.DeleteEnabled = &[]bool{false}[0]
+		protectedChild := createManifestWithTime("sha256:protected-child", now.Add(-120*time.Hour).Format(time.RFC3339Nano))
+		protectedChild.ChangeableAttributes.DeleteEnabled = &[]bool{false}[0]
+		selectedChild := createManifestWithTime("sha256:selected-child", now.Add(-144*time.Hour).Format(time.RFC3339Nano))
+
+		manifestsResult := &acr.Manifests{
+			Response:            autorest.Response{Response: &http.Response{StatusCode: http.StatusOK}},
+			Registry:            &testLoginURL,
+			ImageName:           &testRepo,
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{protectedChild, selectedChild, retainedIndex, lockedManifest, lockedIndex},
+		}
+		emptyResult := &acr.Manifests{
+			Response:            manifestsResult.Response,
+			Registry:            &testLoginURL,
+			ImageName:           &testRepo,
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{},
+		}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(manifestsResult, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:locked-index").Return(emptyResult, nil).Once()
+		mockClient.On("GetManifest", mock.Anything, testRepo, "sha256:retained-index").Return([]byte(`{
+			"manifests": [{"digest": "sha256:protected-child", "mediaType": "application/vnd.docker.distribution.manifest.v2+json"}]
+		}`), nil).Twice()
+		mockClient.On("GetManifest", mock.Anything, testRepo, "sha256:locked-index").Return([]byte(`{
+			"manifests": [{"digest": "sha256:selected-child", "mediaType": "application/vnd.docker.distribution.manifest.v2+json"}]
+		}`), nil).Once()
+
+		agoDuration := mustParseDuration("1d")
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 1, maxManifests: 2, dryRun: true, includeLocked: true}
+		output := capturePurgeOutput(t, func() {
+			deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
+			assert.Nil(err, "Should not return error when previewing selected locked manifests and indexes")
+			assert.Equal(3, deletedCount, "Should report the same 3 deletions as live include-locked, excluding the retained index and its child")
+		})
+
+		assert.Equal("Would delete manifests for repository: "+testRepo+"\n"+
+			"Would delete: "+testLoginURL+"/"+testRepo+"@sha256:locked (reason: age)\n"+
+			"Would delete: "+testLoginURL+"/"+testRepo+"@sha256:locked-index (reason: age and maximum count)\n"+
+			"Would delete: "+testLoginURL+"/"+testRepo+"@sha256:selected-child (reason: age and maximum count)\n", output)
+		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, mock.Anything, mock.Anything)
+		mockClient.AssertNotCalled(t, "UpdateAcrManifestAttributes", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+		mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, mock.Anything, mock.Anything)
+		assert.False(*retainedIndex.ChangeableAttributes.DeleteEnabled, "Minimum-protected index should remain locked")
+		assert.False(*protectedChild.ChangeableAttributes.DeleteEnabled, "Child of the retained index should remain locked")
+		assert.False(*lockedManifest.ChangeableAttributes.WriteEnabled, "Dry run should not unlock the selected manifest")
+		assert.False(*lockedIndex.ChangeableAttributes.DeleteEnabled, "Dry run should not unlock the selected index")
+		mockClient.AssertExpectations(t)
+	})
+
+	t.Run("MaximumDeletesRecentOverflow", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		now := time.Now().UTC()
+		newestManifest := createManifestWithTime("sha256:newest", now.Add(-time.Hour).Format(time.RFC3339Nano))
+		secondManifest := createManifestWithTime("sha256:second", now.Add(-2*time.Hour).Format(time.RFC3339Nano))
+		thirdManifest := createManifestWithTime("sha256:third", now.Add(-3*time.Hour).Format(time.RFC3339Nano))
+		oldestManifest := createManifestWithTime("sha256:oldest", now.Add(-4*time.Hour).Format(time.RFC3339Nano))
+
+		manifestsResult := &acr.Manifests{
+			Response:            autorest.Response{Response: &http.Response{StatusCode: http.StatusOK}},
+			Registry:            &testLoginURL,
+			ImageName:           &testRepo,
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{newestManifest, secondManifest, thirdManifest, oldestManifest},
+		}
+		emptyResult := &acr.Manifests{
+			Response:            manifestsResult.Response,
+			Registry:            &testLoginURL,
+			ImageName:           &testRepo,
+			ManifestsAttributes: &[]acr.ManifestAttributesBase{},
+		}
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "").Return(manifestsResult, nil).Once()
+		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:oldest").Return(emptyResult, nil).Once()
+		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:oldest").Return(nil, nil).Once()
+
+		agoDuration := mustParseDuration("1d")
+		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: 1, maxManifests: 3, dryRun: false, includeLocked: false}
+		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
+
+		assert.Nil(err, "Should not return error when the maximum overrides age protection")
+		assert.Equal(1, deletedCount, "Should delete only the recent manifest beyond the maximum of 3")
+		mockClient.AssertNumberOfCalls(t, "DeleteManifest", 1)
+		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, testRepo, "sha256:newest")
+		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, testRepo, "sha256:second")
+		mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, testRepo, "sha256:third")
+		mockClient.AssertNotCalled(t, "UpdateAcrManifestAttributes", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+		mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, mock.Anything, mock.Anything)
+		mockClient.AssertExpectations(t)
+	})
+
 }
 
 // TestPurgeAbacVerboseMode tests the verbose output for ABAC registries
@@ -807,44 +1457,35 @@ func TestPurgeAbacVerboseMode(t *testing.T) {
 			tagFilters[repo] = ".*"
 		}
 
-		// Capture stdout to verify verbose output
-		oldStdout := os.Stdout
-		r, w, _ := os.Pipe()
-		os.Stdout = w
-
 		// Call purge with verbose=true and ABAC enabled
-		deletedTagsCount, deletedManifestsCount, purgeErr := purge(
-			testCtx,
-			mockClient,
-			testLoginURL,
-			defaultPoolSize,
-			0,    // ago
-			0,    // keep
-			60,   // filterTimeout
-			true, // removeUntaggedManifests
-			true, // untaggedOnly
-			tagFilters,
-			false, // dryRun
-			false, // includeLocked
-			true,  // verbose = true
-		)
-
-		// Restore stdout and read captured output
-		err := w.Close()
-		if err != nil {
-			t.Fatalf("Failed to close pipe writer: %v", err)
+		opts := retentionOptions{
+			agoDuration:   nil, // ago
+			keep:          0,   // keep
+			minTags:       -1,
+			maxTags:       -1,
+			minManifests:  -1,
+			maxManifests:  -1,
+			dryRun:        false, // dryRun
+			includeLocked: false, // includeLocked
 		}
-		os.Stdout = oldStdout
-		var buf bytes.Buffer
-		_, err = io.Copy(&buf, r)
-		if err != nil {
-			t.Fatalf("Failed to read from pipe: %v", err)
-		}
-		output := buf.String()
+		output := capturePurgeOutput(t, func() {
+			deletedTagsCount, deletedManifestsCount, purgeErr := purge(
+				testCtx,
+				mockClient,
+				testLoginURL,
+				defaultPoolSize,
+				opts,
+				60,   // filterTimeout
+				true, // removeUntaggedManifests
+				true, // untaggedOnly
+				tagFilters,
+				true, // verbose = true
+			)
+			assert.Equal(0, deletedTagsCount, "No tags should be deleted")
+			assert.Equal(0, deletedManifestsCount, "No manifests deleted when none are untagged")
+			assert.Nil(purgeErr, "Error should be nil")
+		})
 
-		assert.Equal(0, deletedTagsCount, "No tags should be deleted")
-		assert.Equal(0, deletedManifestsCount, "No manifests deleted when none are untagged")
-		assert.Nil(purgeErr, "Error should be nil")
 		// Verify verbose output contains repository names
 		assert.Contains(output, "ABAC: Setting token scope for 3 repositories:", "Should output repo count")
 		assert.Contains(output, "repo1", "Should output repo1 in verbose mode")
@@ -883,44 +1524,35 @@ func TestPurgeAbacVerboseMode(t *testing.T) {
 			tagFilters[repo] = ".*"
 		}
 
-		// Capture stdout to verify non-verbose output
-		oldStdout := os.Stdout
-		r, w, _ := os.Pipe()
-		os.Stdout = w
-
 		// Call purge with verbose=false and ABAC enabled
-		deletedTagsCount, deletedManifestsCount, purgeErr := purge(
-			testCtx,
-			mockClient,
-			testLoginURL,
-			defaultPoolSize,
-			0,    // ago
-			0,    // keep
-			60,   // filterTimeout
-			true, // removeUntaggedManifests
-			true, // untaggedOnly
-			tagFilters,
-			false, // dryRun
-			false, // includeLocked
-			false, // verbose = false
-		)
-
-		// Restore stdout and read captured output
-		err := w.Close()
-		if err != nil {
-			t.Fatalf("Failed to close pipe writer: %v", err)
+		opts := retentionOptions{
+			agoDuration:   nil, // ago
+			keep:          0,   // keep
+			minTags:       -1,
+			maxTags:       -1,
+			minManifests:  -1,
+			maxManifests:  -1,
+			dryRun:        false, // dryRun
+			includeLocked: false, // includeLocked
 		}
-		os.Stdout = oldStdout
-		var buf bytes.Buffer
-		_, err = io.Copy(&buf, r)
-		if err != nil {
-			t.Fatalf("Failed to read from pipe: %v", err)
-		}
-		output := buf.String()
+		output := capturePurgeOutput(t, func() {
+			deletedTagsCount, deletedManifestsCount, purgeErr := purge(
+				testCtx,
+				mockClient,
+				testLoginURL,
+				defaultPoolSize,
+				opts,
+				60,   // filterTimeout
+				true, // removeUntaggedManifests
+				true, // untaggedOnly
+				tagFilters,
+				false, // verbose = false
+			)
+			assert.Equal(0, deletedTagsCount, "No tags should be deleted")
+			assert.Equal(0, deletedManifestsCount, "No manifests deleted when none are untagged")
+			assert.Nil(purgeErr, "Error should be nil")
+		})
 
-		assert.Equal(0, deletedTagsCount, "No tags should be deleted")
-		assert.Equal(0, deletedManifestsCount, "No manifests deleted when none are untagged")
-		assert.Nil(purgeErr, "Error should be nil")
 		// Verify non-verbose output contains count but NOT the repository list
 		assert.Contains(output, "ABAC: Setting token scope for 3 repositories", "Should output repo count")
 		// The non-verbose output should NOT contain the bracketed list of repos
@@ -950,20 +1582,27 @@ func TestPurgeAbacVerboseMode(t *testing.T) {
 		mockClient.On("GetAcrManifests", mock.Anything, "test-repo", "", "").Return(emptyManifestsResult, nil).Once()
 
 		// Call purge with verbose=true but non-ABAC registry
+		opts := retentionOptions{
+			agoDuration:   nil, // ago
+			keep:          0,   // keep
+			minTags:       -1,
+			maxTags:       -1,
+			minManifests:  -1,
+			maxManifests:  -1,
+			dryRun:        false, // dryRun
+			includeLocked: false, // includeLocked
+		}
 		deletedTagsCount, deletedManifestsCount, err := purge(
 			testCtx,
 			mockClient,
 			testLoginURL,
 			defaultPoolSize,
-			0,    // ago
-			0,    // keep
+			opts,
 			60,   // filterTimeout
 			true, // removeUntaggedManifests
 			true, // untaggedOnly
 			map[string]string{"test-repo": ".*"},
-			false, // dryRun
-			false, // includeLocked
-			true,  // verbose = true
+			true, // verbose = true
 		)
 
 		assert.Equal(0, deletedTagsCount, "No tags should be deleted")
@@ -973,4 +1612,15 @@ func TestPurgeAbacVerboseMode(t *testing.T) {
 		mockClient.AssertNotCalled(t, "RefreshTokenForAbac", mock.Anything, mock.Anything)
 		mockClient.AssertExpectations(t)
 	})
+}
+
+func createManifestWithTime(digest, timestamp string) acr.ManifestAttributesBase {
+	mediaType := "application/vnd.docker.distribution.manifest.v2+json"
+	return acr.ManifestAttributesBase{
+		Digest:               &digest,
+		Tags:                 &[]string{},
+		LastUpdateTime:       &timestamp,
+		MediaType:            &mediaType,
+		ChangeableAttributes: &acr.ChangeableAttributes{DeleteEnabled: &[]bool{true}[0], WriteEnabled: &[]bool{true}[0]},
+	}
 }
