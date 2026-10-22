@@ -142,5 +142,5 @@ gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c/go.mod h1:K4uyk7z7BCEPqu6E+C
 gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
 gotest.tools/v3 v3.2.0 h1:I0DwBVMGAx26dttAj1BtJLAkVGncrkkUXfJLC4Flt/I=
 gotest.tools/v3 v3.2.0/go.mod h1:Mcr9QNxkg0uMvy/YElmo4SpXgJKWgQvYrT7Kw5RzJ1A=
-oras.land/oras-go/v2 v2.6.3 h1:72z4K9YiDKVB5jieM8cuB1WSVnbZkkD2hd+NmO3HYVI=
-oras.land/oras-go/v2 v2.6.3/go.mod h1:imXEFiYkTZUVVYkfv/r5GVmWeiLkGtNQA8FU4F/sjKs=
+oras.land/oras-go/v2 v2.6.4 h1:l4uv+UT7QK4Hju+KOEZ/c8iOjq3iZH7cULoRpUnSDAU=
+oras.land/oras-go/v2 v2.6.4/go.mod h1:imXEFiYkTZUVVYkfv/r5GVmWeiLkGtNQA8FU4F/sjKs=
