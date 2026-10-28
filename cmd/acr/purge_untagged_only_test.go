@@ -96,6 +96,7 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 			true, // removeUntaggedManifests
 			true, // untaggedOnly
 			map[string]string{testRepo: ".*"},
+			nil,   // tagExclusions
 			false, // verbose
 		)
 
@@ -158,6 +159,7 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 			true, // removeUntaggedManifests
 			true, // untaggedOnly
 			tagFilters,
+			nil,   // tagExclusions
 			false, // verbose
 		)
 
@@ -237,6 +239,7 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 			true, // removeUntaggedManifests
 			true, // untaggedOnly
 			map[string]string{"specific-repo": ".*"},
+			nil,   // tagExclusions
 			false, // verbose
 		)
 
@@ -311,6 +314,7 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 			true, // removeUntaggedManifests
 			true, // untaggedOnly
 			map[string]string{testRepo: ".*"},
+			nil,   // tagExclusions
 			false, // verbose
 		)
 
@@ -402,6 +406,7 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 			true, // removeUntaggedManifests
 			true, // untaggedOnly
 			map[string]string{testRepo: ".*"},
+			nil,   // tagExclusions
 			false, // verbose
 		)
 
@@ -490,6 +495,7 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 			true, // removeUntaggedManifests
 			true, // untaggedOnly
 			map[string]string{testRepo: ".*"},
+			nil,   // tagExclusions
 			false, // verbose
 		)
 
@@ -646,14 +652,14 @@ func TestPurgeDanglingManifestsWithAgoAndKeep(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 
-		// Create manifests where some are old enough (>300 days) and some are not
-		// 300 days before 2026-01-31 is approximately 2025-04-06
+		// Create manifests where some are old enough (>300 days) and some are not.
+		now := time.Now().UTC()
 		manifests := []acr.ManifestAttributesBase{
-			createManifestWithTime("sha256:veryold1", "2025-01-01T00:00:00Z"), // Old enough
-			createManifestWithTime("sha256:veryold2", "2025-02-01T00:00:00Z"), // Old enough
-			createManifestWithTime("sha256:veryold3", "2025-03-01T00:00:00Z"), // Old enough
-			createManifestWithTime("sha256:recent1", "2026-01-01T00:00:00Z"),  // Too recent (<300 days)
-			createManifestWithTime("sha256:recent2", "2026-01-15T00:00:00Z"),  // Too recent (<300 days)
+			createManifestWithTime("sha256:veryold1", now.Add(-400*24*time.Hour).Format(time.RFC3339Nano)),
+			createManifestWithTime("sha256:veryold2", now.Add(-350*24*time.Hour).Format(time.RFC3339Nano)),
+			createManifestWithTime("sha256:veryold3", now.Add(-301*24*time.Hour).Format(time.RFC3339Nano)),
+			createManifestWithTime("sha256:recent1", now.Add(-200*24*time.Hour).Format(time.RFC3339Nano)),
+			createManifestWithTime("sha256:recent2", now.Add(-100*24*time.Hour).Format(time.RFC3339Nano)),
 		}
 
 		manifestsResult := &acr.Manifests{
@@ -1479,6 +1485,7 @@ func TestPurgeAbacVerboseMode(t *testing.T) {
 				true, // removeUntaggedManifests
 				true, // untaggedOnly
 				tagFilters,
+				nil,  // tagExclusions
 				true, // verbose = true
 			)
 			assert.Equal(0, deletedTagsCount, "No tags should be deleted")
@@ -1546,6 +1553,7 @@ func TestPurgeAbacVerboseMode(t *testing.T) {
 				true, // removeUntaggedManifests
 				true, // untaggedOnly
 				tagFilters,
+				nil,   // tagExclusions
 				false, // verbose = false
 			)
 			assert.Equal(0, deletedTagsCount, "No tags should be deleted")
@@ -1602,6 +1610,7 @@ func TestPurgeAbacVerboseMode(t *testing.T) {
 			true, // removeUntaggedManifests
 			true, // untaggedOnly
 			map[string]string{"test-repo": ".*"},
+			nil,  // tagExclusions
 			true, // verbose = true
 		)
 

@@ -204,6 +204,59 @@ func CollectTagFilters(ctx context.Context, rawFilters []string, client acrapi.B
 	return tagFilters, nil
 }
 
+// CollectTagExclusions collects tag expressions for already-selected repositories.
+func CollectTagExclusions(tagFilters map[string]string, excludeTags []string, excludeFilters []string, timeout int64) (map[string][]string, error) {
+	exclusionPatterns := make(map[string][]string)
+	for _, value := range excludeTags {
+		repoExpression, tags, err := GetRepositoryAndTagRegex(value)
+		if err != nil {
+			return nil, err
+		}
+		var escapedTags []string
+		for _, tag := range strings.Split(tags, ",") {
+			tag = strings.TrimSpace(tag)
+			if tag == "" {
+				return nil, errors.New("tag exclusion list contains an empty entry")
+			}
+			escapedTags = append(escapedTags, regexp2.Escape(tag))
+		}
+		exclusionPatterns[repoExpression] = append(exclusionPatterns[repoExpression], `\A(?:`+strings.Join(escapedTags, "|")+`)\z`)
+	}
+
+	for _, value := range excludeFilters {
+		repoExpression, tagExpression, err := GetRepositoryAndTagRegex(value)
+		if err != nil {
+			return nil, err
+		}
+		exclusionPatterns[repoExpression] = append(exclusionPatterns[repoExpression], tagExpression)
+	}
+
+	exclusions := make(map[string][]string)
+	for repoExpression, tagExpressions := range exclusionPatterns {
+		repoFilter, err := BuildRegexFilter("^"+repoExpression+"$", timeout)
+		if err != nil {
+			return nil, err
+		}
+		for _, tagExpression := range tagExpressions {
+			if _, err := BuildRegexFilter(tagExpression, timeout); err != nil {
+				return nil, err
+			}
+		}
+		for repoName := range tagFilters {
+			matches, err := repoFilter.MatchString(repoName)
+			if err != nil {
+				return nil, err
+			}
+			if matches {
+				// Preserve capture numbering and inline options by keeping expressions separate.
+				exclusions[repoName] = append(exclusions[repoName], tagExpressions...)
+			}
+		}
+	}
+
+	return exclusions, nil
+}
+
 // GetLastTagFromResponse extracts the last tag from pagination headers in the response.
 func GetLastTagFromResponse(resultTags *acr.RepositoryTagsType) string {
 	// The lastTag is updated to keep the for loop going.

@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,6 +17,8 @@ import (
 	"github.com/Azure/acr-cli/cmd/mocks"
 	"github.com/Azure/acr-cli/cmd/repository"
 	"github.com/Azure/go-autorest/autorest"
+	"github.com/dlclark/regexp2"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -46,7 +49,7 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(TagWithLocal, nil).Once()
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, "v1-c-local.test").Return(&deletedResponse, nil).Once()
 		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*-?local[.].+", 60, false)
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*-?local[.].+", nil, 60, false)
 		assert.Equal(1, deletedTags, "Number of deleted elements should be 1")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -60,7 +63,7 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, "v1-c").Return(&deletedResponse, nil).Once()
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, "v1-b").Return(&deletedResponse, nil).Once()
 		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "v1(?!-a)", 60, false)
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "v1(?!-a)", nil, 60, false)
 		assert.Equal(2, deletedTags, "Number of deleted elements should be 2")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -73,7 +76,7 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, "v1-c").Return(&deletedResponse, nil).Once()
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, "v1-b").Return(&deletedResponse, nil).Once()
 		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "v1-*[abc]+(?<!-[a])", 60, false)
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "v1-*[abc]+(?<!-[a])", nil, 60, false)
 		assert.Equal(2, deletedTags, "Number of deleted elements should be 2")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -87,7 +90,7 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(notFoundTagResponse, errors.New("testRepo not found")).Once()
 		agoDuration := mustParseDuration("1d")
 		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "[\\s\\S]*", 60, false)
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "[\\s\\S]*", nil, 60, false)
 		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -100,7 +103,7 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(EmptyListTagsResult, nil).Once()
 		agoDuration := mustParseDuration("1d")
 		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "[\\s\\S]*", 60, false)
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "[\\s\\S]*", nil, 60, false)
 		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -114,7 +117,7 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(OneTagResult, nil).Once()
 		agoDuration := mustParseDuration("1d")
 		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "[\\s\\S]*", 60, false)
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "[\\s\\S]*", nil, 60, false)
 		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -127,7 +130,7 @@ func TestPurgeTags(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(OneTagResult, nil).Once()
 		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "^hello.*", 60, false)
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "^hello.*", nil, 60, false)
 		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -138,7 +141,7 @@ func TestPurgeTags(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "[", 60, false)
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "[", nil, 60, false)
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
 		assert.NotEqual(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -151,7 +154,7 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(nil, errors.New("unauthorized")).Once()
 		agoDuration := mustParseDuration("1d")
 		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "[\\s\\S]*", 60, false)
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "[\\s\\S]*", nil, 60, false)
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
@@ -166,7 +169,7 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "latest").Return(nil, errors.New("unauthorized")).Once()
 		agoDuration := mustParseDuration("1d")
 		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "[\\s\\S]*", 60, false)
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "[\\s\\S]*", nil, 60, false)
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
@@ -179,7 +182,7 @@ func TestPurgeTags(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(DeleteDisabledOneTagResult, nil).Once()
 		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "^la.*", 60, false)
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "^la.*", nil, 60, false)
 		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -190,7 +193,7 @@ func TestPurgeTags(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(WriteDisabledOneTagResult, nil).Once()
 		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "^la.*", 60, false)
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "^la.*", nil, 60, false)
 		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -202,7 +205,7 @@ func TestPurgeTags(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(InvalidDateOneTagResult, nil).Once()
 		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "^la.*", 60, false)
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "^la.*", nil, 60, false)
 		assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
@@ -216,7 +219,7 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(OneTagResult, nil).Once()
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, "latest").Return(&deletedResponse, nil).Once()
 		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "^la.*", 60, false)
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "^la.*", nil, 60, false)
 		assert.Equal(1, deletedTags, "Number of deleted elements should be 1")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -235,7 +238,7 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, "v3").Return(&deletedResponse, nil).Once()
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, "v4").Return(&deletedResponse, nil).Once()
 		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "[\\s\\S]*", 60, false)
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "[\\s\\S]*", nil, 60, false)
 		assert.Equal(5, deletedTags, "Number of deleted elements should be 5")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -249,7 +252,7 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, "latest").Return(&notFoundResponse, errors.New("not found")).Once()
 		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
 		output := capturePurgeOutput(t, func() {
-			deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "^la.*", 60, true)
+			deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "^la.*", nil, 60, true)
 			assert.Equal(1, deletedTags, "Number of deleted elements should be 1")
 			assert.NoError(err)
 		})
@@ -269,7 +272,7 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, "latest").Return(nil, deleteErr).Once()
 		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
 		output := capturePurgeOutput(t, func() {
-			deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "^la.*", 60, true)
+			deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "^la.*", nil, 60, true)
 			assert.Equal(-1, deletedTags, "Number of deleted elements should be -1")
 			assert.ErrorIs(err, deleteErr)
 		})
@@ -287,7 +290,7 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, "v3").Return(&deletedResponse, nil).Once()
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, "v4").Return(&deletedResponse, nil).Once()
 		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 1, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "[\\s\\S]*", 60, false)
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "[\\s\\S]*", nil, 60, false)
 		assert.Equal(3, deletedTags, "Number of deleted elements should be 3")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -300,7 +303,7 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, "v1-c").Return(&deletedResponse, nil).Once()
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, "v1-b").Return(&deletedResponse, nil).Once()
 		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 1, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "v1-.*", 60, false)
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "v1-.*", nil, 60, false)
 		assert.Equal(2, deletedTags, "Number of deleted elements should be 2")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -313,7 +316,7 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, "v1-c").Return(&deletedResponse, nil).Once()
 		agoDuration := mustParseDuration("30m")
 		opts := retentionOptions{agoDuration: &agoDuration, keep: 1, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "v1-.*", 60, false)
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "v1-.*", nil, 60, false)
 		assert.Equal(1, deletedTags, "Number of deleted elements should be 1")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -325,7 +328,7 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(OneTagResult, nil).Once()
 		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: true, includeLocked: false}
 		output := capturePurgeOutput(t, func() {
-			deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", 60, false)
+			deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", nil, 60, false)
 			assert.NoError(err)
 			assert.Equal(1, deletedTags)
 		})
@@ -340,7 +343,7 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(FourTagsResult, nil).Once()
 		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 1, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: true, includeLocked: false}
 		output := capturePurgeOutput(t, func() {
-			deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", 60, false)
+			deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", nil, 60, false)
 			assert.NoError(err)
 			assert.Equal(3, deletedTags)
 		})
@@ -376,7 +379,7 @@ func TestPurgeTags(t *testing.T) {
 
 		agoDuration := mustParseDuration("1d")
 		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: 1, maxTags: 2, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "^release-", 60, false)
+		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, "^release-", nil, 60, false)
 
 		assert.NoError(err)
 		assert.Equal(2, deletedTags)
@@ -407,7 +410,7 @@ func TestPurgeTags(t *testing.T) {
 
 		agoDuration := mustParseDuration("1d")
 		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: 1, maxTags: 2, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", 60, false)
+		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", nil, 60, false)
 
 		assert.NoError(err)
 		assert.Equal(1, deletedTags)
@@ -428,7 +431,7 @@ func TestPurgeTags(t *testing.T) {
 		}, nil).Once()
 
 		opts := retentionOptions{agoDuration: nil, keep: 0, minTags: -1, maxTags: 2, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", 60, false)
+		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", nil, 60, false)
 
 		assert.NoError(err)
 		assert.Zero(deletedTags)
@@ -455,7 +458,7 @@ func TestPurgeTags(t *testing.T) {
 
 		agoDuration := mustParseDuration("0s")
 		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: 0, maxTags: 2, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", 60, false)
+		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", nil, 60, false)
 
 		assert.NoError(err)
 		assert.Equal(1, deletedTags)
@@ -477,7 +480,7 @@ func TestPurgeTags(t *testing.T) {
 
 		agoDuration := mustParseDuration("0s")
 		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: 0, maxTags: 0, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", 60, false)
+		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", nil, 60, false)
 
 		assert.NoError(err)
 		assert.Equal(1, deletedTags)
@@ -497,7 +500,7 @@ func TestPurgeTags(t *testing.T) {
 
 		agoDuration := mustParseDuration("1d")
 		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: 2, maxTags: 3, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", 60, false)
+		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", nil, 60, false)
 
 		assert.NoError(err)
 		assert.Zero(deletedTags)
@@ -557,6 +560,16 @@ func TestPurgeTags(t *testing.T) {
 				assert.ErrorContains(t, cmd.Execute(), message)
 			})
 		}
+		for _, flag := range []string{"--exclude-tags", "--exclude-filter"} {
+			t.Run(flag+"-untagged-only", func(t *testing.T) {
+				assert := assert.New(t)
+				cmd := newPurgeCmd(&rootParameters{})
+				cmd.SetOut(io.Discard)
+				cmd.SetErr(io.Discard)
+				cmd.SetArgs([]string{"--untagged-only", flag, ".*:latest"})
+				assert.ErrorContains(cmd.Execute(), "none of the others can be")
+			})
+		}
 		for i, args := range [][]string{
 			{"--filter", "repo:.*", "--max-tags", "0"},
 			{"--filter", "repo:.*", "--ago", "0s", "--min-tags", "0", "--max-tags", "0"},
@@ -592,7 +605,7 @@ func TestPurgeTags(t *testing.T) {
 
 		agoDuration := mustParseDuration("1d")
 		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: 1, maxTags: 1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", 60, false)
+		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", nil, 60, false)
 
 		assert.NoError(err)
 		assert.Equal(1, deletedTags)
@@ -625,7 +638,7 @@ func TestPurgeTags(t *testing.T) {
 
 		agoDuration := mustParseDuration("1d")
 		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: 1, maxTags: 2, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: true}
-		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", 60, false)
+		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", nil, 60, false)
 
 		assert.NoError(err)
 		assert.Equal(2, deletedTags)
@@ -657,7 +670,7 @@ func TestPurgeTags(t *testing.T) {
 		agoDuration := mustParseDuration("1d")
 		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: 1, maxTags: 2, minManifests: -1, maxManifests: -1, dryRun: true, includeLocked: true}
 		output := capturePurgeOutput(t, func() {
-			deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", 60, false)
+			deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", nil, 60, false)
 			assert.NoError(err)
 			assert.Equal(2, deletedTags)
 			assert.Equal(map[string]int{middleDigest: 1, overflowDigest: 1}, byDigest)
@@ -690,7 +703,7 @@ func TestPurgeTags(t *testing.T) {
 		agoDuration := mustParseDuration("1d")
 		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: 1, maxTags: 1, minManifests: -1, maxManifests: -1, dryRun: true, includeLocked: false}
 		output := capturePurgeOutput(t, func() {
-			deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", 60, false)
+			deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", nil, 60, false)
 			assert.NoError(err)
 			assert.Equal(1, deletedTags)
 			assert.Equal(map[string]int{overflowDigest: 1}, byDigest)
@@ -721,7 +734,7 @@ func TestPurgeTags(t *testing.T) {
 		agoDuration := mustParseDuration("1d")
 		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: 1, maxTags: 2, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
 		output := capturePurgeOutput(t, func() {
-			deletedTags, byDigest, err := purgeTags(testCtx, mockClient, 1, testLoginURL, testRepo, opts, ".*", 60, false)
+			deletedTags, byDigest, err := purgeTags(testCtx, mockClient, 1, testLoginURL, testRepo, opts, ".*", nil, 60, false)
 			assert.NoError(err)
 			assert.Equal(1, deletedTags)
 			assert.Equal(map[string]int{middleDigest: 1}, byDigest)
@@ -752,7 +765,7 @@ func TestPurgeTags(t *testing.T) {
 		}, errors.New("operation not allowed")).Once()
 		opts := retentionOptions{agoDuration: nil, keep: 0, minTags: -1, maxTags: 1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
 		output := capturePurgeOutput(t, func() {
-			deletedTags, byDigest, err := purgeTags(testCtx, mockClient, 1, testLoginURL, testRepo, opts, ".*", 60, true)
+			deletedTags, byDigest, err := purgeTags(testCtx, mockClient, 1, testLoginURL, testRepo, opts, ".*", nil, 60, true)
 			assert.NoError(err)
 			assert.Zero(deletedTags)
 			assert.Equal(map[string]int{blockedDigest: 1}, byDigest)
@@ -779,7 +792,7 @@ func TestPurgeTags(t *testing.T) {
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", name).Return(nil, listingErr).Once()
 
 		opts := retentionOptions{agoDuration: nil, keep: 0, minTags: -1, maxTags: 1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", 60, false)
+		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", nil, 60, false)
 
 		assert.ErrorIs(err, listingErr)
 		assert.Equal(-1, deletedTags)
@@ -804,7 +817,7 @@ func TestPurgeTags(t *testing.T) {
 		}, nil).Once()
 
 		opts := retentionOptions{agoDuration: nil, keep: 0, minTags: -1, maxTags: 1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", 60, false)
+		deletedTags, byDigest, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", nil, 60, false)
 
 		var parseErr *time.ParseError
 		if assert.ErrorAs(err, &parseErr) {
@@ -830,7 +843,7 @@ func TestPurgeTags(t *testing.T) {
 		opts := retentionOptions{minTags: -1, maxTags: 0, minManifests: -1, maxManifests: -1}
 
 		output := capturePurgeOutput(t, func() {
-			deleted, _, err := purgeTags(testCtx, mockClient, 1, testLoginURL, testRepo, opts, ".*", 60, true)
+			deleted, _, err := purgeTags(testCtx, mockClient, 1, testLoginURL, testRepo, opts, ".*", nil, 60, true)
 			assert.NoError(err)
 			assert.Equal(1, deleted)
 		})
@@ -859,7 +872,7 @@ func TestPurgeTags(t *testing.T) {
 		opts := retentionOptions{agoDuration: &agoDuration, minTags: 1, maxTags: 2, minManifests: -1, maxManifests: -1}
 
 		output := capturePurgeOutput(t, func() {
-			deleted, _, err := purgeTags(testCtx, mockClient, 1, testLoginURL, testRepo, opts, ".*", 60, true)
+			deleted, _, err := purgeTags(testCtx, mockClient, 1, testLoginURL, testRepo, opts, ".*", nil, 60, true)
 			assert.NoError(err)
 			assert.Equal(2, deleted)
 		})
@@ -883,7 +896,7 @@ func TestPurgeTags(t *testing.T) {
 		opts := retentionOptions{agoDuration: &agoDuration, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1}
 
 		output := capturePurgeOutput(t, func() {
-			deleted, _, err := purgeTags(testCtx, mockClient, 1, testLoginURL, testRepo, opts, ".*", 60, false)
+			deleted, _, err := purgeTags(testCtx, mockClient, 1, testLoginURL, testRepo, opts, ".*", nil, 60, false)
 			assert.NoError(err)
 			assert.Equal(1, deleted)
 		})
@@ -905,7 +918,7 @@ func TestPurgeTags(t *testing.T) {
 		opts := retentionOptions{minTags: -1, maxTags: 0, minManifests: -1, maxManifests: -1}
 
 		output := capturePurgeOutput(t, func() {
-			_, _, err := purgeTags(testCtx, mockClient, 1, testLoginURL, testRepo, opts, ".*", 60, true)
+			_, _, err := purgeTags(testCtx, mockClient, 1, testLoginURL, testRepo, opts, ".*", nil, 60, true)
 			assert.ErrorIs(err, context.Canceled)
 		})
 
@@ -948,7 +961,7 @@ func TestPurgeTags(t *testing.T) {
 		opts := retentionOptions{agoDuration: &agoDuration, minTags: -1, maxTags: 1, minManifests: -1, maxManifests: -1, includeLocked: true}
 
 		output := capturePurgeOutput(t, func() {
-			_, _, err := purgeTags(testCtx, mockClient, 1, testLoginURL, testRepo, opts, ".*", 60, true)
+			_, _, err := purgeTags(testCtx, mockClient, 1, testLoginURL, testRepo, opts, ".*", nil, 60, true)
 			assert.ErrorIs(err, deletionErr)
 		})
 
@@ -957,6 +970,801 @@ func TestPurgeTags(t *testing.T) {
 		assert.Contains(output, fmt.Sprintf("Deleted %s/%s:both (reason: age and maximum count)\n", testLoginURL, testRepo))
 		assert.Contains(output, fmt.Sprintf("Failed to delete %s/%s:failed, error: deletion failed\n", testLoginURL, testRepo))
 		assert.NotContains(output, fmt.Sprintf("Deleted %s/%s:failed", testLoginURL, testRepo))
+		mockClient.AssertExpectations(t)
+	})
+
+	t.Run("TagExclusionsBeforeAge", func(t *testing.T) {
+		for _, dryRun := range []bool{false, true} {
+			t.Run(fmt.Sprintf("dry-run=%t", dryRun), func(t *testing.T) {
+				assert := assert.New(t)
+				mockClient := &mocks.AcrCLIClientInterface{}
+				wantDelete := []string{"candidate-middle", "candidate-old", "candidate-ancient"}
+				exclusions, err := repository.CollectTagExclusions(
+					map[string]string{"app": ".*"},
+					[]string{".*:latest, stable", "^app.*$:v1.0,latest"},
+					[]string{"^app.*$:^release-", "^app$:production-"},
+					60,
+				)
+				if !assert.NoError(err) {
+					t.FailNow()
+				}
+				now := time.Now().UTC()
+				newestTime := now.Add(-time.Hour)
+				tag := func(name string, updated time.Time) acr.TagAttributesBase {
+					digest, timestamp := "sha256:"+name, updated.Format(time.RFC3339Nano)
+					return acr.TagAttributesBase{Name: &name, Digest: &digest, LastUpdateTime: &timestamp}
+				}
+				latest, stable, release, exact, production, unrelated := "latest", "stable", "release-live", "v1.0", "production-live", "unmatched"
+				tags := []acr.TagAttributesBase{
+					{Name: &latest}, {Name: &stable}, {Name: &release}, {Name: &exact}, {Name: &unrelated},
+					tag("candidate-new", newestTime), tag("candidate-middle", now.Add(-48*time.Hour)),
+					{Name: &production},
+					tag("candidate-old", now.Add(-72*time.Hour)), tag("candidate-ancient", now.Add(-96*time.Hour)),
+				}
+				mockClient.On("GetAcrTags", mock.Anything, "app", "timedesc", "").Return(&acr.RepositoryTagsType{
+					Response: autorest.Response{Response: &http.Response{}}, TagsAttributes: &tags,
+				}, nil).Once()
+				if !dryRun {
+					for _, name := range wantDelete {
+						mockClient.On("DeleteAcrTag", mock.Anything, "app", name).Return(&deletedResponse, nil).Once()
+					}
+				}
+				duration := mustParseDuration("1d")
+				opts := retentionOptions{agoDuration: &duration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: dryRun}
+				output := capturePurgeOutput(t, func() {
+					count, byDigest, err := purgeTags(testCtx, mockClient, 1, testLoginURL, "app", opts,
+						"^(?:candidate-|latest$|stable$|v1[.]0$|release-|production-)", exclusions["app"], 60, false)
+					assert.NoError(err)
+					assert.Equal(len(wantDelete), count)
+					expectedDigests := map[string]int{}
+					for _, name := range wantDelete {
+						expectedDigests["sha256:"+name] = 1
+					}
+					assert.Equal(expectedDigests, byDigest)
+				})
+				if dryRun {
+					assert.Equal(len(wantDelete), strings.Count(output, "Would delete:"))
+					for _, name := range wantDelete {
+						assert.Contains(output, "/app:"+name+" ")
+					}
+					mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, mock.Anything, mock.Anything)
+				}
+				for _, protected := range []string{latest, stable, release, exact, production, unrelated} {
+					assert.NotContains(output, "/app:"+protected+" ")
+					mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, "app", protected)
+				}
+				mockClient.AssertExpectations(t)
+			})
+		}
+	})
+
+	t.Run("TagExclusionsBeforeKeep", func(t *testing.T) {
+		for _, dryRun := range []bool{false, true} {
+			t.Run(fmt.Sprintf("dry-run=%t", dryRun), func(t *testing.T) {
+				assert := assert.New(t)
+				mockClient := &mocks.AcrCLIClientInterface{}
+				wantDelete := []string{"candidate-old", "candidate-ancient"}
+				exclusions, err := repository.CollectTagExclusions(
+					map[string]string{"app": ".*"},
+					[]string{".*:latest, stable", "^app.*$:v1.0,latest"},
+					[]string{"^app.*$:^release-", "^app$:production-"},
+					60,
+				)
+				if !assert.NoError(err) {
+					t.FailNow()
+				}
+				now := time.Now().UTC()
+				newestTime := now.Add(-time.Hour)
+				tag := func(name string, updated time.Time) acr.TagAttributesBase {
+					digest, timestamp := "sha256:"+name, updated.Format(time.RFC3339Nano)
+					return acr.TagAttributesBase{Name: &name, Digest: &digest, LastUpdateTime: &timestamp}
+				}
+				latest, stable, release, exact, production, unrelated := "latest", "stable", "release-live", "v1.0", "production-live", "unmatched"
+				tags := []acr.TagAttributesBase{
+					{Name: &latest}, {Name: &stable}, {Name: &release}, {Name: &exact}, {Name: &unrelated},
+					tag("candidate-new", newestTime), tag("candidate-middle", now.Add(-48*time.Hour)),
+					{Name: &production},
+					tag("candidate-old", now.Add(-72*time.Hour)), tag("candidate-ancient", now.Add(-96*time.Hour)),
+				}
+				mockClient.On("GetAcrTags", mock.Anything, "app", "timedesc", "").Return(&acr.RepositoryTagsType{
+					Response: autorest.Response{Response: &http.Response{}}, TagsAttributes: &tags,
+				}, nil).Once()
+				if !dryRun {
+					for _, name := range wantDelete {
+						mockClient.On("DeleteAcrTag", mock.Anything, "app", name).Return(&deletedResponse, nil).Once()
+					}
+				}
+				duration := mustParseDuration("1d")
+				opts := retentionOptions{agoDuration: &duration, keep: 1, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: dryRun}
+				output := capturePurgeOutput(t, func() {
+					count, byDigest, err := purgeTags(testCtx, mockClient, 1, testLoginURL, "app", opts,
+						"^(?:candidate-|latest$|stable$|v1[.]0$|release-|production-)", exclusions["app"], 60, false)
+					assert.NoError(err)
+					assert.Equal(len(wantDelete), count)
+					expectedDigests := map[string]int{}
+					for _, name := range wantDelete {
+						expectedDigests["sha256:"+name] = 1
+					}
+					assert.Equal(expectedDigests, byDigest)
+				})
+				if dryRun {
+					assert.Equal(len(wantDelete), strings.Count(output, "Would delete:"))
+					for _, name := range wantDelete {
+						assert.Contains(output, "/app:"+name+" ")
+					}
+					mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, mock.Anything, mock.Anything)
+				}
+				for _, protected := range []string{latest, stable, release, exact, production, unrelated} {
+					assert.NotContains(output, "/app:"+protected+" ")
+					mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, "app", protected)
+				}
+				mockClient.AssertExpectations(t)
+			})
+		}
+	})
+
+	t.Run("TagExclusionsBeforeKeepAcrossPages", func(t *testing.T) {
+		for _, dryRun := range []bool{false, true} {
+			t.Run(fmt.Sprintf("dry-run=%t", dryRun), func(t *testing.T) {
+				assert := assert.New(t)
+				mockClient := &mocks.AcrCLIClientInterface{}
+				wantDelete := []string{"candidate-ancient"}
+				exclusions, err := repository.CollectTagExclusions(
+					map[string]string{"app": ".*"},
+					[]string{".*:latest, stable", "^app.*$:v1.0,latest"},
+					[]string{"^app.*$:^release-", "^app$:production-"},
+					60,
+				)
+				if !assert.NoError(err) {
+					t.FailNow()
+				}
+				now := time.Now().UTC()
+				newestTime := now.Add(-time.Hour)
+				tag := func(name string, updated time.Time) acr.TagAttributesBase {
+					digest, timestamp := "sha256:"+name, updated.Format(time.RFC3339Nano)
+					return acr.TagAttributesBase{Name: &name, Digest: &digest, LastUpdateTime: &timestamp}
+				}
+				latest, stable, release, exact, production, unrelated := "latest", "stable", "release-live", "v1.0", "production-live", "unmatched"
+				firstPage := []acr.TagAttributesBase{{Name: &latest}, {Name: &stable}}
+				secondPage := []acr.TagAttributesBase{
+					{Name: &release}, {Name: &exact}, {Name: &unrelated},
+					tag("candidate-new", newestTime), tag("candidate-middle", now.Add(-48*time.Hour)),
+				}
+				thirdPage := []acr.TagAttributesBase{
+					{Name: &production},
+					tag("candidate-old", now.Add(-72*time.Hour)), tag("candidate-ancient", now.Add(-96*time.Hour)),
+				}
+				mockClient.On("GetAcrTags", mock.Anything, "app", "timedesc", "").Return(&acr.RepositoryTagsType{
+					Response: autorest.Response{Response: &http.Response{Header: http.Header{"Link": {"</tags?last=stable>"}}}}, TagsAttributes: &firstPage,
+				}, nil).Once()
+				mockClient.On("GetAcrTags", mock.Anything, "app", "timedesc", stable).Return(&acr.RepositoryTagsType{
+					Response: autorest.Response{Response: &http.Response{Header: http.Header{"Link": {"</tags?last=candidate-middle>"}}}}, TagsAttributes: &secondPage,
+				}, nil).Once()
+				mockClient.On("GetAcrTags", mock.Anything, "app", "timedesc", "candidate-middle").Return(&acr.RepositoryTagsType{
+					Response: autorest.Response{Response: &http.Response{}}, TagsAttributes: &thirdPage,
+				}, nil).Once()
+				if !dryRun {
+					for _, name := range wantDelete {
+						mockClient.On("DeleteAcrTag", mock.Anything, "app", name).Return(&deletedResponse, nil).Once()
+					}
+				}
+				duration := mustParseDuration("1d")
+				opts := retentionOptions{agoDuration: &duration, keep: 2, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: dryRun}
+				output := capturePurgeOutput(t, func() {
+					count, byDigest, err := purgeTags(testCtx, mockClient, 1, testLoginURL, "app", opts,
+						"^(?:candidate-|latest$|stable$|v1[.]0$|release-|production-)", exclusions["app"], 60, false)
+					assert.NoError(err)
+					assert.Equal(len(wantDelete), count)
+					expectedDigests := map[string]int{}
+					for _, name := range wantDelete {
+						expectedDigests["sha256:"+name] = 1
+					}
+					assert.Equal(expectedDigests, byDigest)
+				})
+				if dryRun {
+					assert.Equal(len(wantDelete), strings.Count(output, "Would delete:"))
+					for _, name := range wantDelete {
+						assert.Contains(output, "/app:"+name+" ")
+					}
+					mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, mock.Anything, mock.Anything)
+				}
+				for _, protected := range []string{latest, stable, release, exact, production, unrelated} {
+					assert.NotContains(output, "/app:"+protected+" ")
+					mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, "app", protected)
+				}
+				mockClient.AssertExpectations(t)
+			})
+		}
+	})
+
+	t.Run("TagExclusionsBeforeMaximum", func(t *testing.T) {
+		for _, dryRun := range []bool{false, true} {
+			t.Run(fmt.Sprintf("dry-run=%t", dryRun), func(t *testing.T) {
+				assert := assert.New(t)
+				mockClient := &mocks.AcrCLIClientInterface{}
+				wantDelete := []string{"candidate-old", "candidate-ancient"}
+				exclusions, err := repository.CollectTagExclusions(
+					map[string]string{"app": ".*"},
+					[]string{".*:latest, stable", "^app.*$:v1.0,latest"},
+					[]string{"^app.*$:^release-", "^app$:production-"},
+					60,
+				)
+				if !assert.NoError(err) {
+					t.FailNow()
+				}
+				now := time.Now().UTC()
+				newestTime := now.Add(-time.Hour)
+				tag := func(name string, updated time.Time) acr.TagAttributesBase {
+					digest, timestamp := "sha256:"+name, updated.Format(time.RFC3339Nano)
+					return acr.TagAttributesBase{Name: &name, Digest: &digest, LastUpdateTime: &timestamp}
+				}
+				latest, stable, release, exact, production, unrelated := "latest", "stable", "release-live", "v1.0", "production-live", "unmatched"
+				tags := []acr.TagAttributesBase{
+					{Name: &latest}, {Name: &stable}, {Name: &release}, {Name: &exact}, {Name: &unrelated},
+					tag("candidate-new", newestTime), tag("candidate-middle", now.Add(-48*time.Hour)),
+					{Name: &production},
+					tag("candidate-old", now.Add(-72*time.Hour)), tag("candidate-ancient", now.Add(-96*time.Hour)),
+				}
+				mockClient.On("GetAcrTags", mock.Anything, "app", "timedesc", "").Return(&acr.RepositoryTagsType{
+					Response: autorest.Response{Response: &http.Response{}}, TagsAttributes: &tags,
+				}, nil).Once()
+				if !dryRun {
+					for _, name := range wantDelete {
+						mockClient.On("DeleteAcrTag", mock.Anything, "app", name).Return(&deletedResponse, nil).Once()
+					}
+				}
+				opts := retentionOptions{keep: 0, minTags: -1, maxTags: 2, minManifests: -1, maxManifests: -1, dryRun: dryRun}
+				output := capturePurgeOutput(t, func() {
+					count, byDigest, err := purgeTags(testCtx, mockClient, 1, testLoginURL, "app", opts,
+						"^(?:candidate-|latest$|stable$|v1[.]0$|release-|production-)", exclusions["app"], 60, false)
+					assert.NoError(err)
+					assert.Equal(len(wantDelete), count)
+					expectedDigests := map[string]int{}
+					for _, name := range wantDelete {
+						expectedDigests["sha256:"+name] = 1
+					}
+					assert.Equal(expectedDigests, byDigest)
+				})
+				if dryRun {
+					assert.Equal(len(wantDelete), strings.Count(output, "Would delete:"))
+					for _, name := range wantDelete {
+						assert.Contains(output, "/app:"+name+" ")
+					}
+					mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, mock.Anything, mock.Anything)
+				}
+				for _, protected := range []string{latest, stable, release, exact, production, unrelated} {
+					assert.NotContains(output, "/app:"+protected+" ")
+					mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, "app", protected)
+				}
+				mockClient.AssertExpectations(t)
+			})
+		}
+	})
+
+	t.Run("TagExclusionsWithZeroMaximum", func(t *testing.T) {
+		for _, dryRun := range []bool{false, true} {
+			t.Run(fmt.Sprintf("dry-run=%t", dryRun), func(t *testing.T) {
+				assert := assert.New(t)
+				mockClient := &mocks.AcrCLIClientInterface{}
+				wantDelete := []string{"candidate-new", "candidate-middle", "candidate-old", "candidate-ancient"}
+				exclusions, err := repository.CollectTagExclusions(
+					map[string]string{"app": ".*"},
+					[]string{".*:latest, stable", "^app.*$:v1.0,latest"},
+					[]string{"^app.*$:^release-", "^app$:production-"},
+					60,
+				)
+				if !assert.NoError(err) {
+					t.FailNow()
+				}
+				now := time.Now().UTC()
+				newestTime := now.Add(-time.Hour)
+				tag := func(name string, updated time.Time) acr.TagAttributesBase {
+					digest, timestamp := "sha256:"+name, updated.Format(time.RFC3339Nano)
+					return acr.TagAttributesBase{Name: &name, Digest: &digest, LastUpdateTime: &timestamp}
+				}
+				latest, stable, release, exact, production, unrelated := "latest", "stable", "release-live", "v1.0", "production-live", "unmatched"
+				tags := []acr.TagAttributesBase{
+					{Name: &latest}, {Name: &stable}, {Name: &release}, {Name: &exact}, {Name: &unrelated},
+					tag("candidate-new", newestTime), tag("candidate-middle", now.Add(-48*time.Hour)),
+					{Name: &production},
+					tag("candidate-old", now.Add(-72*time.Hour)), tag("candidate-ancient", now.Add(-96*time.Hour)),
+				}
+				mockClient.On("GetAcrTags", mock.Anything, "app", "timedesc", "").Return(&acr.RepositoryTagsType{
+					Response: autorest.Response{Response: &http.Response{}}, TagsAttributes: &tags,
+				}, nil).Once()
+				if !dryRun {
+					for _, name := range wantDelete {
+						mockClient.On("DeleteAcrTag", mock.Anything, "app", name).Return(&deletedResponse, nil).Once()
+					}
+				}
+				opts := retentionOptions{keep: 0, minTags: -1, maxTags: 0, minManifests: -1, maxManifests: -1, dryRun: dryRun}
+				output := capturePurgeOutput(t, func() {
+					count, byDigest, err := purgeTags(testCtx, mockClient, 1, testLoginURL, "app", opts,
+						"^(?:candidate-|latest$|stable$|v1[.]0$|release-|production-)", exclusions["app"], 60, false)
+					assert.NoError(err)
+					assert.Equal(len(wantDelete), count)
+					expectedDigests := map[string]int{}
+					for _, name := range wantDelete {
+						expectedDigests["sha256:"+name] = 1
+					}
+					assert.Equal(expectedDigests, byDigest)
+				})
+				if dryRun {
+					assert.Equal(len(wantDelete), strings.Count(output, "Would delete:"))
+					for _, name := range wantDelete {
+						assert.Contains(output, "/app:"+name+" ")
+					}
+					mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, mock.Anything, mock.Anything)
+				}
+				for _, protected := range []string{latest, stable, release, exact, production, unrelated} {
+					assert.NotContains(output, "/app:"+protected+" ")
+					mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, "app", protected)
+				}
+				mockClient.AssertExpectations(t)
+			})
+		}
+	})
+
+	t.Run("TagExclusionsBeforeAgeAndMaximum", func(t *testing.T) {
+		for _, dryRun := range []bool{false, true} {
+			t.Run(fmt.Sprintf("dry-run=%t", dryRun), func(t *testing.T) {
+				assert := assert.New(t)
+				mockClient := &mocks.AcrCLIClientInterface{}
+				wantDelete := []string{"candidate-middle", "candidate-old", "candidate-ancient"}
+				exclusions, err := repository.CollectTagExclusions(
+					map[string]string{"app": ".*"},
+					[]string{".*:latest, stable", "^app.*$:v1.0,latest"},
+					[]string{"^app.*$:^release-", "^app$:production-"},
+					60,
+				)
+				if !assert.NoError(err) {
+					t.FailNow()
+				}
+				now := time.Now().UTC()
+				newestTime := now.Add(-time.Hour)
+				tag := func(name string, updated time.Time) acr.TagAttributesBase {
+					digest, timestamp := "sha256:"+name, updated.Format(time.RFC3339Nano)
+					return acr.TagAttributesBase{Name: &name, Digest: &digest, LastUpdateTime: &timestamp}
+				}
+				latest, stable, release, exact, production, unrelated := "latest", "stable", "release-live", "v1.0", "production-live", "unmatched"
+				tags := []acr.TagAttributesBase{
+					{Name: &latest}, {Name: &stable}, {Name: &release}, {Name: &exact}, {Name: &unrelated},
+					tag("candidate-new", newestTime), tag("candidate-middle", now.Add(-48*time.Hour)),
+					{Name: &production},
+					tag("candidate-old", now.Add(-72*time.Hour)), tag("candidate-ancient", now.Add(-96*time.Hour)),
+				}
+				mockClient.On("GetAcrTags", mock.Anything, "app", "timedesc", "").Return(&acr.RepositoryTagsType{
+					Response: autorest.Response{Response: &http.Response{}}, TagsAttributes: &tags,
+				}, nil).Once()
+				if !dryRun {
+					for _, name := range wantDelete {
+						mockClient.On("DeleteAcrTag", mock.Anything, "app", name).Return(&deletedResponse, nil).Once()
+					}
+				}
+				duration := mustParseDuration("1d")
+				opts := retentionOptions{agoDuration: &duration, keep: 0, minTags: -1, maxTags: 2, minManifests: -1, maxManifests: -1, dryRun: dryRun}
+				output := capturePurgeOutput(t, func() {
+					count, byDigest, err := purgeTags(testCtx, mockClient, 1, testLoginURL, "app", opts,
+						"^(?:candidate-|latest$|stable$|v1[.]0$|release-|production-)", exclusions["app"], 60, false)
+					assert.NoError(err)
+					assert.Equal(len(wantDelete), count)
+					expectedDigests := map[string]int{}
+					for _, name := range wantDelete {
+						expectedDigests["sha256:"+name] = 1
+					}
+					assert.Equal(expectedDigests, byDigest)
+				})
+				if dryRun {
+					assert.Equal(len(wantDelete), strings.Count(output, "Would delete:"))
+					for _, name := range wantDelete {
+						assert.Contains(output, "/app:"+name+" ")
+					}
+					mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, mock.Anything, mock.Anything)
+				}
+				for _, protected := range []string{latest, stable, release, exact, production, unrelated} {
+					assert.NotContains(output, "/app:"+protected+" ")
+					mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, "app", protected)
+				}
+				mockClient.AssertExpectations(t)
+			})
+		}
+	})
+
+	t.Run("TagExclusionsBeforeMinimum", func(t *testing.T) {
+		for _, dryRun := range []bool{false, true} {
+			t.Run(fmt.Sprintf("dry-run=%t", dryRun), func(t *testing.T) {
+				assert := assert.New(t)
+				mockClient := &mocks.AcrCLIClientInterface{}
+				wantDelete := []string{"candidate-middle", "candidate-old", "candidate-ancient"}
+				exclusions, err := repository.CollectTagExclusions(
+					map[string]string{"app": ".*"},
+					[]string{".*:latest, stable", "^app.*$:v1.0,latest"},
+					[]string{"^app.*$:^release-", "^app$:production-"},
+					60,
+				)
+				if !assert.NoError(err) {
+					t.FailNow()
+				}
+				now := time.Now().UTC()
+				newestTime := now.Add(-36 * time.Hour)
+				tag := func(name string, updated time.Time) acr.TagAttributesBase {
+					digest, timestamp := "sha256:"+name, updated.Format(time.RFC3339Nano)
+					return acr.TagAttributesBase{Name: &name, Digest: &digest, LastUpdateTime: &timestamp}
+				}
+				latest, stable, release, exact, production, unrelated := "latest", "stable", "release-live", "v1.0", "production-live", "unmatched"
+				tags := []acr.TagAttributesBase{
+					{Name: &latest}, {Name: &stable}, {Name: &release}, {Name: &exact}, {Name: &unrelated},
+					tag("candidate-new", newestTime), tag("candidate-middle", now.Add(-48*time.Hour)),
+					{Name: &production},
+					tag("candidate-old", now.Add(-72*time.Hour)), tag("candidate-ancient", now.Add(-96*time.Hour)),
+				}
+				mockClient.On("GetAcrTags", mock.Anything, "app", "timedesc", "").Return(&acr.RepositoryTagsType{
+					Response: autorest.Response{Response: &http.Response{}}, TagsAttributes: &tags,
+				}, nil).Once()
+				if !dryRun {
+					for _, name := range wantDelete {
+						mockClient.On("DeleteAcrTag", mock.Anything, "app", name).Return(&deletedResponse, nil).Once()
+					}
+				}
+				duration := mustParseDuration("1d")
+				opts := retentionOptions{agoDuration: &duration, keep: 0, minTags: 1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: dryRun}
+				output := capturePurgeOutput(t, func() {
+					count, byDigest, err := purgeTags(testCtx, mockClient, 1, testLoginURL, "app", opts,
+						"^(?:candidate-|latest$|stable$|v1[.]0$|release-|production-)", exclusions["app"], 60, false)
+					assert.NoError(err)
+					assert.Equal(len(wantDelete), count)
+					expectedDigests := map[string]int{}
+					for _, name := range wantDelete {
+						expectedDigests["sha256:"+name] = 1
+					}
+					assert.Equal(expectedDigests, byDigest)
+				})
+				if dryRun {
+					assert.Equal(len(wantDelete), strings.Count(output, "Would delete:"))
+					for _, name := range wantDelete {
+						assert.Contains(output, "/app:"+name+" ")
+					}
+					mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, mock.Anything, mock.Anything)
+				}
+				for _, protected := range []string{latest, stable, release, exact, production, unrelated} {
+					assert.NotContains(output, "/app:"+protected+" ")
+					mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, "app", protected)
+				}
+				mockClient.AssertExpectations(t)
+			})
+		}
+	})
+
+	t.Run("TagExclusionsBeforeMinimumAndMaximum", func(t *testing.T) {
+		for _, dryRun := range []bool{false, true} {
+			t.Run(fmt.Sprintf("dry-run=%t", dryRun), func(t *testing.T) {
+				assert := assert.New(t)
+				mockClient := &mocks.AcrCLIClientInterface{}
+				wantDelete := []string{"candidate-old", "candidate-ancient"}
+				exclusions, err := repository.CollectTagExclusions(
+					map[string]string{"app": ".*"},
+					[]string{".*:latest, stable", "^app.*$:v1.0,latest"},
+					[]string{"^app.*$:^release-", "^app$:production-"},
+					60,
+				)
+				if !assert.NoError(err) {
+					t.FailNow()
+				}
+				now := time.Now().UTC()
+				newestTime := now.Add(-36 * time.Hour)
+				tag := func(name string, updated time.Time) acr.TagAttributesBase {
+					digest, timestamp := "sha256:"+name, updated.Format(time.RFC3339Nano)
+					return acr.TagAttributesBase{Name: &name, Digest: &digest, LastUpdateTime: &timestamp}
+				}
+				latest, stable, release, exact, production, unrelated := "latest", "stable", "release-live", "v1.0", "production-live", "unmatched"
+				tags := []acr.TagAttributesBase{
+					{Name: &latest}, {Name: &stable}, {Name: &release}, {Name: &exact}, {Name: &unrelated},
+					tag("candidate-new", newestTime), tag("candidate-middle", now.Add(-48*time.Hour)),
+					{Name: &production},
+					tag("candidate-old", now.Add(-72*time.Hour)), tag("candidate-ancient", now.Add(-96*time.Hour)),
+				}
+				mockClient.On("GetAcrTags", mock.Anything, "app", "timedesc", "").Return(&acr.RepositoryTagsType{
+					Response: autorest.Response{Response: &http.Response{}}, TagsAttributes: &tags,
+				}, nil).Once()
+				if !dryRun {
+					for _, name := range wantDelete {
+						mockClient.On("DeleteAcrTag", mock.Anything, "app", name).Return(&deletedResponse, nil).Once()
+					}
+				}
+				duration := mustParseDuration("1d")
+				opts := retentionOptions{agoDuration: &duration, keep: 0, minTags: 2, maxTags: 3, minManifests: -1, maxManifests: -1, dryRun: dryRun}
+				output := capturePurgeOutput(t, func() {
+					count, byDigest, err := purgeTags(testCtx, mockClient, 1, testLoginURL, "app", opts,
+						"^(?:candidate-|latest$|stable$|v1[.]0$|release-|production-)", exclusions["app"], 60, false)
+					assert.NoError(err)
+					assert.Equal(len(wantDelete), count)
+					expectedDigests := map[string]int{}
+					for _, name := range wantDelete {
+						expectedDigests["sha256:"+name] = 1
+					}
+					assert.Equal(expectedDigests, byDigest)
+				})
+				if dryRun {
+					assert.Equal(len(wantDelete), strings.Count(output, "Would delete:"))
+					for _, name := range wantDelete {
+						assert.Contains(output, "/app:"+name+" ")
+					}
+					mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, mock.Anything, mock.Anything)
+				}
+				for _, protected := range []string{latest, stable, release, exact, production, unrelated} {
+					assert.NotContains(output, "/app:"+protected+" ")
+					mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, "app", protected)
+				}
+				mockClient.AssertExpectations(t)
+			})
+		}
+	})
+
+	t.Run("TagExclusionsWithKeepAll", func(t *testing.T) {
+		for _, dryRun := range []bool{false, true} {
+			t.Run(fmt.Sprintf("dry-run=%t", dryRun), func(t *testing.T) {
+				assert := assert.New(t)
+				mockClient := &mocks.AcrCLIClientInterface{}
+				exclusions, err := repository.CollectTagExclusions(
+					map[string]string{"app": ".*"},
+					[]string{".*:latest, stable", "^app.*$:v1.0,latest"},
+					[]string{"^app.*$:^release-", "^app$:production-"},
+					60,
+				)
+				if !assert.NoError(err) {
+					t.FailNow()
+				}
+				now := time.Now().UTC()
+				newestTime := now.Add(-time.Hour)
+				tag := func(name string, updated time.Time) acr.TagAttributesBase {
+					digest, timestamp := "sha256:"+name, updated.Format(time.RFC3339Nano)
+					return acr.TagAttributesBase{Name: &name, Digest: &digest, LastUpdateTime: &timestamp}
+				}
+				latest, stable, release, exact, production, unrelated := "latest", "stable", "release-live", "v1.0", "production-live", "unmatched"
+				tags := []acr.TagAttributesBase{
+					{Name: &latest}, {Name: &stable}, {Name: &release}, {Name: &exact}, {Name: &unrelated},
+					tag("candidate-new", newestTime), tag("candidate-middle", now.Add(-48*time.Hour)),
+					{Name: &production},
+					tag("candidate-old", now.Add(-72*time.Hour)), tag("candidate-ancient", now.Add(-96*time.Hour)),
+				}
+				mockClient.On("GetAcrTags", mock.Anything, "app", "timedesc", "").Return(&acr.RepositoryTagsType{
+					Response: autorest.Response{Response: &http.Response{}}, TagsAttributes: &tags,
+				}, nil).Once()
+				duration := mustParseDuration("1d")
+				opts := retentionOptions{agoDuration: &duration, keep: 10, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: dryRun}
+				output := capturePurgeOutput(t, func() {
+					count, byDigest, err := purgeTags(testCtx, mockClient, 1, testLoginURL, "app", opts,
+						"^(?:candidate-|latest$|stable$|v1[.]0$|release-|production-)", exclusions["app"], 60, false)
+					assert.NoError(err)
+					assert.Zero(count)
+					assert.Empty(byDigest)
+				})
+				assert.NotContains(output, "Would delete:")
+				mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, mock.Anything, mock.Anything)
+				for _, protected := range []string{latest, stable, release, exact, production, unrelated} {
+					assert.NotContains(output, "/app:"+protected+" ")
+					mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, "app", protected)
+				}
+				mockClient.AssertExpectations(t)
+			})
+		}
+	})
+
+	t.Run("TagExclusionsVerboseOutput", func(t *testing.T) {
+		for _, dryRun := range []bool{false, true} {
+			for _, verbose := range []bool{false, true} {
+				t.Run(fmt.Sprintf("dry-run=%t/verbose=%t", dryRun, verbose), func(t *testing.T) {
+					assert := assert.New(t)
+					mockClient := &mocks.AcrCLIClientInterface{}
+					exclusions, err := repository.CollectTagExclusions(
+						map[string]string{"app": ".*"},
+						[]string{"^app$:latest", "^app$:latest"},
+						[]string{".*:.*-prod$"},
+						60,
+					)
+					if !assert.NoError(err) {
+						t.FailNow()
+					}
+					latest, production, unmatched, candidate := "latest", "hello-prod", "other-prod", "hello-dev"
+					digest, old := "sha256:candidate", "2020-01-01T00:00:00Z"
+					tags := []acr.TagAttributesBase{
+						{Name: &latest},
+						{Name: &production},
+						{Name: &unmatched},
+						{Name: &candidate, Digest: &digest, LastUpdateTime: &old},
+					}
+					mockClient.On("GetAcrTags", mock.Anything, "app", "timedesc", "").Return(&acr.RepositoryTagsType{
+						Response: autorest.Response{Response: &http.Response{}}, TagsAttributes: &tags,
+					}, nil).Once()
+					if !dryRun {
+						mockClient.On("DeleteAcrTag", mock.Anything, "app", candidate).Return(&deletedResponse, nil).Once()
+					}
+					opts := retentionOptions{agoDuration: &defaultAgoDuration, minTags: -1, maxTags: -1, dryRun: dryRun}
+					output := capturePurgeOutput(t, func() {
+						count, byDigest, err := purgeTags(testCtx, mockClient, 1, testLoginURL, "app", opts, "^(?:hello|latest$)", exclusions["app"], 60, verbose)
+						assert.NoError(err)
+						assert.Equal(1, count)
+						assert.Equal(map[string]int{digest: 1}, byDigest)
+					})
+					if verbose {
+						assert.Equal(1, strings.Count(output, "Skipping excluded tag: app:latest\n"))
+						assert.Equal(1, strings.Count(output, "Skipping excluded tag: app:hello-prod\n"))
+					} else {
+						assert.NotContains(output, "Skipping excluded tag:")
+					}
+					assert.NotContains(output, "Skipping excluded tag: app:other-prod")
+					mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, "app", latest)
+					mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, "app", production)
+					mockClient.AssertExpectations(t)
+				})
+			}
+		}
+	})
+
+	t.Run("InvalidTagFilterFailsBeforeFetching", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		opts := retentionOptions{minTags: -1, maxTags: 0}
+		_, _, err := purgeTags(testCtx, mockClient, 1, testLoginURL, "app", opts, "[", nil, 60, false)
+		assert.ErrorContains(err, `failed to build tag filter "[" for repository "app"`)
+		assert.Empty(mockClient.Calls, "invalid tag filters must fail before fetching or deleting tags")
+	})
+
+	t.Run("InvalidTagExclusionFailsBeforeFetching", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		opts := retentionOptions{minTags: -1, maxTags: 0}
+		_, _, err := purgeTags(testCtx, mockClient, 1, testLoginURL, "app", opts, ".*", []string{"["}, 60, false)
+		assert.ErrorContains(err, `failed to build tag exclusion "[" for repository "app"`)
+		assert.Empty(mockClient.Calls, "invalid tag filters must fail before fetching or deleting tags")
+	})
+
+	t.Run("TagExclusionBackreferencesAcrossRepositoryPatterns", func(t *testing.T) {
+		for _, dryRun := range []bool{false, true} {
+			t.Run(fmt.Sprintf("dry-run=%t", dryRun), func(t *testing.T) {
+				assert := assert.New(t)
+				mockClient := &mocks.AcrCLIClientInterface{}
+				protected := []string{"aa", "bb", "latest"}
+				wantDelete := []string{"ab", "ba"}
+				exclusions, err := repository.CollectTagExclusions(map[string]string{"app": ".*"}, []string{".*:latest"}, []string{`^app$:^(a)\1$`, `.*:^(b)\1$`}, 60)
+				if !assert.NoError(err) {
+					t.FailNow()
+				}
+				var tags []acr.TagAttributesBase
+				for _, names := range [][]string{protected, wantDelete} {
+					for _, name := range names {
+						digest, old := "sha256:"+name, "2020-01-01T00:00:00Z"
+						tags = append(tags, acr.TagAttributesBase{Name: &name, Digest: &digest, LastUpdateTime: &old})
+					}
+				}
+				mockClient.On("GetAcrTags", mock.Anything, "app", "timedesc", "").Return(&acr.RepositoryTagsType{
+					Response: autorest.Response{Response: &http.Response{}}, TagsAttributes: &tags,
+				}, nil).Once()
+				expectedDigests := make(map[string]int)
+				for _, name := range wantDelete {
+					expectedDigests["sha256:"+name] = 1
+					if !dryRun {
+						mockClient.On("DeleteAcrTag", mock.Anything, "app", name).Return(&deletedResponse, nil).Once()
+					}
+				}
+				opts := retentionOptions{minTags: -1, maxTags: 0, dryRun: dryRun}
+				output := capturePurgeOutput(t, func() {
+					count, byDigest, err := purgeTags(testCtx, mockClient, 1, testLoginURL, "app", opts, ".*", exclusions["app"], 60, false)
+					assert.NoError(err)
+					assert.Equal(len(wantDelete), count)
+					assert.Equal(expectedDigests, byDigest)
+				})
+				for _, name := range protected {
+					assert.NotContains(output, "/app:"+name+" ")
+					mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, "app", name)
+				}
+				if dryRun {
+					assert.Equal(len(wantDelete), strings.Count(output, "Would delete:"))
+					for _, name := range wantDelete {
+						assert.Contains(output, "/app:"+name+" ")
+					}
+					mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, mock.Anything, mock.Anything)
+				}
+				mockClient.AssertExpectations(t)
+			})
+		}
+	})
+
+	t.Run("TagExclusionsAcrossRepositories", func(t *testing.T) {
+		for _, dryRun := range []bool{false, true} {
+			t.Run(fmt.Sprintf("dry-run=%t", dryRun), func(t *testing.T) {
+				assert := assert.New(t)
+				mockClient := &mocks.AcrCLIClientInterface{}
+				mockClient.On("IsAbac").Return(false)
+				mockCatalog := &mocks.BaseClientAPI{}
+				expected := map[string][]string{
+					"app":         {"production-one", "v1x0"},
+					"application": {"stable", "release-one", "production-one", "v1x0"},
+					"worker":      {"stable", "v1.0", "v1x0"},
+					"worker-east": {"stable", "v1.0", "release-one", "v1x0"},
+					"other":       {"stable", "v1.0", "release-one", "production-one", "v1x0"},
+					"nested/app":  {"stable", "v1.0", "release-one", "production-one", "v1x0"},
+				}
+				var filters []string
+				total := 0
+				for repo, names := range expected {
+					filters = append(filters, repo+":.*")
+					var tags []acr.TagAttributesBase
+					for _, name := range []string{"latest", "stable", "v1.0", "release-one", "production-one", "v1x0"} {
+						digest, updated := "sha256:"+name, "2020-01-01T00:00:00Z"
+						tags = append(tags, acr.TagAttributesBase{Name: &name, Digest: &digest, LastUpdateTime: &updated})
+					}
+					mockClient.On("GetAcrTags", mock.Anything, repo, "timedesc", "").Return(&acr.RepositoryTagsType{
+						Response: autorest.Response{Response: &http.Response{}}, TagsAttributes: &tags,
+					}, nil).Once()
+					if !dryRun {
+						for _, name := range names {
+							mockClient.On("DeleteAcrTag", mock.Anything, repo, name).Return(&deletedResponse, nil).Once()
+						}
+					}
+					total += len(names)
+				}
+				tagFilters, err := repository.CollectTagFilters(testCtx, filters, mockCatalog, 60, defaultRepoPageSize)
+				if !assert.NoError(err) {
+					t.FailNow()
+				}
+				exclusions, err := repository.CollectTagExclusions(
+					tagFilters,
+					[]string{".*:latest", "^app.*$:v1.0", "^app$:stable", "not-selected:ignored"},
+					[]string{"^worker.*$:^production-", "^(?:app|worker)$:^release-"},
+					60,
+				)
+				if !assert.NoError(err) {
+					t.FailNow()
+				}
+				assert.Len(exclusions, len(expected))
+				assert.NotContains(exclusions, "not-selected")
+				opts := retentionOptions{minTags: -1, maxTags: 0, minManifests: -1, maxManifests: -1, dryRun: dryRun, includeLocked: true}
+				output := capturePurgeOutput(t, func() {
+					count, manifests, err := purge(testCtx, mockClient, testLoginURL, 1, opts, 60, false, false, tagFilters, exclusions, false)
+					assert.NoError(err)
+					assert.Equal(total, count)
+					assert.Zero(manifests)
+				})
+				if dryRun {
+					assert.Equal(total, strings.Count(output, "Would delete:"))
+					for repo, names := range expected {
+						for _, name := range names {
+							assert.Contains(output, "/"+repo+":"+name+" ")
+						}
+					}
+				}
+				assert.Empty(mockCatalog.Calls, "regex exclusions must not introduce catalog listing for literal inclusion filters")
+				mockClient.AssertExpectations(t)
+			})
+		}
+	})
+
+	t.Run("TagExclusionTimeout", func(t *testing.T) {
+		assert := assert.New(t)
+		mockClient := &mocks.AcrCLIClientInterface{}
+		repoName, tagName := "app", strings.Repeat("a", 40)+"b"
+		safe, digest, old := "delete-me", "sha256:safe", "2020-01-01T00:00:00Z"
+		tags := []acr.TagAttributesBase{
+			{Name: &safe, Digest: &digest, LastUpdateTime: &old},
+			{Name: &tagName},
+		}
+		mockClient.On("GetAcrTags", mock.Anything, repoName, "timedesc", "").Return(&acr.RepositoryTagsType{
+			Response: autorest.Response{Response: &http.Response{}}, TagsAttributes: &tags,
+		}, nil).Once()
+		opts := retentionOptions{agoDuration: &defaultAgoDuration, minTags: -1, maxTags: -1}
+		filter, err := repository.BuildRegexFilter(".*", 60)
+		if !assert.NoError(err) {
+			t.FailNow()
+		}
+		exclusionRegex, err := repository.BuildRegexFilter("(a+)+$", 60)
+		if !assert.NoError(err) {
+			t.FailNow()
+		}
+		exclusionRegex.MatchTimeout = time.Millisecond
+		_, _, _, _, err = getTagsToDelete(testCtx, mockClient, repoName, filter, []*regexp2.Regexp{exclusionRegex}, time.Now().UTC(), "", opts, 0, 0, false)
+		assert.ErrorContains(err, "timeout")
+		mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, mock.Anything, mock.Anything)
 		mockClient.AssertExpectations(t)
 	})
 }
@@ -1475,7 +2283,7 @@ func TestPurgeManifests(t *testing.T) {
 
 		agoDuration := mustParseDuration("1d")
 		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: 1, maxTags: 1, minManifests: 1, maxManifests: 1, dryRun: false, includeLocked: false}
-		deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 1, opts, 60, true, false, repos, false)
+		deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 1, opts, 60, true, false, repos, nil, false)
 
 		assert.NoError(err)
 		assert.Equal(4, deletedTags)
@@ -1521,7 +2329,7 @@ func TestPurgeManifests(t *testing.T) {
 
 		agoDuration := mustParseDuration("1d")
 		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: 1, maxTags: 1, minManifests: 1, maxManifests: 1, dryRun: true, includeLocked: false}
-		deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 1, opts, 60, true, false, repos, false)
+		deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 1, opts, 60, true, false, repos, nil, false)
 
 		assert.NoError(err)
 		assert.Equal(4, deletedTags)
@@ -1555,7 +2363,7 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, digest).Return(&deletedResponse, nil).Once()
 
 		opts := retentionOptions{agoDuration: nil, keep: 0, minTags: -1, maxTags: 0, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 1, opts, 60, true, false, map[string]string{testRepo: "^release-"}, false)
+		deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 1, opts, 60, true, false, map[string]string{testRepo: "^release-"}, nil, false)
 
 		assert.NoError(err)
 		assert.Equal(2, deletedTags)
@@ -1585,7 +2393,7 @@ func TestPurgeManifests(t *testing.T) {
 
 		opts := retentionOptions{agoDuration: nil, keep: 0, minTags: -1, maxTags: 0, minManifests: -1, maxManifests: -1, dryRun: true, includeLocked: false}
 		output := capturePurgeOutput(t, func() {
-			deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 1, opts, 60, true, false, map[string]string{testRepo: "^release-"}, false)
+			deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 1, opts, 60, true, false, map[string]string{testRepo: "^release-"}, nil, false)
 			assert.NoError(err)
 			assert.Equal(2, deletedTags)
 			assert.Equal(1, deletedManifests)
@@ -1620,7 +2428,7 @@ func TestPurgeManifests(t *testing.T) {
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", digest).Return(EmptyListManifestsResult, nil).Once()
 
 		opts := retentionOptions{agoDuration: nil, keep: 0, minTags: -1, maxTags: 0, minManifests: -1, maxManifests: 0, dryRun: true, includeLocked: false}
-		deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 1, opts, 60, true, false, map[string]string{testRepo: "^release-"}, false)
+		deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 1, opts, 60, true, false, map[string]string{testRepo: "^release-"}, nil, false)
 
 		assert.NoError(err)
 		assert.Equal(2, deletedTags)
@@ -1652,7 +2460,7 @@ func TestPurgeManifests(t *testing.T) {
 
 		agoDuration := mustParseDuration("0s")
 		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: 0, maxTags: 0, minManifests: 0, maxManifests: 0, dryRun: true, includeLocked: false}
-		deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 1, opts, 60, true, false, map[string]string{testRepo: ".*"}, false)
+		deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 1, opts, 60, true, false, map[string]string{testRepo: ".*"}, nil, false)
 
 		assert.NoError(err)
 		assert.Equal(1, deletedTags)
@@ -1688,7 +2496,7 @@ func TestPurgeManifests(t *testing.T) {
 
 		agoDuration := mustParseDuration("0s")
 		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: 0, maxTags: 0, minManifests: 0, maxManifests: 0, dryRun: false, includeLocked: false}
-		deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 1, opts, 60, true, false, map[string]string{testRepo: ".*"}, false)
+		deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 1, opts, 60, true, false, map[string]string{testRepo: ".*"}, nil, false)
 
 		assert.NoError(err)
 		assert.Equal(1, deletedTags)
@@ -1724,7 +2532,7 @@ func TestPurgeManifests(t *testing.T) {
 
 		agoDuration := mustParseDuration("3d")
 		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: 1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 1, opts, 60, true, false, map[string]string{testRepo: ".*"}, false)
+		deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 1, opts, 60, true, false, map[string]string{testRepo: ".*"}, nil, false)
 
 		assert.NoError(err)
 		assert.Equal(1, deletedTags)
@@ -1760,7 +2568,7 @@ func TestPurgeManifests(t *testing.T) {
 
 		agoDuration := mustParseDuration("3d")
 		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: 1, dryRun: true, includeLocked: false}
-		deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 1, opts, 60, true, false, map[string]string{testRepo: ".*"}, false)
+		deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 1, opts, 60, true, false, map[string]string{testRepo: ".*"}, nil, false)
 
 		assert.NoError(err)
 		assert.Equal(1, deletedTags)
@@ -2010,6 +2818,70 @@ func TestPurgeManifests(t *testing.T) {
 		assert.NotContains(output, fmt.Sprintf("Deleted %s/%s@sha256:failed", testLoginURL, testRepo))
 		mockClient.AssertExpectations(t)
 	})
+	t.Run("TagExclusionsUntagged", func(t *testing.T) {
+		for _, dryRun := range []bool{false, true} {
+			for _, useRegex := range []bool{false, true} {
+				t.Run(fmt.Sprintf("dry-run=%t/regex=%t", dryRun, useRegex), func(t *testing.T) {
+					assert := assert.New(t)
+					mockClient := &mocks.AcrCLIClientInterface{}
+					mockClient.On("IsAbac").Return(false)
+					exact, filters := []string{".*:latest"}, []string(nil)
+					if useRegex {
+						exact, filters = nil, []string{"^app$:lat.*"}
+					}
+					exclusions, err := repository.CollectTagExclusions(map[string]string{"app": ".*"}, exact, filters, 60)
+					if !assert.NoError(err) {
+						t.FailNow()
+					}
+					old := time.Now().UTC().Add(-72 * time.Hour).Format(time.RFC3339Nano)
+					latest, sharedTag, otherTag := "latest", "delete-shared", "delete-other"
+					sharedDigest, otherDigest := "sha256:shared", "sha256:other"
+					tags := []acr.TagAttributesBase{
+						{Name: &latest, Digest: &sharedDigest, LastUpdateTime: &old},
+						{Name: &sharedTag, Digest: &sharedDigest, LastUpdateTime: &old},
+						{Name: &otherTag, Digest: &otherDigest, LastUpdateTime: &old},
+					}
+					mockClient.On("GetAcrTags", mock.Anything, "app", "timedesc", "").Return(&acr.RepositoryTagsType{
+						Response: autorest.Response{Response: &http.Response{}}, TagsAttributes: &tags,
+					}, nil).Once()
+					shared := createManifestWithTime(sharedDigest, old)
+					shared.Tags = &[]string{latest}
+					other := createManifestWithTime(otherDigest, old)
+					if dryRun {
+						shared.Tags = &[]string{latest, sharedTag}
+						other.Tags = &[]string{otherTag}
+					} else {
+						mockClient.On("DeleteAcrTag", mock.Anything, "app", sharedTag).Return(&deletedResponse, nil).Once()
+						mockClient.On("DeleteAcrTag", mock.Anything, "app", otherTag).Return(&deletedResponse, nil).Once()
+					}
+					dangling := createManifestWithTime("sha256:dangling", old)
+					manifests := []acr.ManifestAttributesBase{shared, other, dangling}
+					mockClient.On("GetAcrManifests", mock.Anything, "app", "", "").Return(&acr.Manifests{ManifestsAttributes: &manifests}, nil).Once()
+					mockClient.On("GetAcrManifests", mock.Anything, "app", "", *dangling.Digest).Return(EmptyListManifestsResult, nil).Once()
+					if !dryRun {
+						mockClient.On("DeleteManifest", mock.Anything, "app", otherDigest).Return(&deletedResponse, nil).Once()
+						mockClient.On("DeleteManifest", mock.Anything, "app", *dangling.Digest).Return(&deletedResponse, nil).Once()
+					}
+					duration := mustParseDuration("1d")
+					opts := retentionOptions{agoDuration: &duration, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: dryRun}
+					output := capturePurgeOutput(t, func() {
+						deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 1, opts, 60, true, false, map[string]string{"app": ".*"}, exclusions, false)
+						assert.NoError(err)
+						assert.Equal(2, deletedTags)
+						assert.Equal(2, deletedManifests)
+					})
+					assert.NotContains(output, "/app@"+sharedDigest)
+					mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, "app", latest)
+					mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, "app", sharedDigest)
+					if dryRun {
+						mockClient.AssertNotCalled(t, "DeleteAcrTag", mock.Anything, mock.Anything, mock.Anything)
+						mockClient.AssertNotCalled(t, "DeleteManifest", mock.Anything, mock.Anything, mock.Anything)
+					}
+					mockClient.AssertExpectations(t)
+				})
+			}
+		}
+	})
 }
 
 // TestDryRun contains the tests for the dryRunPurge method, it is called when the --dry-run flag is set.
@@ -2026,7 +2898,7 @@ func TestDryRun(t *testing.T) {
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(notFoundTagResponse, errors.New("testRepo not found")).Once()
 		agoDuration := -24 * time.Hour
 		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: true, includeLocked: false}
-		deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 60, opts, 1, true, false, map[string]string{testRepo: "[\\s\\S]*"}, false)
+		deletedTags, deletedManifests, err := purge(testCtx, mockClient, testLoginURL, 60, opts, 1, true, false, map[string]string{testRepo: "[\\s\\S]*"}, nil, false)
 		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
 		assert.Equal(0, deletedManifests, "Number of deleted elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
@@ -2192,6 +3064,255 @@ func TestCollectTagFilters(t *testing.T) {
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
 	})
+}
+
+func TestCollectTagExclusions(t *testing.T) {
+	t.Run("ExactTagsInOneRepository", func(t *testing.T) {
+		assert := assert.New(t)
+		exclusions, err := repository.CollectTagExclusions(
+			map[string]string{"app": ".*", "application": ".*", "nested/app": ".*"},
+			[]string{"app: v1.2.3, v1.2.4 ,v1.2.3", "app:Exact"}, nil, 9,
+		)
+		if !assert.NoError(err) || !assert.Len(exclusions["app"], 2) {
+			t.FailNow()
+		}
+		assert.NotContains(exclusions, "application")
+		assert.NotContains(exclusions, "nested/app")
+
+		filter, err := repository.BuildRegexFilter(exclusions["app"][0], 9)
+		if !assert.NoError(err) {
+			t.FailNow()
+		}
+		excluded, err := filter.MatchString("v1.2.3")
+		assert.NoError(err)
+		assert.True(excluded)
+		excluded, err = filter.MatchString("v1.2.4")
+		assert.NoError(err)
+		assert.True(excluded)
+		excluded, err = filter.MatchString("v1.2.30")
+		assert.NoError(err)
+		assert.False(excluded)
+
+		filter, err = repository.BuildRegexFilter(exclusions["app"][1], 9)
+		if !assert.NoError(err) {
+			t.FailNow()
+		}
+		excluded, err = filter.MatchString("Exact")
+		assert.NoError(err)
+		assert.True(excluded)
+		excluded, err = filter.MatchString("exact")
+		assert.NoError(err)
+		assert.False(excluded)
+	})
+
+	t.Run("ExactTagsInMatchingRepositories", func(t *testing.T) {
+		assert := assert.New(t)
+		exclusions, err := repository.CollectTagExclusions(
+			map[string]string{"app": ".*", "application": ".*", "other": ".*"},
+			[]string{"^app.*$:v1.0"}, nil, 9,
+		)
+		if !assert.NoError(err) || !assert.Len(exclusions["application"], 1) {
+			t.FailNow()
+		}
+		assert.Len(exclusions, 2)
+		assert.Equal(exclusions["application"], exclusions["app"])
+		assert.NotContains(exclusions, "other")
+		filter, err := repository.BuildRegexFilter(exclusions["application"][0], 9)
+		if !assert.NoError(err) {
+			t.FailNow()
+		}
+		excluded, err := filter.MatchString("v1.0")
+		assert.NoError(err)
+		assert.True(excluded)
+		excluded, err = filter.MatchString("v1x0")
+		assert.NoError(err)
+		assert.False(excluded)
+	})
+
+	t.Run("ExactTagsInAllRepositories", func(t *testing.T) {
+		assert := assert.New(t)
+		exclusions, err := repository.CollectTagExclusions(
+			map[string]string{"other": ".*", "team/nested": ".*"},
+			[]string{".*:latest,stable"}, nil, 9,
+		)
+		if !assert.NoError(err) || !assert.Len(exclusions["other"], 1) {
+			t.FailNow()
+		}
+		assert.Len(exclusions, 2)
+		assert.Equal(exclusions["other"], exclusions["team/nested"])
+		filter, err := repository.BuildRegexFilter(exclusions["other"][0], 9)
+		if !assert.NoError(err) {
+			t.FailNow()
+		}
+		excluded, err := filter.MatchString("latest")
+		assert.NoError(err)
+		assert.True(excluded)
+		excluded, err = filter.MatchString("stable")
+		assert.NoError(err)
+		assert.True(excluded)
+		excluded, err = filter.MatchString("LATEST")
+		assert.NoError(err)
+		assert.False(excluded)
+	})
+
+	t.Run("TagRegexInMatchingRepositories", func(t *testing.T) {
+		assert := assert.New(t)
+		exclusions, err := repository.CollectTagExclusions(
+			map[string]string{"worker": ".*", "worker-east": ".*", "other": ".*"},
+			nil, []string{"^worker.*$:^production-.*$"}, 9,
+		)
+		if !assert.NoError(err) || !assert.Len(exclusions["worker-east"], 1) {
+			t.FailNow()
+		}
+		assert.Len(exclusions, 2)
+		assert.Equal(exclusions["worker-east"], exclusions["worker"])
+		assert.NotContains(exclusions, "other")
+		filter, err := repository.BuildRegexFilter(exclusions["worker-east"][0], 9)
+		if !assert.NoError(err) {
+			t.FailNow()
+		}
+		excluded, err := filter.MatchString("production-live")
+		assert.NoError(err)
+		assert.True(excluded)
+		excluded, err = filter.MatchString("test-production-live")
+		assert.NoError(err)
+		assert.False(excluded)
+	})
+
+	t.Run("NoncapturingRepositoryGroup", func(t *testing.T) {
+		assert := assert.New(t)
+		exclusions, err := repository.CollectTagExclusions(
+			map[string]string{"app": ".*", "worker": ".*", "worker-east": ".*"},
+			nil, []string{"^(?:app|worker)$:^release-"}, 9,
+		)
+		if !assert.NoError(err) || !assert.Len(exclusions["app"], 1) {
+			t.FailNow()
+		}
+		assert.Len(exclusions, 2)
+		assert.Equal(exclusions["app"], exclusions["worker"])
+		assert.NotContains(exclusions, "worker-east")
+		filter, err := repository.BuildRegexFilter(exclusions["app"][0], 9)
+		if !assert.NoError(err) {
+			t.FailNow()
+		}
+		excluded, err := filter.MatchString("release-2026")
+		assert.NoError(err)
+		assert.True(excluded)
+	})
+
+	t.Run("MultipleExactAndRegexFlags", func(t *testing.T) {
+		assert := assert.New(t)
+		exclusions, err := repository.CollectTagExclusions(
+			map[string]string{"app": ".*"}, []string{"app:latest"},
+			[]string{"app:^release-", "app:^v2"}, 9,
+		)
+		if !assert.NoError(err) || !assert.Len(exclusions["app"], 3) {
+			t.FailNow()
+		}
+		filter, err := repository.BuildRegexFilter(exclusions["app"][0], 9)
+		if !assert.NoError(err) {
+			t.FailNow()
+		}
+		excluded, err := filter.MatchString("latest")
+		assert.NoError(err)
+		assert.True(excluded)
+		filter, err = repository.BuildRegexFilter(exclusions["app"][1], 9)
+		if !assert.NoError(err) {
+			t.FailNow()
+		}
+		excluded, err = filter.MatchString("release-2026")
+		assert.NoError(err)
+		assert.True(excluded)
+		filter, err = repository.BuildRegexFilter(exclusions["app"][2], 9)
+		if !assert.NoError(err) {
+			t.FailNow()
+		}
+		excluded, err = filter.MatchString("v2.0")
+		assert.NoError(err)
+		assert.True(excluded)
+	})
+
+	t.Run("LongExactTag", func(t *testing.T) {
+		assert := assert.New(t)
+		tag := strings.Repeat("a", 128)
+		exclusions, err := repository.CollectTagExclusions(map[string]string{"other": ".*"}, []string{".*:" + tag}, nil, 9)
+		if !assert.NoError(err) || !assert.Len(exclusions["other"], 1) {
+			t.FailNow()
+		}
+		filter, err := repository.BuildRegexFilter(exclusions["other"][0], 9)
+		if !assert.NoError(err) {
+			t.FailNow()
+		}
+		excluded, err := filter.MatchString(tag)
+		assert.NoError(err)
+		assert.True(excluded)
+	})
+
+	t.Run("Repository regex timeout", func(t *testing.T) {
+		assert := assert.New(t)
+		repoName := strings.Repeat("a", 40) + "b"
+		_, err := repository.CollectTagExclusions(map[string]string{repoName: ".*"}, nil, []string{"(a+)+$:.*"}, 1)
+		assert.ErrorContains(err, "timeout")
+	})
+
+	t.Run("NoExclusions", func(t *testing.T) {
+		assert := assert.New(t)
+		exclusions, err := repository.CollectTagExclusions(map[string]string{"app": ".*"}, nil, nil, 0)
+		assert.NoError(err)
+		assert.Empty(exclusions)
+	})
+}
+
+func TestCollectTagExclusionsValidation(t *testing.T) {
+	for _, flag := range []string{"--exclude-tags", "--exclude-filter"} {
+		invalid := []string{"", "repo", ":tag", "repo:", "[:tag", "repo:tag:extra"}
+		if flag == "--exclude-tags" {
+			invalid = append(invalid, "repo: ", "repo:,latest", "repo:latest,", "repo:latest,,stable",
+				"repo:latest, ,stable")
+		} else {
+			invalid = append(invalid, "repo:[", "repo:(unfinished")
+		}
+		for _, value := range invalid {
+			t.Run(flag+"-"+value, func(t *testing.T) {
+				assert := assert.New(t)
+				var exact, filters []string
+				if flag == "--exclude-tags" {
+					exact = []string{".*:latest", value}
+				} else {
+					filters = []string{".*:latest", value}
+				}
+				// Validate even expressions that match none of the selected repositories.
+				_, err := repository.CollectTagExclusions(map[string]string{"app": ".*"}, exact, filters, 60)
+				assert.Error(err)
+				_, err = repository.CollectTagExclusions(nil, exact, filters, 60)
+				assert.Error(err)
+			})
+		}
+	}
+}
+
+func TestCollectTagExclusionsLiteralValues(t *testing.T) {
+	assert := assert.New(t)
+	values := []string{"bad tag", "-invalid", ".invalid", ".*", "caf\u00e9", strings.Repeat("a", 129)}
+	exclusions, err := repository.CollectTagExclusions(map[string]string{"repo": ".*"}, []string{"repo:" + strings.Join(values, ",")}, nil, 60)
+	if !assert.NoError(err) {
+		t.FailNow()
+	}
+	if !assert.Len(exclusions["repo"], 1) {
+		t.FailNow()
+	}
+	filter, err := repository.BuildRegexFilter(exclusions["repo"][0], 60)
+	if !assert.NoError(err) {
+		t.FailNow()
+	}
+	for _, value := range values {
+		excluded, err := filter.MatchString(value)
+		assert.NoError(err)
+		assert.True(excluded, "nonempty values should be matched literally")
+	}
+	excluded, err := filter.MatchString("latest")
+	assert.NoError(err)
+	assert.False(excluded, ".* must not be interpreted as a regex")
 }
 
 func TestGetAllRepositoryNames(t *testing.T) {
@@ -2920,7 +4041,7 @@ func TestIncludeLockedFlag(t *testing.T) {
 		})).Return(&deletedResponse, nil).Once()
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, tagName).Return(&deletedResponse, nil).Once()
 		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: true}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", 60, false)
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", nil, 60, false)
 		assert.Equal(1, deletedTags, "Number of deleted elements should be 1")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -2936,7 +4057,7 @@ func TestIncludeLockedFlag(t *testing.T) {
 		})).Return(&deletedResponse, nil).Once()
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, tagName).Return(&deletedResponse, nil).Once()
 		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: true}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", 60, false)
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", nil, 60, false)
 		assert.Equal(1, deletedTags, "Number of deleted elements should be 1")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -2977,7 +4098,7 @@ func TestIncludeLockedFlag(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(DeleteDisabledOneTagResult, nil).Once()
 		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", 60, false)
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", nil, 60, false)
 		assert.Equal(0, deletedTags, "Number of deleted elements should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -2992,7 +4113,7 @@ func TestIncludeLockedFlag(t *testing.T) {
 		// Even though unlock fails, we still attempt deletion
 		mockClient.On("DeleteAcrTag", mock.Anything, testRepo, tagName).Return(&deletedResponse, nil).Once()
 		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: true}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", 60, false)
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", nil, 60, false)
 		assert.Equal(1, deletedTags, "Number of deleted elements should be 1 as deletion succeeded despite unlock failure")
 		assert.Nil(err, "Error should be nil as deletion succeeded")
 		mockClient.AssertExpectations(t)
@@ -3008,7 +4129,7 @@ func TestDryRunWithIncludeLocked(t *testing.T) {
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(DeleteDisabledOneTagResult, nil).Once()
 		// No unlock or delete calls should be made in dry-run mode
 		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: true, includeLocked: true}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", 60, false)
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", nil, 60, false)
 		assert.Equal(1, deletedTags, "Number of tags to be deleted should be 1")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -3046,7 +4167,7 @@ func TestDryRunWithIncludeLocked(t *testing.T) {
 		mockClient := &mocks.AcrCLIClientInterface{}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(DeleteDisabledOneTagResult, nil).Once()
 		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: true, includeLocked: false}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", 60, false)
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", nil, 60, false)
 		assert.Equal(0, deletedTags, "Number of tags to be deleted should be 0")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
@@ -3082,7 +4203,7 @@ func TestDryRunWithIncludeLocked(t *testing.T) {
 		}
 		mockClient.On("GetAcrTags", mock.Anything, testRepo, "timedesc", "").Return(mixedTagsResult, nil).Once()
 		opts := retentionOptions{agoDuration: &defaultAgoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: true, includeLocked: true}
-		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", 60, false)
+		deletedTags, _, err := purgeTags(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, ".*", nil, 60, false)
 		assert.Equal(2, deletedTags, "Number of tags to be deleted should be 2 with include-locked")
 		assert.Equal(nil, err, "Error should be nil")
 		mockClient.AssertExpectations(t)
