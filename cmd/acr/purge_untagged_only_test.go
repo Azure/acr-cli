@@ -11,6 +11,7 @@ import (
 
 	"github.com/Azure/acr-cli/acr"
 	"github.com/Azure/acr-cli/cmd/mocks"
+	"github.com/Azure/acr-cli/cmd/repository"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -95,7 +96,7 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 			60,
 			true, // removeUntaggedManifests
 			true, // untaggedOnly
-			map[string]string{testRepo: ".*"},
+			map[string]repository.TagFilters{testRepo: {Filter: ".*"}},
 			false, // verbose
 		)
 
@@ -113,7 +114,7 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 		mockClient.On("IsTokenExpired").Return(false).Maybe()
 
 		// We won't test GetRepositories here since the purge function is called
-		// with already-created tagFilters. Instead test that all repos are processed.
+		// with already-created repoTagFilters. Instead test that all repos are processed.
 
 		emptyManifestsResult := &acr.Manifests{
 			Response: autorest.Response{
@@ -133,9 +134,9 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 		}
 
 		// Simulate getting all repositories when no filter is provided
-		tagFilters := make(map[string]string)
+		repoTagFilters := make(map[string]repository.TagFilters)
 		for _, repo := range repos {
-			tagFilters[repo] = ".*"
+			repoTagFilters[repo] = repository.TagFilters{Filter: ".*"}
 		}
 
 		opts := retentionOptions{
@@ -157,7 +158,7 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 			60,
 			true, // removeUntaggedManifests
 			true, // untaggedOnly
-			tagFilters,
+			repoTagFilters,
 			false, // verbose
 		)
 
@@ -236,7 +237,7 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 			60,
 			true, // removeUntaggedManifests
 			true, // untaggedOnly
-			map[string]string{"specific-repo": ".*"},
+			map[string]repository.TagFilters{"specific-repo": {Filter: ".*"}},
 			false, // verbose
 		)
 
@@ -310,7 +311,7 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 			60,
 			true, // removeUntaggedManifests
 			true, // untaggedOnly
-			map[string]string{testRepo: ".*"},
+			map[string]repository.TagFilters{testRepo: {Filter: ".*"}},
 			false, // verbose
 		)
 
@@ -401,7 +402,7 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 			60,
 			true, // removeUntaggedManifests
 			true, // untaggedOnly
-			map[string]string{testRepo: ".*"},
+			map[string]repository.TagFilters{testRepo: {Filter: ".*"}},
 			false, // verbose
 		)
 
@@ -489,7 +490,7 @@ func TestPurgeUntaggedOnly(t *testing.T) {
 			60,
 			true, // removeUntaggedManifests
 			true, // untaggedOnly
-			map[string]string{testRepo: ".*"},
+			map[string]repository.TagFilters{testRepo: {Filter: ".*"}},
 			false, // verbose
 		)
 
@@ -646,14 +647,14 @@ func TestPurgeDanglingManifestsWithAgoAndKeep(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 
-		// Create manifests where some are old enough (>300 days) and some are not
-		// 300 days before 2026-01-31 is approximately 2025-04-06
+		// Create manifests where some are old enough (>300 days) and some are not.
+		now := time.Now().UTC()
 		manifests := []acr.ManifestAttributesBase{
-			createManifestWithTime("sha256:veryold1", "2025-01-01T00:00:00Z"), // Old enough
-			createManifestWithTime("sha256:veryold2", "2025-02-01T00:00:00Z"), // Old enough
-			createManifestWithTime("sha256:veryold3", "2025-03-01T00:00:00Z"), // Old enough
-			createManifestWithTime("sha256:recent1", "2026-01-01T00:00:00Z"),  // Too recent (<300 days)
-			createManifestWithTime("sha256:recent2", "2026-01-15T00:00:00Z"),  // Too recent (<300 days)
+			createManifestWithTime("sha256:veryold1", now.Add(-400*24*time.Hour).Format(time.RFC3339Nano)),
+			createManifestWithTime("sha256:veryold2", now.Add(-350*24*time.Hour).Format(time.RFC3339Nano)),
+			createManifestWithTime("sha256:veryold3", now.Add(-301*24*time.Hour).Format(time.RFC3339Nano)),
+			createManifestWithTime("sha256:recent1", now.Add(-200*24*time.Hour).Format(time.RFC3339Nano)),
+			createManifestWithTime("sha256:recent2", now.Add(-100*24*time.Hour).Format(time.RFC3339Nano)),
 		}
 
 		manifestsResult := &acr.Manifests{
@@ -1452,9 +1453,9 @@ func TestPurgeAbacVerboseMode(t *testing.T) {
 			mockClient.On("GetAcrManifests", mock.Anything, repo, "", "").Return(emptyManifestsResult, nil).Once()
 		}
 
-		tagFilters := make(map[string]string)
+		repoTagFilters := make(map[string]repository.TagFilters)
 		for _, repo := range repos {
-			tagFilters[repo] = ".*"
+			repoTagFilters[repo] = repository.TagFilters{Filter: ".*"}
 		}
 
 		// Call purge with verbose=true and ABAC enabled
@@ -1478,7 +1479,7 @@ func TestPurgeAbacVerboseMode(t *testing.T) {
 				60,   // filterTimeout
 				true, // removeUntaggedManifests
 				true, // untaggedOnly
-				tagFilters,
+				repoTagFilters,
 				true, // verbose = true
 			)
 			assert.Equal(0, deletedTagsCount, "No tags should be deleted")
@@ -1519,9 +1520,9 @@ func TestPurgeAbacVerboseMode(t *testing.T) {
 			mockClient.On("GetAcrManifests", mock.Anything, repo, "", "").Return(emptyManifestsResult, nil).Once()
 		}
 
-		tagFilters := make(map[string]string)
+		repoTagFilters := make(map[string]repository.TagFilters)
 		for _, repo := range repos {
-			tagFilters[repo] = ".*"
+			repoTagFilters[repo] = repository.TagFilters{Filter: ".*"}
 		}
 
 		// Call purge with verbose=false and ABAC enabled
@@ -1545,7 +1546,7 @@ func TestPurgeAbacVerboseMode(t *testing.T) {
 				60,   // filterTimeout
 				true, // removeUntaggedManifests
 				true, // untaggedOnly
-				tagFilters,
+				repoTagFilters,
 				false, // verbose = false
 			)
 			assert.Equal(0, deletedTagsCount, "No tags should be deleted")
@@ -1601,7 +1602,7 @@ func TestPurgeAbacVerboseMode(t *testing.T) {
 			60,   // filterTimeout
 			true, // removeUntaggedManifests
 			true, // untaggedOnly
-			map[string]string{"test-repo": ".*"},
+			map[string]repository.TagFilters{"test-repo": {Filter: ".*"}},
 			true, // verbose = true
 		)
 

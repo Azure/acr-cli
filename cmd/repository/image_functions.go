@@ -75,6 +75,12 @@ type UntaggedManifestsOptions struct {
 	MaxManifests            int
 }
 
+// TagFilters groups a repository's inclusion filter and exclusion expressions.
+type TagFilters struct {
+	Filter     string
+	Exclusions []string
+}
+
 // GetAllRepositoryNames retrieves all repository names from the registry using pagination.
 func GetAllRepositoryNames(ctx context.Context, client acrapi.BaseClientAPI, pageSize int32) ([]string, error) {
 	allRepoNames := make([]string, 0)
@@ -148,8 +154,8 @@ func isLiteralRegex(pattern string) bool {
 	return regexp2.Escape(pattern) == pattern
 }
 
-// CollectTagFilters collects all matching repos and collects the associated tag filters
-func CollectTagFilters(ctx context.Context, rawFilters []string, client acrapi.BaseClientAPI, regexMatchTimeout int64, repoPageSize int32) (map[string]string, error) {
+// CollectTagFilters collects all matching repos and collects the associated tag filters.
+func CollectTagFilters(ctx context.Context, rawFilters []string, client acrapi.BaseClientAPI, regexMatchTimeout int64, repoPageSize int32) (map[string]TagFilters, error) {
 	type parsedFilter struct {
 		repoRegex string
 		tagRegex  string
@@ -179,7 +185,7 @@ func CollectTagFilters(ctx context.Context, rawFilters []string, client acrapi.B
 		}
 	}
 
-	tagFilters := map[string]string{}
+	repoTagFilters := map[string]TagFilters{}
 	for _, pf := range parsed {
 		var repoNames []string
 		if pf.literal {
@@ -192,16 +198,78 @@ func CollectTagFilters(ctx context.Context, rawFilters []string, client acrapi.B
 			}
 		}
 		for _, repoName := range repoNames {
-			if _, ok := tagFilters[repoName]; ok {
+			repoFilters, ok := repoTagFilters[repoName]
+			if ok {
 				// To only iterate through a repo once a big regex filter is made of all the filters of a particular repo.
-				tagFilters[repoName] = tagFilters[repoName] + "|" + pf.tagRegex
+				repoFilters.Filter += "|" + pf.tagRegex
 			} else {
-				tagFilters[repoName] = pf.tagRegex
+				repoFilters.Filter = pf.tagRegex
+			}
+			repoTagFilters[repoName] = repoFilters
+		}
+	}
+
+	return repoTagFilters, nil
+}
+
+// AddTagExclusions attaches tag exclusion expressions to already-selected repositories.
+func AddTagExclusions(repoTagFilters map[string]TagFilters, excludeTags []string, excludeFilters []string, timeout int64) error {
+	exclusionPatterns := make(map[string][]string)
+	var validationErrors []error
+	for _, value := range excludeTags {
+		repoExpression, tags, err := GetRepositoryAndTagRegex(value)
+		if err != nil {
+			validationErrors = append(validationErrors, fmt.Errorf("invalid tag exclusion %q: %w", value, err))
+			continue
+		}
+		var escapedTags []string
+		for _, tag := range strings.Split(tags, ",") {
+			tag = strings.TrimSpace(tag)
+			if tag == "" {
+				validationErrors = append(validationErrors, fmt.Errorf("invalid tag exclusion %q: tag exclusion list contains an empty entry", value))
+				break
+			}
+			escapedTags = append(escapedTags, regexp2.Escape(tag))
+		}
+		exclusionPatterns[repoExpression] = append(exclusionPatterns[repoExpression], `\A(?:`+strings.Join(escapedTags, "|")+`)\z`)
+	}
+
+	for _, value := range excludeFilters {
+		repoExpression, tagExpression, err := GetRepositoryAndTagRegex(value)
+		if err != nil {
+			validationErrors = append(validationErrors, fmt.Errorf("invalid tag exclusion filter %q: %w", value, err))
+			continue
+		}
+		exclusionPatterns[repoExpression] = append(exclusionPatterns[repoExpression], tagExpression)
+	}
+
+	for repoExpression, tagExpressions := range exclusionPatterns {
+		repoFilter, err := BuildRegexFilter("^"+repoExpression+"$", timeout)
+		if err != nil {
+			validationErrors = append(validationErrors, fmt.Errorf("invalid tag exclusion filter: repository expression %q: %w", repoExpression, err))
+		}
+		for _, tagExpression := range tagExpressions {
+			if _, err := BuildRegexFilter(tagExpression, timeout); err != nil {
+				validationErrors = append(validationErrors, fmt.Errorf("invalid tag exclusion filter %q for repository expression %q: %w", tagExpression, repoExpression, err))
+			}
+		}
+		if len(validationErrors) > 0 {
+			continue
+		}
+		for repoName, repoFilters := range repoTagFilters {
+			matches, err := repoFilter.MatchString(repoName)
+			if err != nil {
+				return fmt.Errorf("failed to match tag exclusion repository expression %q against %q: %w", repoExpression, repoName, err)
+			}
+			if matches {
+				// Preserve capture numbering and inline options by keeping expressions separate.
+				repoFilters.Exclusions = append(repoFilters.Exclusions, tagExpressions...)
+				repoTagFilters[repoName] = repoFilters
 			}
 		}
 	}
 
-	return tagFilters, nil
+	return errors.Join(validationErrors...)
 }
 
 // GetLastTagFromResponse extracts the last tag from pagination headers in the response.

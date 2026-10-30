@@ -83,7 +83,7 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 			}
 
 			// A map is used to collect the regex tags for every repository.
-			tagFilters, err := repository.CollectTagFilters(ctx, annotateParams.filters, acrClient.AutorestClient, annotateParams.filterTimeout, defaultRepoPageSize)
+			repoTagFilters, err := repository.CollectTagFilters(ctx, annotateParams.filters, acrClient.AutorestClient, annotateParams.filterTimeout, defaultRepoPageSize)
 			if err != nil {
 				return err
 			}
@@ -105,8 +105,8 @@ func newAnnotateCmd(rootParams *rootParameters) *cobra.Command {
 				poolSize = maxPoolSize
 				fmt.Printf("Specified concurrency value too large. Set to maximum value: %d \n", maxPoolSize)
 			}
-			for repoName, tagRegex := range tagFilters {
-				singleAnnotatedTagsCount, singleSkippedTagsCount, err := annotateTags(ctx, acrClient, orasClient, poolSize, loginURL, repoName, annotateParams.artifactType, annotateParams.annotations, tagRegex, annotateParams.filterTimeout, annotateParams.dryRun, annotateParams.includeLocked)
+			for repoName, repoFilters := range repoTagFilters {
+				singleAnnotatedTagsCount, singleSkippedTagsCount, err := annotateTags(ctx, acrClient, orasClient, poolSize, loginURL, repoName, annotateParams.artifactType, annotateParams.annotations, repoFilters.Filter, annotateParams.filterTimeout, annotateParams.dryRun, annotateParams.includeLocked)
 				if err != nil {
 					return fmt.Errorf("failed to annotate tags: %w", err)
 				}
