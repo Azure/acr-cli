@@ -222,28 +222,27 @@ func newPurgeCmd(rootParams *rootParameters) *cobra.Command {
 			}
 
 			// A map is used to collect the regex tags for every repository.
-			var tagFilters map[string]string
+			var repoTagFilters map[string]repository.TagFilters
 			if purgeParams.untaggedOnly && len(purgeParams.filters) == 0 {
 				// If untagged-only without filters, get all repositories
 				allRepoNames, err := repository.GetAllRepositoryNames(ctx, acrClient.AutorestClient, purgeParams.repoPageSize)
 				if err != nil {
 					return err
 				}
-				tagFilters = make(map[string]string)
+				repoTagFilters = make(map[string]repository.TagFilters)
 				for _, repoName := range allRepoNames {
-					tagFilters[repoName] = "" // empty filter - won't be used in untagged-only mode
+					repoTagFilters[repoName] = repository.TagFilters{} // tag selection is not used in untagged-only mode
 				}
 			} else if len(purgeParams.filters) > 0 {
-				tagFilters, err = repository.CollectTagFilters(ctx, purgeParams.filters, acrClient.AutorestClient, purgeParams.filterTimeout, purgeParams.repoPageSize)
+				repoTagFilters, err = repository.CollectTagFilters(ctx, purgeParams.filters, acrClient.AutorestClient, purgeParams.filterTimeout, purgeParams.repoPageSize)
 				if err != nil {
 					return err
 				}
 			} else {
-				tagFilters = make(map[string]string)
+				repoTagFilters = make(map[string]repository.TagFilters)
 			}
 
-			tagExclusions, err := repository.CollectTagExclusions(tagFilters, purgeParams.excludeTags, purgeParams.excludeFilters, purgeParams.filterTimeout)
-			if err != nil {
+			if err := repository.AddTagExclusions(repoTagFilters, purgeParams.excludeTags, purgeParams.excludeFilters, purgeParams.filterTimeout); err != nil {
 				return err
 			}
 
@@ -266,7 +265,7 @@ func newPurgeCmd(rootParams *rootParameters) *cobra.Command {
 			// Combine flags for clarity - these are mutually exclusive
 			supportUntaggedCleanup := purgeParams.untagged || purgeParams.untaggedOnly
 
-			deletedTagsCount, deletedManifestsCount, err := purge(ctx, acrClient, loginURL, repoParallelism, opts, purgeParams.filterTimeout, supportUntaggedCleanup, purgeParams.untaggedOnly, tagFilters, tagExclusions, purgeParams.verbose)
+			deletedTagsCount, deletedManifestsCount, err := purge(ctx, acrClient, loginURL, repoParallelism, opts, purgeParams.filterTimeout, supportUntaggedCleanup, purgeParams.untaggedOnly, repoTagFilters, purgeParams.verbose)
 
 			if err != nil && !strings.Contains(err.Error(), "insufficient permissions") {
 				fmt.Printf("Failed to complete purge: %v \n", err)
@@ -325,8 +324,7 @@ func purge(ctx context.Context,
 	filterTimeout int64,
 	removeUntaggedManifests bool,
 	untaggedOnly bool,
-	tagFilters map[string]string,
-	tagExclusions map[string][]string,
+	repoTagFilters map[string]repository.TagFilters,
 	verbose bool) (deletedTagsCount int, deletedManifestsCount int, err error) {
 
 	// Load ABAC batch size from environment variable
@@ -338,8 +336,8 @@ func purge(ctx context.Context,
 	}
 
 	// Collect all repository names into a sorted slice for deterministic batching and output.
-	repos := make([]string, 0, len(tagFilters))
-	for repoName := range tagFilters {
+	repos := make([]string, 0, len(repoTagFilters))
+	for repoName := range repoTagFilters {
 		repos = append(repos, repoName)
 	}
 	sort.Strings(repos)
@@ -374,7 +372,7 @@ func purge(ctx context.Context,
 
 		// Process all repositories in this batch
 		for _, repoName := range batch {
-			tagRegex := tagFilters[repoName]
+			repoFilters := repoTagFilters[repoName]
 			var singleDeletedTagsCount int
 			var manifestToTagsCountMap map[string]int
 
@@ -384,7 +382,7 @@ func purge(ctx context.Context,
 				manifestToTagsCountMap = make(map[string]int)
 			} else {
 				// Standard mode: delete matching tags first
-				singleDeletedTagsCount, manifestToTagsCountMap, err = purgeTags(ctx, acrClient, repoParallelism, loginURL, repoName, opts, tagRegex, tagExclusions[repoName], filterTimeout, verbose)
+				singleDeletedTagsCount, manifestToTagsCountMap, err = purgeTags(ctx, acrClient, repoParallelism, loginURL, repoName, opts, repoFilters, filterTimeout, verbose)
 				if err != nil {
 					if isUnauthorizedError(err) {
 						remainingRepos := repos[i+indexOf(batch, repoName):]
@@ -420,7 +418,7 @@ func purge(ctx context.Context,
 }
 
 // purgeTags deletes matching tags according to the agoDuration, keep, minTags and maxTags policies in opts.
-func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, repoParallelism int, loginURL string, repoName string, opts retentionOptions, tagFilter string, tagExclusions []string, regexpMatchTimeoutSeconds int64, verbose bool) (int, map[string]int, error) {
+func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, repoParallelism int, loginURL string, repoName string, opts retentionOptions, repoFilters repository.TagFilters, regexpMatchTimeoutSeconds int64, verbose bool) (int, map[string]int, error) {
 	if opts.dryRun {
 		fmt.Printf("Would delete tags for repository: %s\n", repoName)
 	} else {
@@ -437,12 +435,12 @@ func purgeTags(ctx context.Context, acrClient api.AcrCLIClientInterface, repoPar
 		timeToCompare = time.Time{}
 	}
 
-	tagRegex, err := repository.BuildRegexFilter(tagFilter, regexpMatchTimeoutSeconds)
+	tagRegex, err := repository.BuildRegexFilter(repoFilters.Filter, regexpMatchTimeoutSeconds)
 	if err != nil {
-		return -1, manifestToTagsCountMap, fmt.Errorf("failed to build tag filter %q for repository %q: %w", tagFilter, repoName, err)
+		return -1, manifestToTagsCountMap, fmt.Errorf("failed to build tag filter %q for repository %q: %w", repoFilters.Filter, repoName, err)
 	}
 	var exclusionRegexes []*regexp2.Regexp
-	for _, tagExclusion := range tagExclusions {
+	for _, tagExclusion := range repoFilters.Exclusions {
 		exclusionRegex, err := repository.BuildRegexFilter(tagExclusion, regexpMatchTimeoutSeconds)
 		if err != nil {
 			return -1, manifestToTagsCountMap, fmt.Errorf("failed to build tag exclusion %q for repository %q: %w", tagExclusion, repoName, err)
