@@ -3065,6 +3065,35 @@ func TestCollectTagFilters(t *testing.T) {
 		assert.NotEqual(nil, err, "Error should not be nil")
 		mockClient.AssertExpectations(t)
 	})
+
+	t.Run("RejectsMalformedRepositoryGroup", func(t *testing.T) {
+		mockClient := &mocks.BaseClientAPI{}
+		mockClient.On("GetRepositories", mock.Anything, "", mock.Anything).Return(ManyRepositoriesResult, nil).Once()
+		mockClient.On("GetRepositories", mock.Anything, mock.Anything, mock.Anything).Return(NoRepositoriesResult, nil).Once()
+
+		repoTagFilters, err := repository.CollectTagFilters(testCtx, []string{"app)|(?:worker:.*"}, mockClient, 60, defaultRepoPageSize)
+
+		assert.ErrorContains(t, err, "unexpected )")
+		assert.Nil(t, repoTagFilters)
+		mockClient.AssertExpectations(t)
+	})
+
+	t.Run("RepositoryAlternation", func(t *testing.T) {
+		mockClient := &mocks.BaseClientAPI{}
+		pageSize := defaultRepoPageSize
+		names := []string{"app", "app-extra", "application", "nested/app", "nested/worker", "worker", "worker-east"}
+		mockClient.On("GetRepositories", testCtx, "", &pageSize).Return(acr.Repositories{Names: &names}, nil).Once()
+		mockClient.On("GetRepositories", testCtx, names[len(names)-1], &pageSize).Return(NoRepositoriesResult, nil).Once()
+
+		repoTagFilters, err := repository.CollectTagFilters(testCtx, []string{"app|worker:.*"}, mockClient, 60, pageSize)
+
+		assert.NoError(t, err)
+		assert.Equal(t, map[string]repository.TagFilters{
+			"app":    {Filter: ".*"},
+			"worker": {Filter: ".*"},
+		}, repoTagFilters)
+		mockClient.AssertExpectations(t)
+	})
 }
 
 func TestAddTagExclusions(t *testing.T) {
@@ -3182,6 +3211,28 @@ func TestAddTagExclusions(t *testing.T) {
 			timeout:               1,
 			expectedErrorContains: "timeout",
 		},
+		{
+			name:                    "ExactTagsWithRepositoryAlternation",
+			timeout:                 9,
+			repoTagFilters:          map[string]repository.TagFilters{"app": {Filter: ".*"}, "app-extra": {Filter: ".*"}, "application": {Filter: ".*"}, "nested/app": {Filter: ".*"}, "nested/worker": {Filter: ".*"}, "worker": {Filter: ".*"}, "worker-east": {Filter: ".*"}},
+			excludeTags:             []string{"app|worker:latest,stable"},
+			expectedExclusionCounts: map[string]int{"app": 1, "worker": 1},
+			checks: []expressionCheck{
+				{"app", 0, []string{"latest", "stable"}, []string{"latest-copy"}},
+				{"worker", 0, []string{"latest", "stable"}, []string{"latest-copy"}},
+			},
+		},
+		{
+			name:                    "TagRegexWithRepositoryAlternation",
+			timeout:                 9,
+			repoTagFilters:          map[string]repository.TagFilters{"app": {Filter: ".*"}, "app-extra": {Filter: ".*"}, "application": {Filter: ".*"}, "nested/app": {Filter: ".*"}, "nested/worker": {Filter: ".*"}, "worker": {Filter: ".*"}, "worker-east": {Filter: ".*"}},
+			excludeFilters:          []string{"app|worker:^release-"},
+			expectedExclusionCounts: map[string]int{"app": 1, "worker": 1},
+			checks: []expressionCheck{
+				{"app", 0, []string{"release-2026"}, []string{"test-release-2026"}},
+				{"worker", 0, []string{"release-2026"}, []string{"test-release-2026"}},
+			},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -3248,8 +3299,8 @@ func TestAddTagExclusionsValidation(t *testing.T) {
 					`invalid tag exclusion "repo":`,
 					`invalid tag exclusion "app:latest,": tag exclusion list contains an empty entry`,
 					`invalid tag exclusion filter "repo:":`,
-					`invalid tag exclusion filter: repository expression "(":`,
-					`invalid tag exclusion filter: repository expression "(unfinished":`,
+					`invalid tag exclusion repository expression "(":`,
+					`invalid tag exclusion repository expression "(unfinished":`,
 					`invalid tag exclusion filter "(" for repository expression "(unfinished":`,
 					`invalid tag exclusion filter "[" for repository expression "worker":`,
 					`invalid tag exclusion filter "(unfinished" for repository expression "other":`,
@@ -3263,7 +3314,7 @@ func TestAddTagExclusionsValidation(t *testing.T) {
 
 	t.Run("RejectsInvalidInputs", func(t *testing.T) {
 		for _, flag := range []string{"--exclude-tags", "--exclude-filter"} {
-			invalid := []string{"", "repo", ":tag", "repo:", "[:tag", "repo:tag:extra"}
+			invalid := []string{"", "repo", ":tag", "repo:", "[:tag", "repo:tag:extra", "app)|(?:worker:tag"}
 			if flag == "--exclude-tags" {
 				invalid = append(invalid, "repo: ", "repo:,latest", "repo:latest,", "repo:latest,,stable", "repo:latest, ,stable")
 			} else {
@@ -3282,13 +3333,55 @@ func TestAddTagExclusionsValidation(t *testing.T) {
 							excludeTags = []string{".*:latest", value}
 						} else {
 							excludeFilters = []string{".*:latest", value}
-							expectedErrorContains = "invalid tag exclusion filter"
 						}
 						err := repository.AddTagExclusions(repoTagFilters, excludeTags, excludeFilters, 60)
 						assert.ErrorContains(t, err, expectedErrorContains)
 					})
 				}
 			}
+		}
+	})
+
+	t.Run("AggregatesWrappedRepositoryErrors", func(t *testing.T) {
+		for _, noRepositories := range []bool{false, true} {
+			t.Run(fmt.Sprintf("noRepositories=%t", noRepositories), func(t *testing.T) {
+				var repoTagFilters map[string]repository.TagFilters
+				if !noRepositories {
+					repoTagFilters = map[string]repository.TagFilters{"app": {Filter: ".*"}}
+				}
+
+				err := repository.AddTagExclusions(repoTagFilters, nil, []string{
+					"(?x)app # comment:latest",
+					"(?x)worker # comment:latest",
+					"(unfinished:(",
+				}, 60)
+
+				assert.ErrorContains(t, err, `invalid tag exclusion repository expression "(?x)app # comment":`)
+				assert.ErrorContains(t, err, `invalid tag exclusion repository expression "(?x)worker # comment":`)
+				assert.ErrorContains(t, err, "in `^(?:(?x)app # comment)$`")
+				assert.ErrorContains(t, err, "in `^(?:(?x)worker # comment)$`")
+				assert.ErrorContains(t, err, `invalid tag exclusion repository expression "(unfinished":`)
+				assert.ErrorContains(t, err, `invalid tag exclusion filter "(" for repository expression "(unfinished":`)
+			})
+		}
+	})
+
+	t.Run("MalformedRepositoryDoesNotAttachExclusions", func(t *testing.T) {
+		for _, flag := range []string{"--exclude-tags", "--exclude-filter"} {
+			t.Run(flag, func(t *testing.T) {
+				repoTagFilters := map[string]repository.TagFilters{"app": {Filter: ".*"}}
+				var excludeTags, excludeFilters []string
+				if flag == "--exclude-tags" {
+					excludeTags = []string{"app)|(?:worker:latest"}
+				} else {
+					excludeFilters = []string{"app)|(?:worker:latest"}
+				}
+
+				err := repository.AddTagExclusions(repoTagFilters, excludeTags, excludeFilters, 60)
+
+				assert.ErrorContains(t, err, `invalid tag exclusion repository expression "app)|(?:worker"`)
+				assert.Empty(t, repoTagFilters["app"].Exclusions)
+			})
 		}
 	})
 }

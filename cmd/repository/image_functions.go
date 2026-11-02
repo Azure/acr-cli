@@ -191,8 +191,12 @@ func CollectTagFilters(ctx context.Context, rawFilters []string, client acrapi.B
 		if pf.literal {
 			repoNames = []string{pf.repoRegex}
 		} else {
+			// Validate before wrapping to avoid accidentally making invalid expressions valid.
+			if _, err := BuildRegexFilter(pf.repoRegex, regexMatchTimeout); err != nil {
+				return nil, err
+			}
 			var err error
-			repoNames, err = GetMatchingRepos(allRepoNames, "^"+pf.repoRegex+"$", regexMatchTimeout)
+			repoNames, err = GetMatchingRepos(allRepoNames, "^(?:"+pf.repoRegex+")$", regexMatchTimeout)
 			if err != nil {
 				return nil, err
 			}
@@ -213,7 +217,7 @@ func CollectTagFilters(ctx context.Context, rawFilters []string, client acrapi.B
 }
 
 // AddTagExclusions attaches tag exclusion expressions to already-selected repositories.
-func AddTagExclusions(repoTagFilters map[string]TagFilters, excludeTags []string, excludeFilters []string, timeout int64) error {
+func AddTagExclusions(repoTagFilters map[string]TagFilters, excludeTags []string, excludeFilters []string, regexMatchTimeout int64) error {
 	exclusionPatterns := make(map[string][]string)
 	var validationErrors []error
 	for _, value := range excludeTags {
@@ -244,18 +248,27 @@ func AddTagExclusions(repoTagFilters map[string]TagFilters, excludeTags []string
 	}
 
 	for repoExpression, tagExpressions := range exclusionPatterns {
-		repoFilter, err := BuildRegexFilter("^"+repoExpression+"$", timeout)
-		if err != nil {
-			validationErrors = append(validationErrors, fmt.Errorf("invalid tag exclusion filter: repository expression %q: %w", repoExpression, err))
+		var repoFilter *regexp2.Regexp
+		// Validate before wrapping to avoid accidentally making invalid expressions valid.
+		if _, err := BuildRegexFilter(repoExpression, regexMatchTimeout); err != nil {
+			validationErrors = append(validationErrors, fmt.Errorf("invalid tag exclusion repository expression %q: %w", repoExpression, err))
+		} else {
+			repoFilter, err = BuildRegexFilter("^(?:"+repoExpression+")$", regexMatchTimeout)
+			if err != nil {
+				validationErrors = append(validationErrors, fmt.Errorf("invalid tag exclusion repository expression %q: %w", repoExpression, err))
+			}
 		}
+
 		for _, tagExpression := range tagExpressions {
-			if _, err := BuildRegexFilter(tagExpression, timeout); err != nil {
+			if _, err := BuildRegexFilter(tagExpression, regexMatchTimeout); err != nil {
 				validationErrors = append(validationErrors, fmt.Errorf("invalid tag exclusion filter %q for repository expression %q: %w", tagExpression, repoExpression, err))
 			}
 		}
+
 		if len(validationErrors) > 0 {
 			continue
 		}
+
 		for repoName, repoFilters := range repoTagFilters {
 			matches, err := repoFilter.MatchString(repoName)
 			if err != nil {
