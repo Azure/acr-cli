@@ -103,7 +103,7 @@ golang.org/x/sys/unix
 golang.org/x/sys/windows
 # gotest.tools/v3 v3.2.0
 ## explicit; go 1.13
-# oras.land/oras-go/v2 v2.6.4
+# oras.land/oras-go/v2 v2.7.0
 ## explicit; go 1.26.0
 oras.land/oras-go/v2
 oras.land/oras-go/v2/content
