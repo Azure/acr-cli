@@ -1048,7 +1048,7 @@ func TestCollectTagFiltersLiteralSkipsRepoListing(t *testing.T) {
 		filters := []string{"myrepo:.*"}
 		result, err := CollectTagFilters(ctx, filters, mockClient, 60, 100)
 		assert.NoError(t, err)
-		assert.Equal(t, map[string]string{"myrepo": ".*"}, result)
+		assert.Equal(t, map[string]TagFilters{"myrepo": {Filter: ".*"}}, result)
 		mockClient.AssertExpectations(t)
 	})
 
@@ -1062,7 +1062,7 @@ func TestCollectTagFiltersLiteralSkipsRepoListing(t *testing.T) {
 		filters := []string{"repo-.*:latest"}
 		result, err := CollectTagFilters(ctx, filters, mockClient, 60, pageSize)
 		assert.NoError(t, err)
-		assert.Equal(t, map[string]string{"repo-a": "latest", "repo-b": "latest"}, result)
+		assert.Equal(t, map[string]TagFilters{"repo-a": {Filter: "latest"}, "repo-b": {Filter: "latest"}}, result)
 		mockClient.AssertExpectations(t)
 	})
 
@@ -1076,8 +1076,8 @@ func TestCollectTagFiltersLiteralSkipsRepoListing(t *testing.T) {
 		filters := []string{"alpha:v1", "bet.*:v2"}
 		result, err := CollectTagFilters(ctx, filters, mockClient, 60, pageSize)
 		assert.NoError(t, err)
-		assert.Equal(t, "v1", result["alpha"])
-		assert.Equal(t, "v2", result["beta"])
+		assert.Equal(t, "v1", result["alpha"].Filter)
+		assert.Equal(t, "v2", result["beta"].Filter)
 		_, hasGamma := result["gamma"]
 		assert.False(t, hasGamma)
 		mockClient.AssertExpectations(t)

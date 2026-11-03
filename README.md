@@ -316,6 +316,31 @@ All limits must be nonnegative. Zero is meaningful: a minimum of zero protects n
 
 Locked items are included when determining the newest N items for minimum and maximum limits, but are not deleted unless `--include-locked` is set. Locks, retained-index dependencies, or skipped deletions can prevent a maximum from being satisfied.
 
+#### Tag exclusions
+
+The optional `--exclude-tags` flag can be used to exclude specific tags from deletion,
+while `--exclude-filter` excludes tags matching a pattern. Multiple exclusions can be
+combined by repeating either flag or using both together. Exclusions apply only to tags matched by
+`--filter`. A tag matching any exclusion is not deleted.
+
+To protect tags across every selected repository, use `.*` for the repository
+expression. For example, `--exclude-tags ".*:latest"` excludes the `latest` tag from
+deletion across all repositories matched by `--filter`.
+
+```sh
+# Delete tags older than 7 days, excluding the specified exact tags and tag patterns.
+acr purge --registry example --filter ".*:.*" \
+    --exclude-tags ".*:latest,stable" \
+    --exclude-tags "^dev.*$:v1.0" \
+    --exclude-filter "^dev.*$:^release-.*$" \
+    --ago 7d
+```
+
+Excluded tags do not count
+toward `--keep`, `--min-tags`, or `--max-tags`.
+
+Use `--verbose` to show which tags were skipped because of exclusions.
+
 #### Dry run flag
 
 To know which tags and manifests would be deleted, the `--dry-run` flag can be set. Nothing will be deleted, and the output will show what would happen if the purge command were executed normally.
