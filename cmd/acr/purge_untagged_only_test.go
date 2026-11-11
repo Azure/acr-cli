@@ -560,10 +560,9 @@ func TestPurgeDanglingManifestsWithAgoAndKeep(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 
-		// Create manifests with different timestamps
-		// old manifest: more than 300 days ago from now (2026), recent: less than 300 days
-		oldManifest := createManifestWithTime("sha256:old123", "2025-01-01T00:00:00Z")
-		recentManifest := createManifestWithTime("sha256:recent123", "2026-01-15T00:00:00Z")
+		now := time.Now().UTC()
+		oldManifest := createManifestWithTime("sha256:old123", now.Add(-400*24*time.Hour).Format(time.RFC3339Nano))
+		recentManifest := createManifestWithTime("sha256:recent123", now.Add(-100*24*time.Hour).Format(time.RFC3339Nano))
 
 		manifestsResult := &acr.Manifests{
 			Response: autorest.Response{
@@ -586,7 +585,7 @@ func TestPurgeDanglingManifestsWithAgoAndKeep(t *testing.T) {
 		mockClient.On("GetAcrManifests", mock.Anything, testRepo, "", "sha256:recent123").Return(emptyResult, nil).Once()
 		mockClient.On("DeleteManifest", mock.Anything, testRepo, "sha256:old123").Return(nil, nil).Once()
 
-		// Call with 300 days ago (should only delete the old manifest from 2023)
+		// Call with 300 days ago (should only delete the old manifest)
 		agoDuration := mustParseDuration("300d")
 		opts := retentionOptions{agoDuration: &agoDuration, keep: 0, minTags: -1, maxTags: -1, minManifests: -1, maxManifests: -1, dryRun: false, includeLocked: false}
 		deletedCount, err := purgeDanglingManifests(testCtx, mockClient, defaultPoolSize, testLoginURL, testRepo, opts, nil, false)
@@ -694,9 +693,9 @@ func TestPurgeDanglingManifestsWithAgoAndKeep(t *testing.T) {
 		assert := assert.New(t)
 		mockClient := &mocks.AcrCLIClientInterface{}
 
-		// old manifest: more than 300 days ago, recent: less than 300 days
-		oldManifest := createManifestWithTime("sha256:old123", "2025-01-01T00:00:00Z")
-		recentManifest := createManifestWithTime("sha256:recent123", "2026-01-15T00:00:00Z")
+		now := time.Now().UTC()
+		oldManifest := createManifestWithTime("sha256:old123", now.Add(-400*24*time.Hour).Format(time.RFC3339Nano))
+		recentManifest := createManifestWithTime("sha256:recent123", now.Add(-100*24*time.Hour).Format(time.RFC3339Nano))
 
 		manifestsResult := &acr.Manifests{
 			Response: autorest.Response{
